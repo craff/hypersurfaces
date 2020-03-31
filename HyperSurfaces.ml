@@ -253,7 +253,6 @@ module Make(R:Field.S) = struct
       if !debug then
         begin
           Printf.eprintf "%f%% %f\n%!" (!total *. 100.0) x;
-          ignore (input_char stdin);
         end
       else
         Printf.eprintf "\r%f %f%%                        %!" (!total *. 100.0) x;

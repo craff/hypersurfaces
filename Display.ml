@@ -3,10 +3,15 @@ open Graphics
 module Make(R:Field.S) = struct
   open R
 
-  let _ = open_graph ""
+  let init = ref false
 
   let display : type a. float -> float * float -> a list -> (a -> R.t array array) -> unit =
     fun scale (x0,y0) ls fn ->
+    if not !init then
+      begin
+        let _ = open_graph "" in
+        init := true
+      end;
     let open Stdlib in
     let w = size_x () and h = size_y () in
     let draw_segment v1 v2 =
