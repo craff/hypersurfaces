@@ -1,3 +1,4 @@
+(*module R = Field.Gmp_R(struct let prec = 256 end)*)
 (*module R = Field.Q*)
 module R = Field.Float
 module D = Display.Make(R)

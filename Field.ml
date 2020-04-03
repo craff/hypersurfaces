@@ -93,3 +93,23 @@ module Q = Make(struct
   let print = output
   let exact = true
 end)
+
+module Gmp_R(Prec: sig val prec: int end) =
+  Make(struct
+      open Mpfr.FR(Prec)
+      let mode = `N
+      type nonrec t = t
+      let zero = zero
+      let one = one
+      let ( +. ) = add ~mode
+      let ( *. ) = mul ~mode
+      let ( -. ) = sub ~mode
+      let ( /. ) = div ~mode
+      let ( ~-.) = neg ~mode
+      let cmp = compare
+      let abs = abs ~mode
+      let of_int = of_int ~mode
+      let to_float = to_float ~mode
+      let print ch x = output_string ch (to_string ~mode x)
+      let exact = false
+    end)
