@@ -272,7 +272,7 @@ module Make(R:Field.S) = struct
                     let k = List.find (fun k -> k <> i1 && k <> j1) [0;1;2] in
                     let l = List.find (fun k -> k <> i2 && k <> j2) [0;1;2] in
                     let (ss1,ss2) =
-                      if s1.s.(i1).p == s2.s.(i2).p then
+                      if s1.s.(i1).p = s2.s.(i2).p then
                         begin
                           assert (s1.s.(j1).p = s2.s.(j2).p);
                           ([|s1.s.(i1); s1.s.(k); s2.s.(l)|],
@@ -292,7 +292,7 @@ module Make(R:Field.S) = struct
                     let f = (s1.f +. s2.f) /. 2.0 in
                     let s1' = mk ~add:false ~f ss1 p1' in
                     let s2' = mk ~add:false ~f ss2 p2' in
-                    if max s1'.x s2'.x >= max s1.x s2.x then raise Exit;
+                    if cmp R.(s1'.x +. s2'.x) R.(s1.x +. s2.x) >= 0 then raise Exit;
                     if s1.k then total := !total -. s1.f;
                     if s2.k then total := !total -. s2.f;
                     if !debug then

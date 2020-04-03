@@ -81,7 +81,7 @@ module Make(R:Field.S) = struct
         let best_k = ref i in
         for j = i to len - 1 do
           for k = i to len - 1 do
-            if abs m.(j).(k) > !best then
+            if cmp (abs m.(j).(k)) !best > 0 then
               begin
                 best := abs m.(j).(k); best_j := j; best_k := k
               end
@@ -151,7 +151,7 @@ module Make(R:Field.S) = struct
     let best = ref zero in
     let i0 = ref 0 in
     Array.iteri (fun i w -> let d = dist2 v w in
-                            if d > !best then (best := d; i0 := i)) m;
+                            if cmp d !best > 0 then (best := d; i0 := i)) m;
     let i0 = !i0 in
     let v = v --- m.(i0) in
     let m = Array.init d (fun i -> let i = if i >= i0 then i+1 else i in
