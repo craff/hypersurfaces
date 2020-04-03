@@ -186,13 +186,13 @@ module Make(R:Field.S) = struct
           assert (cmp p2 zero > 0);
           let z = V.comb h x h y in
           let p3 = eval p z in
-          if compare (V.dist2 x y) e2 < 0 then z else
-          let c = compare p3 zero in
+          if cmp (V.dist2 x y) e2 < 0 then z else
+          let c = cmp p3 zero in
           if c = 0 then z
           else if c < 0 then fn p3 z p2 y
           else fn p1 x p3 z
         in
-        if compare p1 zero < 0 then fn p1 x p2 y else fn p2 y p1 x
+        if cmp p1 zero < 0 then fn p1 x p2 y else fn p2 y p1 x
       end
   (** first version, limited to dimension 26 ! *)
   let print_polynome26 ch p =
@@ -258,8 +258,21 @@ module Make(R:Field.S) = struct
             List.iteri (fun i e ->
                 if e <> 0 then
                   if e > 1 then Printf.fprintf ch "X%d^%d " i e
-                  else  Printf.fprintf ch "X%d " i) (x::l@[y]);
+                  else  Printf.fprintf ch "X%d " i) (x::y::l);
           end) p
 
+  let transform p s1 s2 =
+    let dim = Array.length s1 in
+    assert (Array.length s1.(0) = dim);
+    assert (Array.length s2 = dim);
+    assert (Array.length s2.(0) = dim);
+    let m = Array.init dim (fun i -> V.pcoord s2.(i) s1) in
+    let q = List.init dim (fun j ->
+                List.init dim (fun i ->
+                    let v = var_power i dim 1 in
+                    let c = m.(i).(j) in
+                    (v, c)))
+    in
+    subst p q
 
 end

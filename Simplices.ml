@@ -32,9 +32,23 @@ module Make(R:Field.S) = struct
     List.sort (fun (l1,_) (l2,_) -> compare l2 l1) !res
 
 
-  type simplex = t array array
+  type vertex = { v : V.vector; p : bool; uid : int }
+
+  let ch_sg e = { e with p = not e.p }
+
+  let to_vec v =
+    if v.p then v.v else Array.map (~-.) v.v
+
+  let print_vertex ch v = V.print_vector ch (to_vec v)
+
+  let mk =
+    let c = ref 0 in
+    (fun v p -> let uid = !c in c := !c + 1; { v; p; uid })
+
+  type simplex = vertex array
   (** A simplex is represented by the coordinates of all its vertices.
-      The sign matters if we want barycentrics coefficients to identify
+      The boolen is a sign to share vertices with opposite sign.
+      Sign matters if we want barycentrics coefficients to identify
       point "inside the simplex". The projective line has therefore
       two simplex with coordinates
       (0, 1) (1, 0) -> les points positifs
@@ -42,41 +56,57 @@ module Make(R:Field.S) = struct
       Remarque: la derniere coordonnées sera toujours positive.
   *)
 
+  let vec s i = to_vec s.(i)
+
+  let cev s i =
+    let e = s.(i) in
+    if e.p then Array.map (~-.) e.v else e.v
+
+  let to_matrix ?(opp=false) s : V.matrix =  Array.init (Array.length s) (fun i -> vec s i)
+
+  let print_simplex ch s = V.print_matrix ch (to_matrix s)
+
+  let pos s i = s.(i).p
+  let neg s i = not (pos s i)
+
   type quadrant = t list
   (** a quadrant is represented by a list with -1 and 1, ending with a 1,
       and whose size in the dimension. This list gives the sign of each variable.
       The list starts with a 1 because we are in the projective space and we can
       multiply by -1 *)
 
+  let var dim i =
+    Array.init dim (fun j -> if i = j then one else zero)
+
   (** Take a polynomials and returns a list of tuples (s,q) which gives
       the writing of p in each simplex, giving a complete decomposition of
       the projective space of dimension n (therefore 2^(n-1) simplices,
       if n is the dimension, that is the number of variables. *)
-  let quadrants p =
+  let quadrants (p:polynomial) : (simplex*polynomial) list =
     let dim = dim p in
+    let q0 = Array.init dim (fun i -> mk (var dim i) true) in
     (* the identity matrix *)
-    let rec fn quadrant p =
-      let q = Array.of_list quadrant in
-      let _M = Array.init
-                 dim
-                 (fun i -> Array.init
-                             dim
-                             (fun j -> if i = j then q.(i) else zero))
-      in
+    let rec fn q =
       (* sign of the monomial in the given quadrant, product of the -1 that
          correspondsto odd power, compensate for the -1 in the point coordinates *)
-      let sn l = List.fold_left2 (fun acc n s ->
-                     if n mod 2 = 0 then acc else s *. acc) one l quadrant
+      let sn l = fst (List.fold_left (fun (acc,i) n ->
+                     ((if n mod 2 = 0 || pos q i then acc else ~-. acc),i+1)) (one,0) l)
       in
       let p = List.map (function (l,c) -> (l, sn l *. c)) p in
-      (_M, p)
+      (q, p)
     in
     (* iterates fn on all quadrant *)
-    let rec gn acc quadrant n =
-      if n = 1 then fn (List.rev (one::quadrant)) p::acc
-      else gn (gn acc (~-.one::quadrant) (n-1)) (one::quadrant) (n-1)
+    let rec gn acc q i =
+      if i < 0  then q::acc
+      else
+        begin
+          let q' = Array.copy q in
+          q'.(i) <- ch_sg q'.(i);
+          gn (gn acc q' (i-1)) q (i-1)
+        end
     in
-    gn [] [] dim
+    let qs = gn [] q0 (dim-2) in
+    List.map fn qs
 
   (** midpoint *)
   let milieu a1 a2 =
@@ -85,42 +115,41 @@ module Make(R:Field.S) = struct
 
   (** subdivise a simplex in two, splitting the edge between
       vertices i and j *)
-  let split s i j =
+  let split ?tm f (s:simplex) i j =
     assert (i <> j);
-    let m = milieu s.(i) s.(j) in
+    let fi = f zero and fj = f one in
+    let t,m =
+      match tm with
+      | Some (t,m) -> (t,m)
+      | None ->
+         let t =
+           if cmp (fi *. fj) zero < 0 && false then
+             R.digho f zero fi one fj 4
+           else demi
+         in
+         let u = one -. t in
+         let m = V.comb t (vec s i) u (vec s j) in
+         (t,mk m true)
+    in
     let s1 = Array.mapi (fun k x -> if k = j then m else x) s in
     let s2 = Array.mapi (fun k x -> if k = i then m else x) s in
-    (s1, s2)
+    (t, m, s1, s2)
 
-  (** subdivise a simplex in two, splitting the edge between
-      vertices i and j, inverse matrix to recover the barycentric
-      coordinates in the subdivision from the coordinates in the original simplex *)
-  let isplit s i j =
-    assert (i <> j);
-    let s1 = Array.mapi (fun k x ->
-                 if k = j then Array.map (fun x -> of_int 2 *. x) x
-                 else if k = i then Array.mapi (fun k x -> x -. s.(j).(k)) x
-                 else x) s in
-    let s2 = Array.mapi (fun k x ->
-                 if k = i then Array.map (fun x -> of_int 2 *. x) x
-                 else if k = j then Array.mapi (fun k x -> x -. s.(i).(k)) x
-                 else x) s in
-    (s1, s2)
 
   (** subdivise a polynomial, TODO comments *)
-  let subdivise_half p i0 j0 =
+  let subdivise_half p t u i0 j0 =
     let d = dim p in
     let var i = Array.to_list (Array.init d (fun j -> if i = j then 1 else 0)) in
     (* Y = y/2, X = x + y/2 *)
     let values = Array.init d (fun i ->
-                     if i = j0 then [(var j0, demi)]
-                     else if i = i0 then [(var j0,demi)]++[(var i0,one)]
+                     if i = j0 then [(var j0, u)]
+                     else if i = i0 then [(var j0,t)]++[(var i0,one)]
                      else [(var i,one)])
     in
     subst p (Array.to_list values)
 
-  let subdivise p i0 j0 =
-    (subdivise_half p i0 j0, subdivise_half p j0 i0)
+  let subdivise p t u i0 j0 =
+    (subdivise_half p t u i0 j0, subdivise_half p u t j0 i0)
 
   let select i l =
     let rec fn acc i = function
@@ -149,18 +178,20 @@ module Make(R:Field.S) = struct
   let swap (x,y) = (y,x)
 
 
-  let subdivise2 p i0 j0 =
-    if i0 > j0 then swap (subdivise p j0 i0) else
+  let subdivise2 p t u i0 j0 =
+    if i0 > j0 then swap (subdivise p u t j0 i0) else (
       (* on travaille à i+j fixé *)
+      (*Printf.printf "coucou\n%!";*)
       let d = degree p in
       let res1 = ref [] in
       let res2 = ref [] in
       for i = 0 to d do
+        (*Printf.printf "step %d\n%!" i;*)
         let q = List.filter (fun (l,c) -> List.nth l i0 + List.nth l j0 = i) p in
-        (*    print_polynome q;*)
+        (*print_polynome stdout q; print_newline ();*)
         let q = List.sort (fun ((l1,_), _) ((l2,_), _) -> compare l2 l1)
                           (List.map (fun (l,c) -> (select2 i0 j0 l, c)) q) in
-        (*    print_polynome' q;*)
+        (*print_polynome' stdout q; print_newline ();*)
         let qs = List.fold_left (fun acc x ->
                      match acc, x with
                      | ((((l,_),_)::_ as first)::rest), (((l',_),_) as c) when l = l' ->
@@ -169,27 +200,28 @@ module Make(R:Field.S) = struct
         in
         let qs = List.map List.rev qs in
         let hn q =
-          (*      Printf.printf "coucou %d\n%!" i;
-	print_polynome' q;*)
+          (*Printf.printf "hn: ";
+	  print_polynome' stdout q; print_newline ();*)
           let triangle = Array.make (i+1) [] in
           triangle.(0) <- q;
           for j = 1 to i do
+            (*Printf.printf "hn(%d): " j;*)
 	    let rec fn acc l = match l with
 	      | ((l1,(x1,y1)),c1)::_ when y1 <> 0 && acc = [] ->
-	         fn (((l1,(x1,y1-1)), demi *. c1)::acc) l
+	         fn (((l1,(x1,y1-1)), u *. c1)::acc) l
 	      | [(l1,(x1,y1)),c1] when x1 <> 0 ->
-	         List.rev (((l1,(x1-1,y1)), demi *. c1)::acc)
+	         List.rev (((l1,(x1-1,y1)), t *. c1)::acc)
 	      | ((l1,(x1,y1)),c1)::(((l2,(x2,y2)),c2)::_ as l') ->
   	         assert(x1 > x2);
 	         assert(y1 < y2);
-	         if x1 - 1 > x2  then (
-	           fn (((l2,(x2,y2-1)), demi *. c2)::((l1,(x1-1,y1)), demi *. c1)::acc) l')
+	         if x1 - 1 > x2  then
+	           fn (((l2,(x2,y2-1)), u *. c2)::((l1,(x1-1,y1)), t *. c1)::acc) l'
 	         else
-	           fn (((l1,(x1-1,y1)),demi *. (c1+.c2))::acc) l'
+	           fn (((l1,(x1-1,y1)), t*.c1+.u*.c2)::acc) l'
 	      | _ -> List.rev acc
 	    in
 	    triangle.(j) <- fn [] triangle.(j-1);
-            (*	print_polynome' triangle.(j)*)
+            (*print_polynome' stdout triangle.(j); print_newline ();*)
           done;
           for j = 0 to i  do
 	    (match triangle.(j) with
@@ -205,9 +237,10 @@ module Make(R:Field.S) = struct
         List.iter hn qs
       done;
       let cmp (l,_) (l',_) = compare l' l in
-      List.sort cmp !res1, List.sort cmp !res2
+      List.sort cmp !res1, List.sort cmp !res2)
 
-  let debug = ref (try Sys.argv.(1) = "-d" with _ -> false)
+  let debug = ref (Array.mem "-d" Sys.argv)
+  let show = ref (Array.mem "-s" Sys.argv)
 
   exception Found
 
@@ -223,11 +256,11 @@ module Make(R:Field.S) = struct
     let test_simplex l =
       let w = Array.of_list (List.map (fun i -> snd m.(i)) l) in
       try
-        if !debug then Printf.eprintf "test simplex: %a\n%!"
-                         V.print_matrix w;
+        (*if !debug then Printf.eprintf "test simplex: %a\n%!"
+                         V.print_matrix w;*)
         let v = V.bcoord z w in
-        if !debug then Printf.eprintf "  => %a\n%!"
-                         V.print_vector v;
+        (*if !debug then Printf.eprintf "  => %a\n%!"
+                         V.print_vector v;*)
         if Array.for_all (fun x -> cmp x zero >= 0) v then
           begin
             if !debug then

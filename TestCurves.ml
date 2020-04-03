@@ -9,6 +9,7 @@ open RX.Poly
 
 let display scale ori (s,t) =
   let open Graphics in
+  init ();
   let _ = clear_graph () in
   set_color green;
   display scale ori t (fun x -> x);
@@ -25,6 +26,10 @@ let z = [[0;0;1], one]
 let x2 = x ** x
 let y2 = y ** y
 let z2 = z ** z
+let xmz = x -- z
+let ymz = y -- z
+let xmz2 = xmz ** xmz
+let ymz2 = ymz ** ymz
 
 let circle = x2 ++ y2 -- z2
 let _ = Printf.printf "circle = %a\n%!" print_polynome circle
@@ -38,10 +43,6 @@ let t1 = triangulation ellipse
 
 let _ = display 200.0 (0.,0.) t1
 
-let xmz = x -- z
-let ymz = y -- z
-let xmz2 = xmz ** xmz
-let ymz2 = ymz ** ymz
 let circle2 = xmz2 ++ ymz2 -- z2
 let _ = Printf.printf "circle2 = %a\n%!" print_polynome circle2
 let t1 = triangulation circle2
@@ -74,16 +75,14 @@ let t1 = triangulation quartic
 
 let _ = display 400.0 (0.,0.) t1
 
-
-
-
-(*
-let ellipse4 = cst(of_int 50000000) ** xmz2 ++ ymz2 -- z2
-let _ = Printf.printf "ellipse4 = %a\n%!" print_polynome ellipse4
-let t1 = triangulation ellipse4
-
-let ellipse5 = cst(of_int 500000) ** xmz2 ++ ymz2 -- z2
-let _ = Printf.printf "ellipse5 = %a\n%!" print_polynome ellipse4
+let ellipse5 = cst(of_int 500) ** xmz2 ++ ymz2 -- z2
+let _ = Printf.printf "ellipse5 = %a\n%!" print_polynome ellipse5
 let t1 = triangulation ellipse5
 
- *)
+let _ = display 400.0 (0.,0.) t1
+
+let ellipse5 = cst(of_int 50000) ** xmz2 ++ ymz2 -- z2
+let _ = Printf.printf "ellipse5 = %a\n%!" print_polynome ellipse5
+let t1 = triangulation ellipse5
+
+let _ = display 5000.0 (1.,2.) t1

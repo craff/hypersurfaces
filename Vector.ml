@@ -2,7 +2,8 @@ module Make(R:Field.S) = struct
   open R
 
   (** vector *)
-  type vector = t array
+  type vector = R.t array
+  type t = Vector
 
   (** column matrix *)
   type matrix = vector array
