@@ -86,17 +86,6 @@ module Q = Make(struct
   let ( -. ) = ( - )
   let ( /. ) = ( / )
   let ( ~-.) = ( ~-)
-  let pow (x:t) (n:int) =
-    let (x,n) = if Stdlib.(n < 0) then (one /. x, Stdlib.(-n)) else (x,n) in
-    let rec fn n =
-      if Stdlib.(n <= 0) then one
-      else if Stdlib.(n = 1) then x
-      else
-        let q = fn (n lsr 1) in
-        let q2 = q *. q in
-        if Stdlib.(n land 0x1 = 0) then q2 else q2 *. x
-    in
-    fn n
   let cmp = Q.compare
   let abs = Q.abs
   let of_int x = of_ints x 1
