@@ -55,7 +55,7 @@ module Make(R:Field.S) = struct
     let b = v1.p = v2.p in
     if i < j then (true,(i,j,b)) else (false,(j,i,b))
 
-  let eval dirs dim deg ({s;p} as s0) =
+  let eval dirs dim deg ({s;p;l} as s0) =
     (*if !debug then Printf.eprintf "eval %a => %a\n%!" print_matrix s print_vector l0;*)
     let best = ref zero in
     let best_i = ref 0 in
@@ -90,7 +90,7 @@ module Make(R:Field.S) = struct
         let t = cmp c zero in
         if t < 0 then ap := false;
         if t > 0 then an := false) p;
-    not !ap && not !an &&
+    (not !ap && not !an &&
     let gd =
       let s1 = to_matrix s in
       let gd = ref (tgradient p) in
@@ -119,22 +119,11 @@ module Make(R:Field.S) = struct
             ls) s;
       Array.of_list !gd
     in
-    if !debug then Printf.eprintf "test for %d points for\n %a\n%!" (Array.length gd)
-      print_simplex s;
+    if !debug then Printf.eprintf "test for %d points for\n %a %a\n%!" (Array.length gd)
+      print_simplex s print_polynome p;
     if !debug then Array.iter (fun (l,v) -> Printf.eprintf " %a %a\n%!"
                                               print_list l print_vector v) gd;
-    zero_in_hull gd
-
-  let filter_map f l =
-    let rec fn = function
-      | [] -> []
-      | x::l ->
-         try
-           f x :: fn l
-         with Not_found ->
-           fn l
-    in
-    fn l
+    zero_in_hull gd)
 
   let _ = Printexc.record_backtrace true
 

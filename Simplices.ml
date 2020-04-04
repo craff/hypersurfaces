@@ -64,7 +64,12 @@ module Make(R:Field.S) = struct
 
   let to_matrix ?(opp=false) s : V.matrix =  Array.init (Array.length s) (fun i -> vec s i)
 
-  let print_simplex ch s = V.print_matrix ch (to_matrix s)
+  let print_simplex ch s =
+    let pr ch v =
+      let sg = if v.p then "+" else "-" in
+      Printf.fprintf ch "%s%a" sg V.print_vector v.v
+    in
+    V.print_array pr ch s
 
   let pos s i = s.(i).p
   let neg s i = not (pos s i)
