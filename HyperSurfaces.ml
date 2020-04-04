@@ -134,6 +134,8 @@ module Make(R:Field.S) = struct
     let open Stdlib in
     let p0 = complete p0 in
     let ls = quadrants p0 in
+    let (s0,p00) = List.hd ls in
+    assert (p0 = p00);
     let n = List.length ls in
     let all = Hashtbl.create 1001 in
     let by_vertex = Hashtbl.create 1001 in
@@ -209,8 +211,8 @@ module Make(R:Field.S) = struct
       let first = (tm = None) in
       let (t,m,s1,s2) = split ?tm f s.s i j in
       let tm = (t,m) in
-      let u = R.(one -. t) in
-      let (p1,p2) = subdivise2 s.p t u i j in
+      let p1 = Poly.transform p0 (to_matrix s0) (to_matrix s1) in
+      let p2 = Poly.transform p0 (to_matrix s0) (to_matrix s2) in
       if !debug then
         begin
           Printf.eprintf "quadrant: %a\n%!" print_simplex s.s;
