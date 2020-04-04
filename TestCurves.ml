@@ -32,6 +32,16 @@ let ymz = y -- z
 let xmz2 = xmz ** xmz
 let ymz2 = ymz ** ymz
 
+let xmy = x -- y
+let xpy = x ++ y
+let xmy2 = xmy ** xmy
+let xpy2 = xpy ** xpy
+
+let xmymz = x -- y -- z
+let xpymz = x ++ y ++ z
+let xmymz2 = xmymz ** xmymz
+let xpymz2 = xpymz ** xpymz
+
 let circle = x2 ++ y2 -- z2
 let _ = Printf.printf "circle = %a\n%!" print_polynome circle
 let t1 = triangulation circle
@@ -50,20 +60,18 @@ let t1 = triangulation circle2
 
 let _ = display 200.0 (0.,0.) t1
 
-let xmy = x -- y
-let xpy = x ++ y
-let xmy2 = xmy ** xmy
-let xpy2 = xpy ** xpy
 let ellipse2 = cst(of_int 50) ** xmy2 ++ xpy2 -- z2
 let _ = Printf.printf "ellipse2 = %a\n%!" print_polynome ellipse2
 let t1 = triangulation ellipse2
 
 let _ = display 400.0 (0.,0.) t1
 
-let xmz = x -- z
-let ymz = y -- z
-let xmz2 = xmz ** xmz
-let ymz2 = ymz ** ymz
+let ellipse2b = cst(of_int 8) ** xmy2 ++ xpy2 -- z2
+let _ = Printf.printf "ellipse2b = %a\n%!" print_polynome ellipse2b
+let t1 = triangulation ellipse2b
+
+let _ = display 200.0 (0.,0.) t1
+
 let ellipse3 = cst(of_int 4) ** xmz2 ++ ymz2 -- z2
 let _ = Printf.printf "ellipse3 = %a\n%!" print_polynome ellipse3
 let t1 = triangulation ellipse3
@@ -80,10 +88,18 @@ let ellipse5 = cst(of_int 500) ** xmz2 ++ ymz2 -- z2
 let _ = Printf.printf "ellipse5 = %a\n%!" print_polynome ellipse5
 let t1 = triangulation ellipse5
 
-let _ = display 400.0 (0.,0.) t1
+let _ = display 400.0 (1.,1.) t1
 
 let ellipse5 = cst(of_int 50000) ** xmz2 ++ ymz2 -- z2
 let _ = Printf.printf "ellipse5 = %a\n%!" print_polynome ellipse5
 let t1 = triangulation ellipse5
 
-let _ = display 5000.0 (1.,2.) t1
+let _ = display 400.0 (1.,1.) t1
+
+      (*
+let ellipse5 = cst(of_int 5000000) ** xmz2 ++ ymz2 -- z2
+let _ = Printf.printf "ellipse5 = %a\n%!" print_polynome ellipse5
+let t1 = triangulation ellipse5
+
+let _ = display 400.0 (1.,1.) t1
+       *)
