@@ -53,7 +53,7 @@ module Make(R:Field.S) = struct
   let edge_key v1 v2 =
     let i = v1.uid and j = v2.uid in
     let b = v1.p = v2.p in
-    if i < j then (i,j,b) else (j,i,b)
+    if i < j then (true,(i,j,b)) else (false,(j,i,b))
 
   let eval dirs dim deg ({s;p} as s0) =
     (*if !debug then Printf.eprintf "eval %a => %a\n%!" print_matrix s print_vector l0;*)
@@ -167,17 +167,22 @@ module Make(R:Field.S) = struct
     let by_edge = Hashtbl.create 1001 in
     let add_e s =
       List.iter (fun (i,j) ->
-          let key = edge_key s.s.(i) s.s.(j) in
+          let (r,key) = edge_key s.s.(i) s.s.(j) in
+          let (i,j) = if r then (i,j) else (j,i) in
           let l = try Hashtbl.find by_edge key with Not_found -> [] in
           Hashtbl.replace by_edge key ((i,j,s)::l)) dirs
     in
     let rm_e s =
       List.iter (fun (i,j) ->
-          let key = edge_key s.s.(i) s.s.(j) in
+          let (_,key) = edge_key s.s.(i) s.s.(j) in
           let l = try Hashtbl.find by_edge key with Not_found -> assert false in
           let l = List.filter (fun (_,_,s') -> s != s') l in
           if l = [] then Hashtbl.remove by_edge key
           else Hashtbl.replace by_edge key l) dirs
+    in
+    let find_e s1 s2 =
+      let (_,key) = edge_key s1 s2 in
+      Hashtbl.find by_edge key
     in
     let rm_s s = rm s; rm_v s; rm_e s in
     let add_s s = add s; add_v s; add_e s in
@@ -233,7 +238,8 @@ module Make(R:Field.S) = struct
       let s2 = mk ~f ~k:s.k s2 p2 in
       if first then
         begin
-          let l = Hashtbl.find by_edge (edge_key s.s.(i) s.s.(j)) in
+          let l = find_e s.s.(i) s.s.(j) in
+          if dim = 3 then assert (List.length l = 1);
           List.iter (fun (i',j',s') ->
               if !debug then Printf.eprintf "quadrant to split: %d %d %a\n%!" i j print_simplex s'.s;
               let (i',j') =
@@ -245,7 +251,7 @@ module Make(R:Field.S) = struct
               assert (same_sign = (s.s.(j).p = s'.s.(j').p));
               let tm = if same_sign then tm else (t,{m with p = not (m.p)}) in
               split_s ~tm s' i' j') l;
-          try ignore (Hashtbl.find by_edge (edge_key s.s.(i) s.s.(j))); assert false;
+          try ignore (find_e s.s.(i) s.s.(j)); assert false;
           with Not_found -> ()
         end;
       if not s.k then
@@ -263,12 +269,13 @@ module Make(R:Field.S) = struct
            assert (not s.k);
            if dim <> 3 then raise Exit;
            List.iter (fun (i,j) ->
-               let l = Hashtbl.find by_edge (edge_key s.s.(i) s.s.(j)) in
+               let l = find_e s.s.(i) s.s.(j) in
                try
                  match l with
                  | [(i1,j1,s1);(i2,j2,s2)] ->
                     assert (s1 == s || s2 == s);
-                    if s1.k || s2.k then raise Exit;
+                    assert (s1.s.(i1).uid = s2.s.(i2).uid);
+                    assert (s1.s.(j1).uid = s2.s.(j2).uid);
                     let k = List.find (fun k -> k <> i1 && k <> j1) [0;1;2] in
                     let l = List.find (fun k -> k <> i2 && k <> j2) [0;1;2] in
                     let (ss1,ss2) =
