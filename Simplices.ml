@@ -133,7 +133,7 @@ module Make(R:Field.S) = struct
            else demi
          in
          let u = one -. t in
-         let m = V.comb t (vec s i) u (vec s j) in
+         let m = V.normalise (V.comb t (vec s i) u (vec s j)) in
          (t,mk m true)
     in
     let s1 = Array.mapi (fun k x -> if k = j then m else x) s in

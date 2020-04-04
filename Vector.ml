@@ -34,6 +34,20 @@ module Make(R:Field.S) = struct
     let x = v1 --- v2 in
     x *.* x
 
+  let cos2 v1 v2 =
+    let x = v1 *.* v2 in
+    (x *. x) /. ((v1 *.* v1) *. (v2 *.* v2))
+
+  let sin2 v1 v2 =
+    one -. cos2 v1 v2
+
+  let norm v =
+    Array.fold_left (fun acc x -> acc +. abs x) zero v
+
+  let normalise v =
+    let n = one /. norm v in
+    Array.map (fun x -> x *. n) v
+
   let print_array fn ch v =
     Printf.fprintf ch "(";
     Array.iteri (fun i x ->
