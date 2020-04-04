@@ -2,7 +2,7 @@ open Graphics
 
 module Make(R:Field.S) = struct
   open R
-
+  module V = Vector.Make(R)
 
   let init =
     let init = ref false in
@@ -22,9 +22,18 @@ module Make(R:Field.S) = struct
       try
         let (v1,v2) =
           match cmp v1.(2) zero, cmp v2.(2) zero with
-          | (0 | 1), (0 | 1) -> (v1,v2)
+          | (0, 0)             -> raise Exit
+          | (0 | 1), (0 | 1)   -> (v1,v2)
           | (0 | -1), (0 | -1) -> (Array.map R.(~-.) v1, Array.map R.(~-.) v2)
-          | _ -> raise Exit
+          | (1, -1)            ->
+             let p1 = V.comb R.(~-. (v2.(2))) v1 v1.(2) v2 in
+             p1.(2) <- zero (* avoid rounding pb *);
+             draw_segment v1 p1; draw_segment p1 v2; raise Exit
+          | (-1, 1)            ->
+             let p1 = V.comb R.(~-. (v1.(2))) v2 v2.(2) v1 in
+             p1.(2) <- zero (* avoid rounding pb *);
+             draw_segment v1 p1; draw_segment p1 v2; raise Exit
+          | _ -> assert false
         in
         let ([|x1;y1;z1|], [|x2;y2;z2|]) = if cmp v2.(2) zero = 0 then (v2,v1) else (v1,v2) in
         let x1' = to_float x1 in
