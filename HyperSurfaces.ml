@@ -178,9 +178,9 @@ module Make(R:Field.S) = struct
     let rm_s s = rm s; rm_v s; rm_e s in
     let add_s s = add s; add_v s; add_e s in
     let count = ref 0 in
-    let mk ?(f=1.0 /. float_of_int n) ?(k=false) ?(add=true) s p =
+    let mk ?(f=1.0 /. float_of_int n) ?(add=true) s p =
       let s =
-        { s; p; x=zero; d=(0,0); k
+        { s; p; x=zero; d=(0,0); k = false
         ; l = plane p
         ; f; suid = !count }
       in
@@ -190,13 +190,24 @@ module Make(R:Field.S) = struct
       s
     in
 
-
     let to_do = List.map (fun (s,p) -> mk s p) ls in
     let to_do = ref (List.sort order to_do) in
     let add_to_do l = to_do := List.merge order (List.sort order l) !to_do in
     let total = ref 0.0 in
     let nb_keep = ref 0 in
     let nb_remove = ref 0 in
+    let re_add s =
+      assert (not s.k);
+      let rec fn acc s =
+        Array.fold_left (fun acc v ->
+            let ls = Hashtbl.find by_vertex v.uid in
+            List.fold_left (fun acc (_,s) ->
+                if s.k then (s.k <- false; total := !total -. s.f; s::acc)
+                else acc) acc ls
+          ) acc s.s
+      in
+      add_to_do (fn [] s)
+    in
 
     let rec split_s ?tm s i j =
       let v1 = Array.init dim (fun k -> if i = k then one else zero) in
@@ -225,8 +236,8 @@ module Make(R:Field.S) = struct
         end;
       rm_s s;
       let f = s.f /. 2.0 in
-      let s1 = mk ~f ~k:s.k s1 p1 in
-      let s2 = mk ~f ~k:s.k s2 p2 in
+      let s1 = mk ~f s1 p1 in
+      let s2 = mk ~f s2 p2 in
       if first then
         begin
           let l = find_e s.s.(i) s.s.(j) in
@@ -245,11 +256,11 @@ module Make(R:Field.S) = struct
           try ignore (find_e s.s.(i) s.s.(j)); assert false;
           with Not_found -> ()
         end;
-      if not s.k then
-        begin
-          add_to_do [s1;s2];
-          if not first then to_do := List.filter (fun s' -> s != s') !to_do
-        end;
+      if not first then (to_do := List.filter (fun s' -> s != s') !to_do;
+                         if s.k then total := !total -. s.f);
+      add_to_do [s1;s2];
+      re_add s1; re_add s2;
+      if dim = 3 then Hashtbl.iter (fun _ l -> assert (List.length l = 2)) by_edge;
     in
 
     let rec test () =
@@ -300,9 +311,11 @@ module Make(R:Field.S) = struct
                         print_simplex s2.s print_polynome s2.p
                         print_simplex ss1 print_polynome p1'
                         print_simplex ss2 print_polynome p2';
-                    rm_s s1; rm_s s2; add_s s1'; add_s s2';
+                    rm_s s1; rm_s s2;
+                    add_s s1'; add_s s2';
                     to_do := List.filter (fun s' -> s1 != s' && s2 != s') !to_do;
                     add_to_do [s1';s2'];
+                    re_add s1'; re_add s2';
                     raise Found
                  | _       ->
                     Printf.eprintf "len: %d\n%!" (List.length l);
