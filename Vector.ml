@@ -26,6 +26,15 @@ module Make(R:Field.S) = struct
     Array.iteri (fun i x -> res := !res +. x *. v2.(i)) v1;
     !res
 
+  let zero_v d = Array.make d zero
+
+  let ( **.) x v =
+    Array.map (fun y -> x*.y) v
+
+  let ( //.) v x = (one /. x) **. v
+
+  let opp v = Array.map (~-.) v
+
   let dist v1 v2 =
     let x = v1 --- v2 in
     sqrt (to_float (x *.* x))
