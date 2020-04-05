@@ -1,6 +1,8 @@
 (*module R = Field.Gmp_R(struct let prec = 256 end)*)
 (*module R = Field.Q*)
-module R = Field.Float
+let m = if Array.mem "-q" Sys.argv then (module Field.Q:Field.S)
+        else (module Field.Float)
+module R = (val m)
 module D = Display.Make(R)
 open D
 module RX = HyperSurfaces.Make(R)

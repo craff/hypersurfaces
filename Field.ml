@@ -58,7 +58,7 @@ module Make(R:SMin) = struct
 end
 
 (** Float field *)
-module Float = Make(struct
+module Float:S = Make(struct
   type t = float
   let zero = 0.
   let one = 1.
@@ -76,7 +76,7 @@ module Float = Make(struct
 end)
 
 (** Rational field from Zarith *)
-module Q = Make(struct
+module Q:S = Make(struct
   open Q
   type t = Q.t
   let zero = zero
@@ -94,7 +94,7 @@ module Q = Make(struct
   let exact = true
 end)
 
-module Gmp_R(Prec: sig val prec: int end) =
+module Gmp_R(Prec: sig val prec: int end) : S =
   Make(struct
       open Mpfr.FR(Prec)
       let mode = `N

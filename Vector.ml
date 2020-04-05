@@ -119,6 +119,7 @@ module Make(R:Field.S) = struct
     with Exit -> zero
 
   let _ =
+    let open R in
     assert (cmp (det [| [| one; zero |]; [| zero; one |] |]) one = 0);
     assert (cmp (det [| [| zero; one |]; [| one; zero |] |]) (~-. one) = 0);
     assert (cmp (det [| [| one; one |]; [| one; one |] |]) zero = 0)

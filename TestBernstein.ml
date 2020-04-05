@@ -47,7 +47,7 @@ let r2 = of_int 2
 let r3 = of_int 3
 let r4 = of_int 4
 
-let p = x2 ++ y2 ++ cst 2.0 ** (x ** y)
+let p = x2 ++ y2 ++ cst (of_int 2) ** (x ** y)
 let q,s = subdivise2 p R.(r1 /. r4) R.(r3 /. r4) 0 1
 let _ = Printf.printf "p = %a\n=> q = %a,\n s = %a\n%!"
           print_polynome p print_polynome q print_polynome s
@@ -58,7 +58,7 @@ let q,s = subdivise2 p R.(r3 /. r4) R.(r1 /. r4) 0 1
 let _ = Printf.printf "p = %a\n=> q = %a,\n s = %a\n%!"
           print_polynome p print_polynome q print_polynome s
 
-let p = x2 ++ cst 2.0 ** y2 -- cst 2.0 ** (x ** y)
+let p = x2 ++ cst (of_int 2) ** y2 -- cst (of_int 2) ** (x ** y)
 let q,s = subdivise2 p R.(r1 /. r4) R.(r3 /. r4) 0 1
 let _ = Printf.printf "p = %a\n=> q = %a,\n s = %a\n%!"
           print_polynome p print_polynome q print_polynome s
