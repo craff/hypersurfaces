@@ -63,9 +63,10 @@ module Make(R:SMin) = struct
       | c1, c2 when c1 > 0 && c2 < 0 -> fn y fy x fx nb
       | _ -> invalid_arg "digho same sign"
 
+    (* keep 4/5e of the precision *)
     let epsilon =
       let rec fn nb x =
-        if (one +. x =. one) then pow (one /. of_int 2) ((9 * nb) / 10)
+        if (one +. x =. one) then pow (one /. of_int 2) ((4 * nb) / 5)
         else fn (nb + 1) (x /. of_int 2)
       in
       let r = fn 0 one in

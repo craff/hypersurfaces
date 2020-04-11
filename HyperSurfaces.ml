@@ -76,7 +76,7 @@ module Make(R:Field.S) = struct
               let l = transform l0 s2 s1 in
               if not (List.exists (fun (_,v) ->
                           let r = ref true in
-                          Array.iteri (fun i x -> r := !r && cmp x l.(i) = 0) v;
+                          Array.iteri (fun i x -> r := !r && x =. l.(i)) v;
                           !r
                         ) !gd) then
                 gd := (var_power i dim (deg-1),l) :: !gd)
@@ -137,10 +137,10 @@ module Make(R:Field.S) = struct
           if l = [] then Hashtbl.remove by_edge key
           else Hashtbl.replace by_edge key l) dirs
     in
-    let find_e s1 s2 =
+    (*let find_e s1 s2 =
       let (_,key) = edge_key s1 s2 in
       Hashtbl.find by_edge key
-    in
+    in*)
     let rm_s s = rm s; rm_v s; rm_e s in
     let add_s s = add s; add_v s; add_e s in
 
@@ -154,22 +154,17 @@ module Make(R:Field.S) = struct
 
     let count = ref 0 in
 
-    let f v1 v2 =
-      let x = v1 *.* v2 in
-      x *. abs x /. ((v1 *.* v1) *. (v2 *.* v2)) +. one
-    in
-
     let conic' s y =
       List.fold_left (fun acc (i,j) ->
           let c = sqrt ((vec s.s i *.* vec s.s i) *. (vec s.s j *.* vec s.s j)) -. vec s.s i *.* vec s.s j in
-          assert (cmp c zero >= 0);
+          assert (c >=. zero);
           acc +. (c *. y.(i) *. y.(j))) zero dirs
     in
 
     let conic s x =
       let y = pcoord x (to_matrix s.s) in
       let sg = Array.fold_left (+.) zero y in
-      (conic' s y, cmp sg zero > 0)
+      (conic' s y, sg >. zero)
     in
 
     let mk ?(f=Stdlib.(1.0 /. float_of_int n)) s =
@@ -191,16 +186,17 @@ module Make(R:Field.S) = struct
     let add_to_do l = to_do := List.merge order (List.sort order l) !to_do in
     let total = ref 0.0 in
 
-    let re_add s =
+    let re_add acc s =
       assert (not s.k);
-      let fn s =
-        Array.iter (fun v ->
-            let ls = Hashtbl.find by_vertex v.uid in
-            List.iter (fun (_,s) ->
-                if s.k then Stdlib.(s.k <- false; total := !total -. s.f)) ls
-          ) s.s
+      let fn acc s =
+        Array.fold_left (fun acc v ->
+            let ls = find_v v in
+            List.fold_left (fun acc (_,s) ->
+                if s.k then Stdlib.(s.k <- false; total := !total -. s.f; s::acc)
+                else acc) acc ls
+          ) acc s.s
       in
-      fn s
+      fn acc s
     in
 
     let ajoute x =
@@ -216,7 +212,11 @@ module Make(R:Field.S) = struct
         if c >=. zero then
           begin
             if !debug then Printf.eprintf "remove %a\n%!" print_simplex s.s;
-            rm_s s; if s.k then total := Stdlib.(!total -. s.f);
+            rm_s s;
+            if s.k then
+              (s.k <- false; total := Stdlib.(!total -. s.f))
+            else
+              to_do := List.filter ((!=) s) !to_do;
             f := Stdlib.(!f +. s.f);
             for i = 0 to dim-1 do
               add_face (face s i sg)
@@ -225,19 +225,12 @@ module Make(R:Field.S) = struct
       in
       Hashtbl.iter (fun _ -> fn) all;
       let f = Stdlib.(!f /. (float (List.length !faces))) in
-      let add vs =
+      let add acc vs =
         let s = Array.of_list (x::vs) in
         let s = mk ~f s in
-        re_add s;
+        re_add (s::acc) s;
       in
-      List.iter add !faces;
-    in
-
-    let quality s x =
-      let g = eval_grad s.dp x in
-      let sq = sqrt (g *.* g) in
-      List.fold_left (fun acc (_,c) -> let x = c *.* g /. (sqrt (c *.* c) *. sq) in
-                                        if cmp x acc < 0 then x else acc) one s.dp
+      List.fold_left add [] !faces;
     in
 
     let center s =
@@ -268,10 +261,7 @@ module Make(R:Field.S) = struct
          if decision by_vertex deg dim s then
            begin
              let x = center s in
-             ajoute (Simp.mk x true);
-             to_do := [];
-             Hashtbl.iter (fun _ s -> if not s.k then to_do := s::!to_do) all;
-             to_do := List.sort order !to_do;
+             add_to_do (ajoute (Simp.mk x true));
              false
            end
          else
@@ -321,7 +311,7 @@ module Make(R:Field.S) = struct
     let all = Hashtbl.fold (fun _ s acc -> s :: acc) all [] in
     List.iter (fun {s;p} ->
         let plane = List.combine (Array.to_list s) (Array.to_list (plane p)) in
-        let pos,neg = List.partition (fun (p,x) -> cmp x zero > 0) plane in
+        let pos,neg = List.partition (fun (p,x) -> x >. zero) plane in
         if !debug then
           begin
             Printf.eprintf "quadrant: %a\n%!" print_simplex s;

@@ -106,30 +106,6 @@ module Make(R:Field.S) = struct
   let milieu a1 a2 =
     Array.mapi (fun i x -> demi *. (x +. a2.(i))) a1
 
-
-  (** subdivise a simplex in two, splitting the edge between
-      vertices i and j *)
-  let split ?tm f (s:simplex) i j =
-    assert (i <> j);
-    let fi = f zero and fj = f one in
-    let t,m =
-      match tm with
-      | Some (t,m) -> (t,m)
-      | None ->
-         let t =
-           if cmp (fi *. fj) zero < 0 && false then
-             R.digho f zero fi one fj 4
-           else demi
-         in
-         let u = one -. t in
-         let m = V.normalise (V.comb t (vec s i) u (vec s j)) in
-         (t,mk m true)
-    in
-    let s1 = Array.mapi (fun k x -> if k = j then m else x) s in
-    let s2 = Array.mapi (fun k x -> if k = i then m else x) s in
-    (t, m, s1, s2)
-
-
   (** subdivise a polynomial, TODO comments *)
   let subdivise_half p t u i0 j0 =
     let d = dim p in

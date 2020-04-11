@@ -91,9 +91,15 @@ let t1 = triangulation quartic
 
 let _ = display 400.0 (0.,0.) t1
 
-let ellipse5 = cst(of_int 500) ** xmz2 ++ ymz2 -- z2
-let _ = Printf.printf "ellipse5 = %a\n%!" print_polynome ellipse5
-let t1 = triangulation ellipse5
+let quartic2 = circle ** circle ++ cst(of_int 1 /. of_int 200) ** x ** y ** (x -- y) ** (x ++ y)
+let _ = Printf.printf "quartic2 = %a\n%!" print_polynome quartic2
+let t1 = triangulation quartic2
+
+let _ = display 400.0 (0.,0.) t1
+
+let ellipse4 = cst(of_int 500) ** xmz2 ++ ymz2 -- z2
+let _ = Printf.printf "ellipse4 = %a\n%!" print_polynome ellipse4
+let t1 = triangulation ellipse4
 
 let _ = display 400.0 (1.,1.) t1
 
