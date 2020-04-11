@@ -87,19 +87,9 @@ module Make(R:Field.S) = struct
       the writing of p in each simplex, giving a complete decomposition of
       the projective space of dimension n (therefore 2^(n-1) simplices,
       if n is the dimension, that is the number of variables. *)
-  let quadrants (p:polynomial) : (simplex*polynomial) list =
-    let dim = dim p in
-    let q0 = Array.init dim (fun i -> mk (var dim i) true) in
+  let quadrants (dim:int) : simplex list =
     (* the identity matrix *)
-    let rec fn q =
-      (* sign of the monomial in the given quadrant, product of the -1 that
-         correspondsto odd power, compensate for the -1 in the point coordinates *)
-      let sn l = fst (List.fold_left (fun (acc,i) n ->
-                     ((if n mod 2 = 0 || pos q i then acc else ~-. acc),i+1)) (one,0) l)
-      in
-      let p = List.map (function (l,c) -> (l, sn l *. c)) p in
-      (q, p)
-    in
+    let q0 = Array.init dim (fun i -> mk (var dim i) true) in
     (* iterates fn on all quadrant *)
     let rec gn acc q i =
       if i < 0  then q::acc
@@ -110,8 +100,7 @@ module Make(R:Field.S) = struct
           gn (gn acc q' (i-1)) q (i-1)
         end
     in
-    let qs = gn [] q0 (dim-2) in
-    List.map fn qs
+    gn [] q0 (dim-2)
 
   (** midpoint *)
   let milieu a1 a2 =
@@ -250,7 +239,10 @@ module Make(R:Field.S) = struct
   exception Found
 
   let zero_in_hull m =
-    let d = Array.length (snd m.(0)) in
+    let a2 =
+      V.(zih (Array.map snd m))
+    in
+    (*let d = Array.length (snd m.(0)) in
     let rec fn f d n acc =
       if d < 0 then f acc else
         for i = d to n do
@@ -280,7 +272,11 @@ module Make(R:Field.S) = struct
       with
         Exit | Not_found -> ()
     in
-    try fn test_simplex d (Array.length m - 1) []; false
-    with Found -> true
+    let a1 =
+      try fn test_simplex d (Array.length m - 1) []; false
+      with Found -> true
+    in
+    assert (a1 = a2 || (Printf.eprintf "%a\n%!" V.print_matrix (Array.map snd m); false));*)
+    a2
 
 end

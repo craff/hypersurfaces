@@ -36,17 +36,13 @@ module Make(R:Field.S) = struct
   type simplicies =
     { s : simplex
     ; p : polynomial
+    ; dp : (int list * R.t array) list
     ; l : R.t array
     ; f : float
-    ; mutable x : R.t
-    ; mutable d : int * int
     ; mutable k : bool
     ; suid : int }
 
-  let order s1 s2 =
-    match cmp s2.x s1.x with
-    | 0 -> compare s2.f s1.f
-    | c -> c
+  let order s1 s2 = compare s2.f s1.f
 
   let vertex_key v1 = Simplices.(v1.uid)
 
@@ -55,35 +51,7 @@ module Make(R:Field.S) = struct
     let b = v1.p = v2.p in
     if i < j then (true,(i,j,b)) else (false,(j,i,b))
 
-  let eval dirs dim deg ({s;p;l} as s0) =
-    (*if !debug then Printf.eprintf "eval %a => %a\n%!" print_matrix s print_vector l0;*)
-    let best = ref zero in
-    let best_i = ref 0 in
-    let best_j = ref 0 in
-    let dp = tgradient p in
-    let t = Array.init dim (fun i -> List.assoc (var_power i dim (deg-1)) dp) in
-    try
-      List.iter (fun (i,j) ->
-          let x = dist2 (vec s i) (vec s j) in
-          let y = t.(i) *.* t.(j) in
-          let zi = Array.for_all (fun x -> cmp x zero = 0) t.(i) in
-          let zj = Array.for_all (fun x -> cmp x zero = 0) t.(j) in
-          if zi && zj then (best_i := i; best_j := j; raise Exit);
-          let f = y *. y /. (t.(i) *.* t.(i)) /. (t.(j) *.* t.(j)) in
-          if not zi && not zj then
-            begin
-              let z = x /. (f +. one) in
-              if cmp z !best > 0 then (best := x; best_i := i; best_j := j)
-            end) dirs;
-      (*if !debug then Printf.eprintf "eval => %a (%d, %d)\n%!" print !best !best_i !best_j;*)
-      s0.x <- !best;
-      s0.d <- (!best_i,!best_j)
-    with Exit ->
-      s0.x <- of_int 1_000_000_000;
-      s0.d <- (!best_i,!best_j)
-
-
-  let decision tbl deg dim {s; d; p; l=l0} =
+  let decision tbl deg dim {s; p; l=l0} =
     let ap = ref true in
     let an = ref true in
     List.iter (fun (_,c) ->
@@ -104,12 +72,8 @@ module Make(R:Field.S) = struct
               let s2 =
                 if opp then Array.init dim (fun i -> cev s' i)
                        else Array.init dim (fun i -> vec s' i)
-
               in
               let l = transform l0 s2 s1 in
-              if !debug then Printf.eprintf " %d %a at %a with %b => %a => %a\n%!"
-                               i print_simplex s' print_vertex v opp
-                               print_vector l0 print_vector l;
               if not (List.exists (fun (_,v) ->
                           let r = ref true in
                           Array.iteri (fun i x -> r := !r && cmp x l.(i) = 0) v;
@@ -125,17 +89,15 @@ module Make(R:Field.S) = struct
                                               print_list l print_vector v) gd;
     zero_in_hull gd)
 
-  let _ = Printexc.record_backtrace true
+  let h = one /. of_int 2
 
   let triangulation p0 =
     let dim = dim p0 in
     let deg = degree p0 in
     let dirs = all_dirs dim in
-    let open Stdlib in
     let p0 = complete p0 in
-    let ls = quadrants p0 in
-    let (s0,p00) = List.hd ls in
-    assert (p0 = p00);
+    let ls = quadrants dim in
+    let s0 = List.hd ls in
     let n = List.length ls in
     let all = Hashtbl.create 1001 in
     let by_vertex = Hashtbl.create 1001 in
@@ -154,6 +116,10 @@ module Make(R:Field.S) = struct
           let l = List.filter (fun (_,s') -> s != s') l in
           if l = [] then Hashtbl.remove by_vertex key
           else Hashtbl.replace by_vertex key l) s.s
+    in
+    let find_v v =
+      let key = vertex_key v in
+      Hashtbl.find by_vertex key
     in
     let by_edge = Hashtbl.create 1001 in
     let add_e s =
@@ -177,173 +143,146 @@ module Make(R:Field.S) = struct
     in
     let rm_s s = rm s; rm_v s; rm_e s in
     let add_s s = add s; add_v s; add_e s in
+
+    let face s i sg =
+      let vs = ref [] in
+      for j = 0 to dim - 1 do
+        if i <> j then vs := (if sg then s.s.(j) else ch_sg s.s.(j)) :: !vs
+      done;
+      List.sort (fun v1 v2 -> compare v1.uid v2.uid) !vs
+    in
+
     let count = ref 0 in
-    let mk ?(f=1.0 /. float_of_int n) ?(add=true) s p =
+
+    let f v1 v2 =
+      let x = v1 *.* v2 in
+      x *. abs x /. ((v1 *.* v1) *. (v2 *.* v2)) +. one
+    in
+
+    let conic' s y =
+      List.fold_left (fun acc (i,j) ->
+          let c = sqrt ((vec s.s i *.* vec s.s i) *. (vec s.s j *.* vec s.s j)) -. vec s.s i *.* vec s.s j in
+          assert (cmp c zero >= 0);
+          acc +. (c *. y.(i) *. y.(j))) zero dirs
+    in
+
+    let conic s x =
+      let y = pcoord x (to_matrix s.s) in
+      let sg = Array.fold_left (+.) zero y in
+      (conic' s y, cmp sg zero > 0)
+    in
+
+    let mk ?(f=Stdlib.(1.0 /. float_of_int n)) s =
+      let p = Poly.transform p0 (to_matrix s0) (to_matrix s) in
+      let dp = tgradient p in
       let s =
-        { s; p; x=zero; d=(0,0); k = false
-        ; l = plane p
+        { s; p; k = false
+        ; l = plane p; dp
         ; f; suid = !count }
       in
+      if !debug then Printf.eprintf "make %a\n  %a\n%!" print_simplex s.s print_polynome s.p;
       incr count;
-      eval dirs dim deg s;
-      if add then add_s s;
+      add_s s;
       s
     in
 
-    let to_do = List.map (fun (s,p) -> mk s p) ls in
+    let to_do = List.map (fun s -> mk s) ls in
     let to_do = ref (List.sort order to_do) in
     let add_to_do l = to_do := List.merge order (List.sort order l) !to_do in
     let total = ref 0.0 in
-    let nb_keep = ref 0 in
-    let nb_remove = ref 0 in
+
     let re_add s =
       assert (not s.k);
-      let rec fn acc s =
-        Array.fold_left (fun acc v ->
+      let fn s =
+        Array.iter (fun v ->
             let ls = Hashtbl.find by_vertex v.uid in
-            List.fold_left (fun acc (_,s) ->
-                if s.k then (s.k <- false; total := !total -. s.f; s::acc)
-                else acc) acc ls
-          ) acc s.s
+            List.iter (fun (_,s) ->
+                if s.k then Stdlib.(s.k <- false; total := !total -. s.f)) ls
+          ) s.s
       in
-      add_to_do (fn [] s)
+      fn s
     in
 
-    let rec split_s ?tm s i j =
-      let v1 = Array.init dim (fun k -> if i = k then one else zero) in
-      let v2 = Array.init dim (fun k -> if j = k then one else zero) in
-      let v = v1 --- v2 in
-      let dp = gradient s.p in
-      let f t =
-        let u = R.(one -. t) in
-        let x = comb t v1 u v2 in
-        Array.map (fun p -> Poly.eval p x) dp *.* v
+    let ajoute x =
+      let faces = ref ([] : Simp.vertex list list) in
+      let f = ref 0.0 in
+      let add_face f =
+        if List.mem f !faces then
+          faces := List.filter (fun f' -> f <> f') !faces
+        else faces := f::!faces
       in
-      let first = (tm = None) in
-      let (t,m,s1,s2) = split ?tm f s.s i j in
-      let tm = (t,m) in
-      let p1 = Poly.transform p0 (to_matrix s0) (to_matrix s1) in
-      let p2 = Poly.transform p0 (to_matrix s0) (to_matrix s2) in
-      if !debug then
-        begin
-          Printf.eprintf "quadrant: %a\n%!" print_simplex s.s;
-          Printf.eprintf "polynome: %a\n%!" print_polynome s.p;
-          Printf.eprintf "split (%d,%d)\n%!" i j;
-          Printf.eprintf "quadrant(1): %a\n%!" print_simplex s1;
-          Printf.eprintf "polynome (1): %a\n%!" print_polynome p1;
-          Printf.eprintf "quadrant(2): %a\n%!" print_simplex s2;
-          Printf.eprintf "polynome (2): %a\n%!" print_polynome p2;
-        end;
-      rm_s s;
-      let f = s.f /. 2.0 in
-      let s1 = mk ~f s1 p1 in
-      let s2 = mk ~f s2 p2 in
-      if first then
-        begin
-          let l = find_e s.s.(i) s.s.(j) in
-          if dim = 3 then assert (List.length l = 1);
-          List.iter (fun (i',j',s') ->
-              if !debug then Printf.eprintf "quadrant to split: %d %d %a\n%!" i j print_simplex s'.s;
-              let (i',j') =
-                if s.s.(i).uid = s'.s.(i').uid && s.s.(j).uid = s'.s.(j').uid then (i',j')
-                else if s.s.(i).uid = s'.s.(j').uid && s.s.(j).uid = s'.s.(i').uid then (j',i')
-                else assert false
-              in
-              let same_sign = s.s.(i).p = s'.s.(i').p in
-              assert (same_sign = (s.s.(j).p = s'.s.(j').p));
-              let tm = if same_sign then tm else (t,{m with p = not (m.p)}) in
-              split_s ~tm s' i' j') l;
-          try ignore (find_e s.s.(i) s.s.(j)); assert false;
-          with Not_found -> ()
-        end;
-      if not first then (to_do := List.filter (fun s' -> s != s') !to_do;
-                         if s.k then total := !total -. s.f);
-      add_to_do [s1;s2];
-      re_add s1; re_add s2;
-      if dim = 3 then Hashtbl.iter (fun _ l -> assert (List.length l = 2)) by_edge;
+      let fn s =
+        let (c, sg) = conic s (to_vec x) in
+        if c >=. zero then
+          begin
+            if !debug then Printf.eprintf "remove %a\n%!" print_simplex s.s;
+            rm_s s; if s.k then total := Stdlib.(!total -. s.f);
+            f := Stdlib.(!f +. s.f);
+            for i = 0 to dim-1 do
+              add_face (face s i sg)
+            done;
+          end;
+      in
+      Hashtbl.iter (fun _ -> fn) all;
+      let f = Stdlib.(!f /. (float (List.length !faces))) in
+      let add vs =
+        let s = Array.of_list (x::vs) in
+        let s = mk ~f s in
+        re_add s;
+      in
+      List.iter add !faces;
+    in
+
+    let quality s x =
+      let g = eval_grad s.dp x in
+      let sq = sqrt (g *.* g) in
+      List.fold_left (fun acc (_,c) -> let x = c *.* g /. (sqrt (c *.* c) *. sq) in
+                                        if cmp x acc < 0 then x else acc) one s.dp
+    in
+
+    let center s =
+      let best = ref [||] in
+      let best_q = ref (~-. (of_int 2)) in
+      let rec fn acc z d k =
+        if d > 1 then
+          for i = -1 to k+1 do
+            fn (i::acc) (if i <> 0 then z+1 else z) (d - 1) (k-i)
+          done
+        else if z > 1 then begin
+            let c = Array.of_list (k::acc) in
+            let x = ref (zero_v dim) in
+            Array.iteri (fun i n -> x := !x +++ of_int n **. vec s.s i) c;
+            let x = V.normalise !x in
+            let (q,_) = conic s x in
+            if q >. !best_q then (best_q := q; best := x)
+          end
+      in
+      fn [] 0 dim (dim);
+      !best
     in
 
     let rec test () =
       match !to_do with
       | []   -> true
       | s::ls ->
-         try
-           assert (not s.k);
-           if dim <> 3 then raise Exit;
-           List.iter (fun (i,j) ->
-               let l = find_e s.s.(i) s.s.(j) in
-               try
-                 match l with
-                 | [(i1,j1,s1);(i2,j2,s2)] ->
-                    assert (s1 == s || s2 == s);
-                    assert (s1.s.(i1).uid = s2.s.(i2).uid);
-                    assert (s1.s.(j1).uid = s2.s.(j2).uid);
-                    let k = List.find (fun k -> k <> i1 && k <> j1) [0;1;2] in
-                    let l = List.find (fun k -> k <> i2 && k <> j2) [0;1;2] in
-                    let (ss1,ss2) =
-                      if s1.s.(i1).p = s2.s.(i2).p then
-                        begin
-                          assert (s1.s.(j1).p = s2.s.(j2).p);
-                          ([|s1.s.(i1); s1.s.(k); s2.s.(l)|],
-                           [|s1.s.(j1); s1.s.(k); s2.s.(l)|])
-                        end
-                      else
-                        begin
-                          assert (s1.s.(j1).p <> s2.s.(j2).p);
-                          ([|s1.s.(i1); s1.s.(k); ch_sg s2.s.(l)|],
-                           [|s1.s.(j1); s1.s.(k); ch_sg s2.s.(l)|])
-                        end
-                    in
-                    if cmp R.(det (to_matrix ss1) *. det (to_matrix ss2)) zero >= 0 then
-                      raise Exit;
-                    let p1' = Poly.transform s1.p (to_matrix s1.s) (to_matrix ss1) in
-                    let p2' = Poly.transform s1.p (to_matrix s1.s) (to_matrix ss2) in
-                    let f = (s1.f +. s2.f) /. 2.0 in
-                    let s1' = mk ~add:false ~f ss1 p1' in
-                    let s2' = mk ~add:false ~f ss2 p2' in
-                    if cmp R.(s1'.x +. s2'.x) R.(s1.x +. s2.x) >= 0 then raise Exit;
-                    if s1.k then total := !total -. s1.f;
-                    if s2.k then total := !total -. s2.f;
-                    if !debug then
-                      Printf.eprintf "transform %a %a: \n %a %a\n %a %a\n=>\n %a %a\n %a %a\n"
-                        print (det (to_matrix ss1)) print (det (to_matrix ss2))
-                        print_simplex s1.s print_polynome s1.p
-                        print_simplex s2.s print_polynome s2.p
-                        print_simplex ss1 print_polynome p1'
-                        print_simplex ss2 print_polynome p2';
-                    rm_s s1; rm_s s2;
-                    add_s s1'; add_s s2';
-                    to_do := List.filter (fun s' -> s1 != s' && s2 != s') !to_do;
-                    add_to_do [s1';s2'];
-                    re_add s1'; re_add s2';
-                    raise Found
-                 | _       ->
-                    Printf.eprintf "len: %d\n%!" (List.length l);
-                    assert false
-               with Exit -> ()) dirs;
-           raise Exit
-         with
-         | Exit ->
-            to_do := ls;
-            if decision by_vertex deg dim s then
-              begin
-                let (i,j) = s.d in
-                split_s s i j;
-                false
-              end
-            else
-              begin
-                s.k <- true; total := !total +. s.f;
-                test ()
-              end
-         | Found -> false
+         if decision by_vertex deg dim s then
+           begin
+             let x = center s in
+             ajoute (Simp.mk x true);
+             to_do := [];
+             Hashtbl.iter (fun _ s -> if not s.k then to_do := s::!to_do) all;
+             to_do := List.sort order !to_do;
+             false
+           end
+         else
+           begin
+             to_do := ls;
+             s.k <- true; total := Stdlib.(!total +. s.f);
+             test ()
+           end
     in
 
     while not (test ()) do
-      let x = match !to_do with
-        | [] -> assert false
-        | s::_ -> s.x
-      in
       if dim = 3 then
         begin
           let open Graphics in
@@ -356,20 +295,29 @@ module Make(R:Field.S) = struct
             end;
           if !debug then ignore (input_line stdin);
         end;
-      let z = List.fold_left (fun acc s -> acc +. s.f) !total !to_do *. 100.0 in
+      let z =
+        let open Stdlib in
+        List.fold_left (fun acc s -> acc +. s.f) !total !to_do *. 100.0
+      in
+      let x = match !to_do with
+        | [] -> assert false
+        | s::_ -> s.f
+      in
       if !debug then
         begin
           Printf.eprintf "%f%%/%f%% %d %e\n%!"
-            (!total *. 100.0) z (List.length !to_do) (to_float x);
+            Stdlib.(!total *. 100.0) z (List.length !to_do) x;
         end
       else
         Printf.eprintf "\r%f%%/%f%% %d %e                                                %!"
-          (!total *. 100.0) z (List.length !to_do) (to_float x);
+          Stdlib.(!total *. 100.0) z (List.length !to_do) x;
     done;
 
-    Printf.eprintf "\r%f%% %d\n%!" (!total *. 100.0) (List.length !to_do);
+    Printf.eprintf "\r%f%% %d\n%!" Stdlib.(!total *. 100.0) (List.length !to_do);
 
     let polyhedrons = ref [] in
+    let nb_keep = ref 0 in
+    let nb_remove = ref 0 in
     let all = Hashtbl.fold (fun _ s acc -> s :: acc) all [] in
     List.iter (fun {s;p} ->
         let plane = List.combine (Array.to_list s) (Array.to_list (plane p)) in

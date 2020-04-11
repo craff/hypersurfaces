@@ -127,14 +127,6 @@ module Make(R:Field.S) = struct
       | _, []     -> assert false
     in fn i [] l
 
-  (** increase one of the exponent in a monomial *)
-  let incr l i k =
-    let rec fn i acc l = match (i,l) with
-      | 0, (n::l) -> List.rev_append acc ((n+k)::l)
-      | i, (n::l) -> fn (i-1) (n::acc) l
-      | _, []     -> assert false
-    in fn i [] l
-
   (** partial: partial derivative of p in the ith variable,
       we do not multiply by the degree, it is not very important.
       Recall that with Bernstein, no multiplication by the exponent,
@@ -162,6 +154,10 @@ module Make(R:Field.S) = struct
                     | _ -> zero) ps
         in (l, c)) ls
 
+  let integrate_simplex ?(filter=fun _ -> true) p =
+    (* missing constante vol(s) / binomial deg (deg + dim - 1) *)
+    List.fold_left (fun acc (l,x) -> if filter l then x +. acc else acc) zero p
+
   let plane (p:polynomial) =
     let deg = degree p in
     Array.init (dim p) (fun i -> List.assoc (var_power i (dim p) deg) p)
@@ -173,6 +169,15 @@ module Make(R:Field.S) = struct
           List.iteri (fun i e -> z := !z *. R.pow x.(i) e) l;
           !z
         )) zero p
+
+  let eval_grad p x =
+    let open V in
+    List.fold_left (fun acc (l,c) ->
+        acc +++ (multinomial l *. (
+          let z = ref one in
+          List.iteri (fun i e -> z := !z *. R.pow x.(i) e) l;
+          !z)) **. c
+        ) (zero_v (dim p)) p
 
   let digho (p:polynomial) epsilon p1 x p2 y =
     let e2 = epsilon *. epsilon in

@@ -1,8 +1,6 @@
 (*module R = Field.Gmp_R(struct let prec = 256 end)*)
 (*module R = Field.Q*)
-let m = if Array.mem "-q" Sys.argv then (module Field.Q:Field.S)
-        else (module Field.Float)
-module R = (val m)
+module R = Field.Float
 module D = Display.Make(R)
 open D
 module RX = HyperSurfaces.Make(R)
@@ -80,6 +78,13 @@ let t1 = triangulation ellipse3
 
 let _ = display 400.0 (0.,0.) t1
 
+
+let cubic = circle ** (x -- y) ++ cst(of_int 1 /. of_int 5000) ** z ** (x2 ++ y2 ++ z2)
+let _ = Printf.printf "cubic = %a\n%!" print_polynome cubic
+let t1 = triangulation cubic
+
+let _ = display 400.0 (0.,0.) t1
+
 let quartic = circle ** circle ++ cst(of_int 1 /. of_int 2) ** x ** y ** (x -- y) ** (x ++ y)
 let _ = Printf.printf "quartic = %a\n%!" print_polynome quartic
 let t1 = triangulation quartic
@@ -92,7 +97,7 @@ let t1 = triangulation ellipse5
 
 let _ = display 400.0 (1.,1.) t1
 
-let ellipse5 = cst(of_int 50000) ** xmz2 ++ ymz2 -- z2
+let ellipse5 = cst(of_int 5000) ** xmz2 ++ ymz2 -- z2
 let _ = Printf.printf "ellipse5 = %a\n%!" print_polynome ellipse5
 let t1 = triangulation ellipse5
 
