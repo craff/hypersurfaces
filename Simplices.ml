@@ -43,7 +43,7 @@ module Make(R:Field.S) = struct
 
   let mk =
     let c = ref 0 in
-    (fun v p -> let uid = !c in c := !c + 1; { v; p; uid })
+    (fun v p -> c := !c + 1; let uid = !c in { v; p; uid })
 
   type simplex = vertex array
   (** A simplex is represented by the coordinates of all its vertices.

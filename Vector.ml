@@ -296,9 +296,10 @@ let _ = Printexc.record_backtrace true
     try
       while !cont do
         let d y = Array.mapi (fun i y -> y *. !x.(i)) y in
+        let d2 y = Array.mapi (fun i y -> y *. !x.(i) *. !x.(i)) y in
         let m' y = m *** (d y) in
         let mt z = d (m **- z) in
-        let mmt z = m' (mt z) in
+        let mmt z = m *** (d2 (m **- z)) in
         let v1 = cg mmt (m' d1) in
         let dir = d1 --- mt v1 in
         let alpha = Array.fold_left (fun acc x -> if x <. acc then x else acc)

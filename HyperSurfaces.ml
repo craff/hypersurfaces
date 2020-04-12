@@ -38,11 +38,16 @@ module Make(R:Field.S) = struct
     ; p : polynomial
     ; dp : (int list * R.t array) list
     ; l : R.t array
-    ; f : float
+    ; det : R.t
+    ; mutable f : float
     ; mutable k : bool
-    ; suid : int }
+    ; suid : int array }
 
-  let order s1 s2 = compare s2.f s1.f
+  let simplex_key s =
+    let r = Array.map (fun v -> (v.uid, v.p)) s in
+    Array.sort (fun (u1,_) (u2,_) -> compare u1 u2) r;
+    let p1 = snd r.(0) in
+    Array.map (fun (u,b) -> if b=p1 then u else -u) r
 
   let vertex_key v1 = Simplices.(v1.uid)
 
@@ -101,7 +106,7 @@ module Make(R:Field.S) = struct
     let n = List.length ls in
     let all = Hashtbl.create 1001 in
     let by_vertex = Hashtbl.create 1001 in
-    let add s = Hashtbl.add all s.suid s in
+    let add s = Hashtbl.replace all s.suid s in
     let rm s  = Hashtbl.remove all s.suid in
     let add_v s =
       Array.iteri (fun i v ->
@@ -113,7 +118,7 @@ module Make(R:Field.S) = struct
       Array.iter (fun v ->
           let key = vertex_key v in
           let l = try Hashtbl.find by_vertex key with Not_found -> assert false in
-          let l = List.filter (fun (_,s') -> s != s') l in
+          let l = List.filter (fun (_,s') -> s.suid <> s'.suid) l in
           if l = [] then Hashtbl.remove by_vertex key
           else Hashtbl.replace by_vertex key l) s.s
     in
@@ -133,7 +138,7 @@ module Make(R:Field.S) = struct
       List.iter (fun (i,j) ->
           let (_,key) = edge_key s.s.(i) s.s.(j) in
           let l = try Hashtbl.find by_edge key with Not_found -> assert false in
-          let l = List.filter (fun (_,_,s') -> s != s') l in
+          let l = List.filter (fun (_,_,s') -> s.suid <> s'.suid) l in
           if l = [] then Hashtbl.remove by_edge key
           else Hashtbl.replace by_edge key l) dirs
     in
@@ -144,6 +149,8 @@ module Make(R:Field.S) = struct
     let rm_s s = rm s; rm_v s; rm_e s in
     let add_s s = add s; add_v s; add_e s in
 
+    let order s1 s2 = cmp s2.det s1.det in
+
     let face s i sg =
       let vs = ref [] in
       for j = 0 to dim - 1 do
@@ -152,31 +159,25 @@ module Make(R:Field.S) = struct
       List.sort (fun v1 v2 -> compare v1.uid v2.uid) !vs
     in
 
-    let count = ref 0 in
-
-    let conic' s y =
-      List.fold_left (fun acc (i,j) ->
-          let c = sqrt ((vec s.s i *.* vec s.s i) *. (vec s.s j *.* vec s.s j)) -. vec s.s i *.* vec s.s j in
-          assert (c >=. zero);
-          acc +. (c *. y.(i) *. y.(j))) zero dirs
-    in
-
     let conic s x =
-      let y = pcoord x (to_matrix s.s) in
-      let sg = Array.fold_left (+.) zero y in
-      (conic' s y, sg >. zero)
+      try
+        let y = pcoord x (to_matrix s.s) in
+        let sum = Array.fold_left (+.) zero y in
+        (abs sum -. one, sum >. zero)
+      with Not_found as e ->
+        Printf.eprintf "\nnull det: %a\n%!" print_simplex s.s;
+        raise e
     in
 
     let mk ?(f=Stdlib.(1.0 /. float_of_int n)) s =
       let p = Poly.transform p0 (to_matrix s0) (to_matrix s) in
       let dp = tgradient p in
       let s =
-        { s; p; k = false
+        { s; p; k = false; det = abs (det (to_matrix s))
         ; l = plane p; dp
-        ; f; suid = !count }
+        ; f; suid = simplex_key s }
       in
       if !debug then Printf.eprintf "make %a\n  %a\n%!" print_simplex s.s print_polynome s.p;
-      incr count;
       add_s s;
       s
     in
@@ -199,7 +200,77 @@ module Make(R:Field.S) = struct
       fn acc s
     in
 
-    let ajoute x =
+    let rec check ajoute moved x =
+      let added = ref [] in
+      let lost = ref 0.0 in
+      let add n s =
+        if List.exists (fun (_,s') -> s'.suid = s.suid) !added then
+          begin
+            added := List.filter (fun (_,s') -> s'.suid <> s.suid) !added;
+            if !debug then Printf.eprintf "remove added %a\n%!" print_simplex s.s;
+            rm_s s;
+            if s.k then
+              (s.k <- false; total := Stdlib.(!total -. s.f))
+            else
+              to_do := List.filter (fun s' -> s.suid <> s'.suid) !to_do;
+          end
+        else
+          added := (n,s) :: !added
+      in
+      let fn s =
+        if Array.exists (fun y -> x.uid = y.uid) s.s then
+          add false s
+        else
+          begin
+            let (c,sg) = conic s (to_vec x) in
+            if c >=. zero then
+              begin
+                if !debug then Printf.eprintf "remove %a\n%!" print_simplex s.s;
+                rm_s s;
+                lost := Stdlib.(!lost +. s.f);
+                if s.k then
+                  (s.k <- false; total := Stdlib.(!total -. s.f))
+                else
+                  to_do := List.filter (fun s' -> s.suid <> s'.suid) !to_do;
+                for i = 0 to dim - 1 do
+                  let s' = Array.mapi (fun j y -> if i = j then x else
+                                                    if sg then y else ch_sg y) s.s
+                  in
+                  add true (mk s')
+                done
+              end
+          end
+      in
+      let ls =
+        if ajoute then
+          begin
+            let ls = ref [] in
+            Hashtbl.iter (fun _ x -> ls := x :: !ls) all;
+            !ls
+          end
+        else
+          List.map snd (find_v x)
+      in
+      List.iter fn ls;
+      let nb = List.fold_left (fun nb (n,_) -> if n then nb +1 else nb) 0 !added in
+      let f = Stdlib.(!lost /. float nb) in
+      let l =
+        List.fold_left (fun acc (n,s) ->
+            if n then s.f <- f;
+            if n || moved then
+              begin
+                Array.iter (fun x ->
+                    let n = check false false x in
+                    if ajoute then assert (n = 0)) s.s;
+                re_add (s::acc) s
+              end
+            else acc) [] !added;
+      in
+      add_to_do l;
+      List.length l
+    in
+
+    let ajoute x = ignore (check true false x) in (*
       let faces = ref ([] : Simp.vertex list list) in
       let f = ref 0.0 in
       let add_face f =
@@ -225,20 +296,22 @@ module Make(R:Field.S) = struct
       in
       Hashtbl.iter (fun _ -> fn) all;
       let f = Stdlib.(!f /. (float (List.length !faces))) in
+      Printf.eprintf "new f: %e\n%!" f;
       let add acc vs =
         let s = Array.of_list (x::vs) in
+        assert (det (to_matrix s) <>. zero);
         let s = mk ~f s in
         re_add (s::acc) s;
       in
-      List.fold_left add [] !faces;
+      add_to_do (List.fold_left add [] !faces);
     in
-
+                                     *)
     let center s =
       let best = ref [||] in
       let best_q = ref (~-. (of_int 2)) in
       let rec fn acc z d k =
         if d > 1 then
-          for i = -1 to k+1 do
+          for i = 1 to k-1 do
             fn (i::acc) (if i <> 0 then z+1 else z) (d - 1) (k-i)
           done
         else if z > 1 then begin
@@ -250,7 +323,7 @@ module Make(R:Field.S) = struct
             if q >. !best_q then (best_q := q; best := x)
           end
       in
-      fn [] 0 dim (dim);
+      fn [] 0 dim (4*dim);
       !best
     in
 
@@ -261,7 +334,7 @@ module Make(R:Field.S) = struct
          if decision by_vertex deg dim s then
            begin
              let x = center s in
-             add_to_do (ajoute (Simp.mk x true));
+             ajoute (Simp.mk x true);
              false
            end
          else
