@@ -1,16 +1,17 @@
 uniform mat4 ModelView, Projection;
 uniform vec4 lightDiffuse, lightAmbient, color;
-uniform vec3 lightPos;
+uniform vec3 lightPos1, lightPos2;
 
 in vec3  in_position, in_normal;
 
 out vec4 diffuse, ambient, m_position;
-out vec3 normal, halfVector;
+out vec3 normal, halfVector1, halfVector2;
 
 void main(){
   // Pass the halfVector to the fragment shader.
   m_position = ModelView * vec4(in_position, 1.0);
-  halfVector = normalize(lightPos - 2.0 * m_position.xyz);
+  halfVector1 = normalize(lightPos1 - 2.0 * m_position.xyz);
+  halfVector2 = normalize(lightPos2 - 2.0 * m_position.xyz);
 
   // Only works for orthogonal matrices.
   mat3 NormalMatrix =

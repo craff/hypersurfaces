@@ -172,7 +172,8 @@ let triangles_prg : unit Shaders.program =
 (* We set the uniform parameters of the shader. *)
 let triangles_prg = Shaders.float1_cst_uniform triangles_prg  "specular"     0.2
 let triangles_prg = Shaders.float1_cst_uniform triangles_prg  "shininess"    10.0
-let triangles_prg = Shaders.float3v_cst_uniform triangles_prg "lightPos"     [|10.0;10.0;-25.0|]
+let triangles_prg = Shaders.float3v_cst_uniform triangles_prg "lightPos1"     [|10.0;5.0;-25.0|]
+let triangles_prg = Shaders.float3v_cst_uniform triangles_prg "lightPos2"     [|-10.0;5.0;-25.0|]
 let triangles_prg = Shaders.float4v_cst_uniform triangles_prg "lightDiffuse" [|0.6;0.6;0.6;1.0|]
 let triangles_prg = Shaders.float4v_cst_uniform triangles_prg "lightAmbient" [|0.1;0.1;0.1;1.0|]
 
