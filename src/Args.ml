@@ -24,7 +24,6 @@ let spec =
     , "display each computation step")
   ]
 
-
 let files = ref []
 
 let anon_fun fn = files := fn :: !files
@@ -35,3 +34,7 @@ let usage_msg =
 let _ = Arg.parse spec anon_fun usage_msg
 
 let files = List.rev !files
+
+(* Some general configuration *)
+let _ = Sys.catch_break true
+let _ = Printexc.record_backtrace true

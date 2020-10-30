@@ -187,8 +187,6 @@ let init () =
   Egl.main_loop ()
 end
 
-let _ = Sys.catch_break true
-
 let _ =
   if not !batch then
     ignore (Thread.create (fun () -> let open Init () in init ()) ())

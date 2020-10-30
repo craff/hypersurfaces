@@ -1,4 +1,4 @@
-let _ = Printexc.record_backtrace true
+open Args
 
 module Make(R:Field.S) = struct
   open R
@@ -400,7 +400,8 @@ module Make(R:Field.S) = struct
          Printf.eprintf "===> %a ===> %a\n%!" print_vector z print_vector v;
        if Array.for_all (fun x -> x <. zero) v then
          Some z
-       else None
+       else
+         (if !debug then Printf.printf "REJECT\n%!"; None)
 
   let a =
     Array.map (Array.map of_int)
