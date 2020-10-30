@@ -85,7 +85,7 @@ module Make(R:SMin) = struct
 end
 
 (** Float field *)
-module Float:S =
+module Float =
   Make(struct
     type t = float
     let zero = 0.
