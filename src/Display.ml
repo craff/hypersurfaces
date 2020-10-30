@@ -322,25 +322,29 @@ module Make(R:Field.S) = struct
               i
           in
           let gn x y z = (fn x, fn y, fn z) in
-          (*        if x1.(2) *. x2.(2) <=. zero then
-          begin
-            let h =     one /. of_int 1_000_000 in
-            let lambda1     = (h -. x2.(2)) /. (x1.(2) -. x2.(2)) in
-            let mu1 = one -. lambda1 in
-            let lambda2 = (~-. h -. x2.(2)) /. (x1.(2) -. x2.(2)) in
-            let mu2 = one -. lambda2 in
-            let y1 = comb lambda1 x1 mu1 x2 in
-            let y2 = comb lambda2 x1 mu2 x2 in
-            if x1.(2) >. zero || x2.(2) <. zero then
-              (j+2, gn x1 y1 :: gn x2 y2 :: acc)
-            else if x1.(2) <. zero || x2.(2) >. zero then
-              (j+2, gn x1 y2 :: gn x2 y1 :: acc)
-            else
-              (j, acc)
-          end
-        else
- *)
-          (j+1, gn x1 x2 x3 :: acc)
+          let (ln, lp) = List.partition (fun x -> x.(3) <. zero) [x1;x2;x3] in
+          match (lp, ln) with
+          | [x;y;z], _ | _, [x;y;z] -> (j+1, gn x1 x2 x3 :: acc)
+          | [x;y], [z] | [z], [x;y] ->
+             let zn = List.length ln = 1 in
+             let h =     one /. of_int 1_000_000 in
+             let lambda1     = (h -. z.(3)) /. (x.(3) -. z.(3)) in
+             let mu1 = one -. lambda1 in
+             let lambda2 = (~-. h -. z.(3)) /. (x.(3) -. z.(3)) in
+             let mu2 = one -. lambda2 in
+             let xz1 = comb lambda1 x mu1 z in
+             let xz2 = comb lambda2 x mu2 z in
+             let lambda1     = (h -. z.(3)) /. (y.(3) -. z.(3)) in
+             let mu1 = one -. lambda1 in
+             let lambda2 = (~-. h -. z.(3)) /. (y.(3) -. z.(3)) in
+             let mu2 = one -. lambda2 in
+             let yz1 = comb lambda1 y mu1 z in
+             let yz2 = comb lambda2 y mu2 z in
+             if zn then
+               (j+3, gn x y xz1 :: gn xz1 y yz1 :: gn xz2 yz2 z :: acc)
+             else
+               (j+3, gn x y xz2 :: gn xz2 y yz2 :: gn xz1 yz1 z :: acc)
+          | _ -> assert false
         in
         if Array.length a = 3 then
           f (j,acc) a.(0) a.(1) a.(2)
