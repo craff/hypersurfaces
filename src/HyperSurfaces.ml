@@ -59,6 +59,7 @@ module Make(R:Field.S) = struct
   let edge_key v1 v2 =
     let i = v1.uid and j = v2.uid in
     let b = v1.p = v2.p in
+    if Array.length v1.v = 2 then (true,(i,i,true)) else
     if i < j then (true,(i,j,b)) else (false,(j,i,b))
 
   let face_key s i =
@@ -79,7 +80,7 @@ module Make(R:Field.S) = struct
   let triangulation p0 =
     let dim = dim p0 in
     let deg = degree p0 in
-    let dirs = all_dirs dim in
+    let dirs = if dim = 2 then [(0,1);(1,0)] else all_dirs dim in
     let p0 = complete p0 in
     let ls = quadrants dim in
     let s0 = List.hd ls in
@@ -213,7 +214,8 @@ module Make(R:Field.S) = struct
           let t = cmp c zero in
           if t < 0 then ap := false;
           if t > 0 then an := false) s.p;
-      if !an || !ap then NonZero else
+      if Array.for_all (fun x -> x = zero) s.l then Unknown
+      else if !an || !ap then NonZero else
         begin
           let gd = all_gradients s in
           if !debug then Printf.eprintf "test for %d points for\n %a %a\n%!" (Array.length gd)
@@ -243,8 +245,9 @@ module Make(R:Field.S) = struct
         let x = to_vec x in
         let m = Array.map (fun p -> p --- x) (to_matrix s.s) in
         let m' = Array.map (fun p -> p +++ x) (to_matrix s.s) in
-        Printf.printf "\n%a => %a\n%a => %a\n%a => %a\n%!"
-          print_matrix (to_matrix s.s) print s.det
+        Printf.printf "\nx: %a(%a) s:%a => %a(%a)\n%a => %a\n%a => %a\n%!"
+          print_vector x print (norm2 x)
+          print_matrix (to_matrix s.s) print s.det print_vector (Array.map norm2 (to_matrix s.s))
           print_matrix m print (det m)
           print_matrix m' print (det m');
         false);
@@ -271,6 +274,7 @@ module Make(R:Field.S) = struct
                                 test_sg print_simplex s'.s;
               if visible s' test_sg x then
                 begin
+                  assert (dim > 2);
                   if !debug then Printf.eprintf "to remove\n%!";
                   let acc = ref acc in
                   let l   = ref l   in
@@ -296,11 +300,14 @@ module Make(R:Field.S) = struct
                 fn area (c::acc) l
            | l -> Printf.printf "len: %d\n%!" (List.length l); assert false
       in
-      let faces = List.init (Array.length s.s) (fun i ->
-                      let (k,sg) = face_key s i in
-                      (i,s,sg,true,k)) in
+      let faces =
+        List.init (Array.length s.s) (fun i ->
+            let (k,sg) = face_key s i in
+            (i,s,sg,true,k))
+      in
       let (hole,area) = fn s.f [] faces in
       let area = Stdlib.(area /. float (List.length hole)) in
+      if dim = 2 then assert (List.length hole = 2);
       let added =
         List.map (fun (i,s,_,b,_) ->
             let s' = Array.mapi (fun j y -> if i = j then
