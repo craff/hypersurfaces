@@ -292,8 +292,8 @@ module Make(R:Field.S) = struct
 
   let center m =
     let d = Array.length m in
-    let b = m **- Array.make d one in
-    cg (fun x -> m **- m *** x) b
+    let b = Array.make d one in
+    m **- cg (fun x -> m *** (m **- x)) b
 
   let transform v m1 m2 =
     let len = Array.length v in
