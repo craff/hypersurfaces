@@ -95,21 +95,28 @@ module Parse(R:Field.S) = struct
   type poly_rec =
     { name : string
     ; dim : int
+    ; hom : bool
     ; vars: string list
     ; poly : polynomial
     ; mutable triangulation : R.t Array.t Array.t list }
+
+  let hdim p = if p.hom then p.dim - 1 else p.dim
 
   let polys = Hashtbl.create 101
 
   let%parser cmd =
       "let" (name::ident) ((vars,()) >: params) '=' (p::poly vars Sum) ';' =>
         (Hashtbl.add polys name
-           {name; vars;dim=List.length vars; poly=p; triangulation = []};
+           { name; vars
+           ; dim=List.length vars
+           ; hom=homogeneous p
+           ; poly=p
+           ; triangulation = [] };
          Printf.printf "%a\n%!" print_polynome p)
     ; "zeros" (name::ident) ';' =>
         (try
            let p = Hashtbl.find polys name in
-           let (ts, _, _) = H.triangulation p.poly in
+           let (ts, _, _) = H.triangulation (homogeneisation p.poly) in
            p.triangulation <- ts
          with Not_found -> Lex.give_up ())
     ; "display" (name::ident) ';' =>
@@ -118,17 +125,17 @@ module Parse(R:Field.S) = struct
            let g = tgradient p.poly in
            let normal x = eval_grad g x in
            let o =
-             if p.dim = 3 then
+             if hdim p = 2 then
                D.mk_lines_from_polyhedron p.triangulation
-             else if p.dim = 4 then
+             else if hdim p = 3 then
                D.mk_triangles_from_polyhedron p.triangulation normal
              else
                D.mk_lines_from_polyhedron []
            in
            Display.wait ();
-           if p.dim = 3 then
+           if hdim p = 2 then
              Display.rm_line_object o
-           else if p.dim = 4 then
+           else if hdim p = 3 then
              Display.rm_triangle_object o
            else ();
          with Not_found -> Lex.give_up ())

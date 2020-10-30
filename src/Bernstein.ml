@@ -55,15 +55,25 @@ module Make(R:Field.S) = struct
     Array.to_list
       (Array.init dim (fun j -> if i = j then deg else 0))
 
-  (** degree, only allows for homogeneous polynomials *)
-  let degree p =
-    let d = match p with
-      | (l,_)::_ -> List.fold_left (+) 0 l
-      | _ -> invalid_arg "null polynomial"
+  (** degree *)
+  let monomial_degree (l,_) = List.fold_left (+) 0 l
+  let degree p = List.fold_left (fun d m -> max d (monomial_degree m)) 0 p
+
+  (** homogenisation *)
+  let homogeneous p =
+    let d = degree p in
+    List.for_all (fun m -> monomial_degree m = d) p
+
+  let homogeneisation p =
+    let rec an d1 d2 =
+      if d1 <= d2 then one else of_int d1 *. an (d1 - 1) d2
     in
-    List.iter (fun (l,_) ->
-        if List.fold_left (+) 0 l <> d then invalid_arg "inhomogeneous polynomial") p;
-    d
+    let d = degree p in
+    if List.for_all (fun m -> monomial_degree m = d) p then p else
+      List.map (fun (l,c as m) ->
+          let d0 = monomial_degree m in
+          let d' = d - d0 in
+          (l@[d'], c *. an d' 1 /. an d d0)) p
 
   (** opposite *)
   let ( ~--) : polynomial -> polynomial = List.map (fun (l,c) -> (l,-.c))

@@ -1,35 +1,38 @@
-let c1(x,y,z) = x^2 + y^2 - z^2;
+let c1(x,y) = x^2 + y^2 - 1;
 zeros c1; display c1;
 
-let e1(x,y,z) = 10 * x^2 + y^2 - z^2;
+let e1(x,y) = 10 * x^2 + y^2 - 1;
 zeros e1; display e1;
 
-let c2(x,y,z) = (x - z)^2 + (y - z)^2 - z^2;
+let c2(x,y) = (x - 1)^2 + (y - 1)^2 - 1;
 zeros c2; display c2;
 
-let e2(x,y,z) = 8 * (x-y)^2 + (x+y)^2 - z^2;
+let e2(x,y) = 8 * (x-y)^2 + (x+y)^2 - 1;
 zeros e2; display e2;
 
-let e3(x,y,z) = 50 * (x-y)^2 + (x+y)^2 - z^2;
+let e3(x,y) = 50 * (x-y)^2 + (x+y)^2 - 1;
 zeros e3; display e3;
 
-let e4(x,y,z) = 4 * (x-z)^2 + (y-z)^2 - z^2;
+let e4(x,y) = 4 * (x-1)^2 + (y-1)^2 - 1;
 zeros e4; display e4;
 
-let cubic1(x,y,z) = (x^2+y^2-z^2) * (x - y) + 1/5000 * z * (x^2+y^2+z^2);
+let cubic1(x,y) = (x^2+y^2-1) * (x - y) + 1/5000 * (x^2+y^2+1);
 zeros cubic1; display cubic1;
 
-let q1(x,y,z) = (x^2+y^2-z^2)^2 + 1/2 * x * y * (x-y) * (x+y);
+let q1(x,y) = (x^2+y^2-1)^2 + 1/2 * x * y * (x-y) * (x+y);
 zeros q1; display q1;
 
-let q2(x,y,z) = (x^2+y^2-z^2)^2 + 1/200 * x * y * (x-y) * (x+y);
+let q2(x,y) = (x^2+y^2-1)^2 + 1/200 * x * y * (x-y) * (x+y);
 zeros q2; display q2;
 
-let q3(x,y,z) = (x^2+y^2-z^2)^2 + 1/2000 * x * y * (x-y) * (x+y);
+let q3(x,y) = (x^2+y^2-1)^2 + 1/2000 * x * y * (x-y) * (x+y);
 zeros q3; display q3;
 
-let e5(x,y,z) = 500  * (x-z)^2 + (y-z)^2 - z^2;
+#let q3(x,y) = (x^2+y^2-1)^2 + 1/20000 * x * y * (x-y) * (x+y);
+#zeros q3; display q3;
+
+let e5(x,y) = 500  * (x-1)^2 + (y-1)^2 - 1;
 zeros e5; display e5;
 
-let e6(x,y,z) = 5000 * (x-z)^2 + (y-z)^2 - z^2;
+let e6(x,y) = 5000 * (x-1)^2 + (y-1)^2 - 1;
 zeros e6; display e6;

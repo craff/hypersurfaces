@@ -1,0 +1,29 @@
+let p(x) = x^2 + x - 1;
+zeros p;
+
+let p(x) = x^3 + x - 1;
+zeros p;
+
+let p(x) = x * (x + 1) * (x - 1);
+zeros p;
+
+let p(x) = x * (x + 1e-6) * (x - 1e-6);
+zeros p;
+
+let p(x) = x * (x + 1e-6) * (x - 1e-6) * (x + 2e-6) * (x - 2e-6);
+zeros p;
+
+let p(x) = (x + 1e-12) * (x + 1e-6) * (x - 1e-6) * (x + 2e-6) * (x - 2e-6);
+zeros p;
+
+let p(x) = x * (x + 1e-6) * (x - 1e-6) * (x + 2e-6) * (x - 2e-6) * (x + 3e-6) * (x - 3e-6);
+zeros p;
+
+let p(x) = (x-10) * (x - 100) * (x - 1000) * (x - 10000);
+zeros p;
+
+let p(x) = (x-10) * (x - 100) * (x - 1000) * (x - 10000) * (x - 1000000);
+zeros p;
+
+let p(x) = (x-10) * (x - 100) * (x - 1000) * (x - 10000) * (x - 1000000) * (x - 10000000);
+zeros p;
