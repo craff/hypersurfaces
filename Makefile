@@ -1,7 +1,10 @@
 
 all:
-	ocamlbuild -cflag -g -pkgs zarith,graphics -lflags gmp.cmxa,mpfr.cmxa HyperSurfaces.native TestBernstein.native \
-		TestCurves.native TestSurfaces.native TestHyper.native
+	dune build
 
 clean:
-	ocamlbuild -clean
+	dune clean
+	cd article && rubber --clean --pdf main.tex
+
+test:
+	dune exec Main -- tests/*.txt

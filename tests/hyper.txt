@@ -1,0 +1,11 @@
+let s1(x,y,z,t,u) = x^2 + y^2 + z^2 + t^2 - u^2;
+zeros s1;
+
+let h1(x,y,z,t,u) = x^2 + y^2 + z^2 - t^2 - u^2;
+zeros h1;
+
+let s2(x,y,z,t,u) = (x-t)^2 + (y-t)^2 + (z-t)^2 + (u-t)^2 - t^2;
+zeros s2;
+
+let h2(x,y,z,t,u) =  (x-t)^2 + (y-t)^2 + (z-t)^2 - (u-t)^2 - t^2;
+zeros h2;

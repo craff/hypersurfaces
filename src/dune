@@ -1,0 +1,30 @@
+(include_subdirs unqualified)
+
+(executable
+  (name Main)
+  (public_name Main)
+  (modules :standard)
+  (preprocess (pps pacomb.ppx))
+  (libraries unix threads zarith gles3 gles3.egl gmp pacomb))
+
+(rule
+  (targets lines_shader.ml)
+  (action (with-stdout-to lines_shader.ml (progn
+    (echo "let vertex = String.trim \"") ; hack to remove newline.
+    (cat lines_vertex.glsl)
+    (echo "\"\n")
+    (echo "let fragment = String.trim \"") ; hack to remove newline.
+    (cat lines_fragment.glsl)
+    (echo "\"\n")
+    ))))
+
+(rule
+  (targets triangles_shader.ml)
+  (action (with-stdout-to triangles_shader.ml (progn
+    (echo "let vertex = String.trim \"") ; hack to remove newline.
+    (cat triangles_vertex.glsl)
+    (echo "\"\n")
+    (echo "let fragment = String.trim \"") ; hack to remove newline.
+    (cat triangles_fragment.glsl)
+    (echo "\"\n")
+    ))))

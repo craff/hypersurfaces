@@ -1,0 +1,164 @@
+\documentclass{article}
+
+\usepackage{hyperref}
+\usepackage{enumerate}
+\usepackage{enumitem}
+\usepackage{amssymb,amsmath,amsthm} %must be before unicode-math
+\usepackage[mathletters]{ucs}
+\DeclareUnicodeCharacter{8339}{_x}
+\DeclareUnicodeCharacter{8345}{_n}
+\DeclareUnicodeCharacter{7522}{_i}
+\DeclareUnicodeCharacter{11388}{_j}
+\DeclareUnicodeCharacter{7523}{_r}
+\usepackage[utf8x]{inputenc}
+\usepackage{bussproofs}
+\usepackage{graphicx}
+\usepackage{stmaryrd}
+\usepackage[autosize]{dot2texi}
+\usepackage{multicol}
+\setlength{\multicolsep}{0pt}
+\usepackage{tikz}
+\usetikzlibrary{shapes,arrows,tikzmark,decorations.pathreplacing,calc}
+\usepackage{adjustbox}
+
+% Title portion. Note the short title for running heads
+\title{Solving smooth system of algebraic equations}
+\author{Christophe Raffalli}
+
+\newcommand{\interior}[1]{%
+  #1^{\mathrm{o}}%
+}
+\newcommand{\cardinal}[1]{%
+  \#{#1}%
+}
+
+
+\newtheorem{theo}{Theorem}
+\newtheorem{nota}[theo]{Notation}
+\newtheorem{defi}[theo]{Definition}
+\newtheorem{prop}[theo]{Proposition}
+
+% Document starts
+\begin{document}
+
+
+\maketitle
+
+\begin{nota}
+  We consider the real projective plane $Pⁿ(ℝ)$.
+  When ${x ∈ ℝ^{n+1}}$, we write $\overline{x} = \{ λx, λ∈ℝ_* \} ∈
+  Pⁿ(ℝ)$ the equivalent class of $x$. We define $πₙ:ℝ^{n+1} → Pⁿ(ℝ)$ the
+  projection $x ↦ \overline{x}$.
+  We use on $Pⁿ(ℝ)$ the measure induced by
+  the chord metric of $Sⁿ(ℝ)$:
+  $$d(\overline{x},\overline{y}) = \min\left(
+  \left\|{x \over \|x\|} - {y \over \|y\|}\right\|, \left\|{x \over \|x\|} + {y \over \|y\|}\right\|\right) (∀\overline{x},\overline{y} ∈ Pⁿ(ℝ)).$$
+\end{nota}
+
+\begin{defi}
+  A \emph{simplicial partition} of
+  $Pⁿ(ℝ)$ is a finite set of closed simplices $(Δᵢ)_{i∈I}$ such that
+  \begin{itemize}
+  \item $⋃_{i∈I} Δᵢ = Pⁿ(ℝ)$,
+  \item for all $i≠j ∈ I$, $Δᵢ ∩ Δⱼ$ is a common lower-dimensional facet of $Δᵢ$
+    and $Δⱼ$.
+  \end{itemize}
+  We say that $Δᵢ$ and $Δⱼ$ are neighbour if $Δᵢ ∩ Δⱼ$ is infinite,
+  i.e. contains at least two points. The neighbourhood
+  relation
+  is clearly reflexive and symmetric.
+  For $i \in I$, we define $v(i) = \{ j \in I; \cardinal{Δᵢ ∩ Δⱼ} > 2\}$.
+\end{defi}
+
+\begin{defi}
+  Let $ε$ be a positive real. A \emph{simplicial partition} $(Δᵢ)_{i∈I}$ of $Pⁿ(ℝ)$ is said to be
+  $ε$-thin if for any $i,j ∈ I$, for any $x∈Δᵢ$ and $y ∈ Δⱼ$, if $d(x,y) <
+  ε$, then $Δᵢ ∩ Δⱼ ≠ ∅$.
+\end{defi}
+
+\begin{prop}
+  Any \emph{simplicial partition} $(Δᵢ)_{i∈I}$ of $Pⁿ(ℝ)$ is $ε$-thin for
+  some $ε > 0$ small enough.
+\end{prop}
+
+\begin{proof}
+  Take $ε = \displaystyle{\min_{i,j ∈ I, Δᵢ ∩ Δⱼ = ∅} d(Δᵢ,Δⱼ)}$ which is positive because $I$ is
+  finite and for all $i ∈ I$, $Δᵢ$ is compact.
+\end{proof}
+
+
+plan: on prend p un polynome, qui ne s'annule pas au sommet des Δᵢ.
+on définit f linéaire sur chaque $̣Δᵢ$ et qui coincide avec p au sommet des $Δᵢ$.
+
+On définit $ε$ tel que $p$ et $f$ ne s'annule dans aucune boule centrée au
+sommet d'un $Δᵢ$ et de rayon $ε$.
+
+  Let $s:ℝ^{n+1} → ℝ$ a $C^∞$ map with support included in $B_ε(0)$ and such
+  that $∫_{ℝ^{n+1}} s(t)dt = 1$ (1) for the usual measure $dt$ of $ℝ^{n+1}$.
+
+  We define $g(x) = (f ∗ s)(x) = ∫_{ℝ^{n+1}} f(t)s(x-t) dt$ the convolution product of $f$ and
+  $s$. $g$ is $C^∞$. $|f(x) - g(x)| = |∫_{ℝ^{n+1}} (f(x) - f(t))s(x-t) dt| <
+  \max_{t∈B_ε(x)} |f(x) - f(t)| → 0$ when $ε → 0$.
+
+  Finally, we define $gₜ = tg + (1 - t)p$.
+
+  on montre que $f = 0$ et $g = 0$ sont homémorphes et
+  que $g$ et $gₜ$ aussi si la condition sur les gradients est vérifié.
+
+  Ce qui donne $f = 0$ et $p = 0$ homéomorphe.
+
+\begin{defi}
+   Let $Δ = (Δᵢ)_{i∈I}$ be  a \emph{simplicial partition} of $Pⁿ(ℝ)$, a
+   \emph{$Δ$-piecewise linear map}
+   is a map $f : ℝ^{n+1} → ℝ$ which is
+continuous, piecewise linear and linear
+  on each $πₙ^{-1}(Δᵢ)$ for $i ∈ I$.
+\end{defi}
+
+\begin{nota}
+  For such a map, we write $∇ᵢf$ for $∇f(x)$, for any $x ∈
+  \interior{Δᵢ}$. We also define $C_\epsilon f(x)$ the convex hull
+  of $\{ ∇f(y), y∈Sⁿ(ℝ) ∩ B_ε(x))\}$. $Hᵢ$ is also a convex cone because $f$ is
+  homogeneous.
+
+\end{nota}
+\begin{defi}
+  We say that a $Δ$-map $f$ is smooth if for all $i ∈ I$, $Hᵢf$ does not
+    contains $0$.
+\end{defi}
+
+\begin{prop}
+  Let $Δ = (Δᵢ)_{i∈I}$ be  a \emph{simplicial partition} of $Pⁿ(ℝ)$ and
+  let $f$ be a smooth \emph{$Δ$-map}.
+  There exists $ε>0$ and a $C^∞$ function
+  $f_ε : ℝ^{n+1} → ℝ$ such that
+  \begin{itemize}
+  \item $∀x ∈ Sⁿ, \|f(x) - f_ε(x)\| < ε$
+  \item $∀i ∈ I, ∀x ∈ πₙ^{-1}(Δᵢ) ∩ Sⁿ(ℝ), ∇f_ε(x)$ is in $Hᵢ$. the convex hull of
+    $\{ ∇f(x), x ∈ πₙ^{⁻1}(\interior{Δⱼ} ∩ B_ε(x)), Δᵢ ∩ Δⱼ ≠ 0\}$ where
+    $B_ε(x)$ denotes the ball of $ℝ^{n+1}$ of radius $ε$ and center $x$.
+  \end{itemize}
+\end{prop}
+
+\begin{proof}
+  Let $s:ℝ^{n+1} → ℝ$ a $C^∞$ map with support included in $B_ε(x)$ and such
+  that $∫_{ℝ^{n+1}} s(t)dt = 1$ (1) for the usual measure $dt$ of $ℝ^{n+1}$.
+
+  We define $f_ε(x) = f ∗ s = ∫_{ℝ^{n+1}} f(t)s(x-t) dx$ the convolution product of $f$ and
+  $s$. $f_ε$ is $C^∞$. $|f(x) - f_ε(x)| = |∫_{ℝ^{n+1}} (f(x) - f(t))s(x-t) dt| <
+  \max_{t∈B_ε(x)} |f(x) - f(t)| → 0$.
+
+  Finally, $∇f_ε(x) = ∫_{ℝ^{n+1}} f(t)∇s(x-t) dx = Σ_{i∈I(x)}∫_{Δᵢ} f(t)∇s(x-t) dx =
+    Σ_{i∈I(x)}∫_{Δᵢ} ∇f(t)s(x-t) dx = Σ_{i∈I(x)} λᵢ ∇ᵢf$ with
+    $λᵢ = ∫_{Δᵢ} s(x-t) dx$. By (1) we have $Σ_{i∈I(x)} λᵢ = 1$.
+
+  \end{proof}
+
+  \begin{prop}
+    Let $p$ be an homogeneous polynomial in $n+1$ variables.
+    Let $Δ$ be an ad
+  \end{prop}
+  \begin{proof}
+
+  \end{proof}
+\end{document}

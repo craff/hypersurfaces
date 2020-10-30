@@ -67,7 +67,7 @@ module Make(R:Field.S) = struct
   let print_simplex ch s =
     let pr ch v =
       let sg = if v.p then "+" else "-" in
-      Printf.fprintf ch "%s%a" sg V.print_vector v.v
+      Printf.fprintf ch "%s%a(%d)" sg V.print_vector v.v v.uid
     in
     V.print_array pr ch s
 
@@ -209,50 +209,14 @@ module Make(R:Field.S) = struct
       let cmp (l,_) (l',_) = compare l' l in
       List.sort cmp !res1, List.sort cmp !res2)
 
-  let debug = ref (Array.mem "-d" Sys.argv)
-  let show = ref (Array.mem "-s" Sys.argv)
-
   exception Found
 
-  let zero_in_hull m =
-    let a2 =
-      V.(zih (Array.map snd m))
+  let faces s =
+    let rec fn i s =
+      let r = ref [] in
+      Array.iteri (fun j v -> if i <> j then r := v :: !r) s;
+      List.sort (fun v1 v2 -> compare v1.uid v2.uid)
     in
-    (*let d = Array.length (snd m.(0)) in
-    let rec fn f d n acc =
-      if d < 0 then f acc else
-        for i = d to n do
-          fn f (d-1) (i-1) (i::acc)
-        done
-    in
-    let z = Array.make d zero in
-    let test_simplex l =
-      let w = Array.of_list (List.map (fun i -> snd m.(i)) l) in
-      try
-        (*if !debug then Printf.eprintf "test simplex: %a\n%!"
-                         V.print_matrix w;*)
-        let v = V.bcoord z w in
-        (*if !debug then Printf.eprintf "  => %a\n%!"
-                         V.print_vector v;*)
-        if Array.for_all (fun x -> cmp x zero >= 0) v then
-          begin
-            if !debug then
-              begin
-                Printf.eprintf "zero in hull: ";
-                List.iter (fun i ->
-                    Printf.eprintf "  %a %a\n%!" V.print_list (fst m.(i))
-                      V.print_vector (snd m.(i))) l;
-              end;
-            raise Found
-          end
-      with
-        Exit | Not_found -> ()
-    in
-    let a1 =
-      try fn test_simplex d (Array.length m - 1) []; false
-      with Found -> true
-    in
-    assert (a1 = a2 || (Printf.eprintf "%a\n%!" V.print_matrix (Array.map snd m); false));*)
-    a2
+    List.init (Array.length s) (fun i -> fn i s)
 
 end
