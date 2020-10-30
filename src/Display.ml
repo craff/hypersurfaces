@@ -29,14 +29,62 @@ let triangle_objects = ref ([] : gl_object list)
 
 let draw_mutex = Mutex.create ()
 
-let projection =
-  let m = Matrix.lookat [|0.0;0.0;-3.0|] [|0.0;0.0;0.0|] [|0.0;1.0;0.0|] in
-  ref m
+type camera =
+  { pos : float array
+  ; front : float array
+  ; up: float array
+  ; mutable speed : float
+  ; mutable rspeed : float
+  ; mutable curve : bool }
 
-let change_projection fn =
-  Mutex.lock draw_mutex;
-  projection := fn !projection;
-  Mutex.unlock draw_mutex
+let camera =
+  { pos = [| 0.0;0.0;-5.0 |]
+  ; front = [| 0.0;0.0;1.0 |]
+  ; up = [| 0.0;1.0;0.0 |]
+  ; speed = 0.1
+  ; rspeed = acos(-1.0) *. 1. /. 180.
+  ; curve = true }
+
+module F = Field.Float
+module V = Vector.Make(F)
+
+let projection () =
+  Matrix.lookat camera.pos V.(camera.pos +++ camera.front) camera.up
+
+let camera_right () = V.(vp camera.front camera.up)
+
+let move_right () = V.combq 1. camera.pos camera.speed (camera_right ())
+let move_left  () = V.combq 1. camera.pos (-. camera.speed) (camera_right ())
+let move_left  () = V.combq 1. camera.pos (-. camera.speed) (camera_right ())
+let move_up    () = V.combq 1. camera.pos camera.speed camera.up
+let move_down  () = V.combq 1. camera.pos (-. camera.speed) camera.up
+let rotate_right () =
+  V.combq (cos camera.rspeed) camera.front (sin camera.rspeed) (camera_right ())
+let rotate_left () =
+  V.combq (cos camera.rspeed) camera.front (-. sin camera.rspeed) (camera_right ())
+let rotate_up () =
+  let r = camera_right () in
+  V.combq (cos camera.rspeed) camera.front (sin camera.rspeed) camera.up;
+  Array.blit camera.up 0 (V.vp camera.front r) 0 3
+let rotate_down () =
+  let r = camera_right () in
+  V.combq (cos camera.rspeed) camera.front (-. sin camera.rspeed) camera.up;
+  Array.blit camera.up 0 (V.vp camera.front r) 0 3
+
+let camera_speed () =
+  if camera.curve then
+    let r = ~-. V.(camera.pos *.* camera.front) *. camera.speed in
+    Printf.printf "%f %a\n%!" r V.print_vector camera.pos;
+    r
+  else
+    camera.speed
+let move_forward () = V.combq 1. camera.pos (camera_speed ()) camera.front
+let move_back  () = V.combq 1. camera.pos (-. camera_speed ()) camera.front
+let accel () = camera.speed <- camera.speed *. 1.5
+let slow ()  = camera.speed <- camera.speed /. 1.5
+let toggle_curve () =
+  camera.curve <- not camera.curve;
+  Printf.printf "curve mode is %b\n%!" camera.curve
 
 let add_line_object = fun obj ->
   Mutex.lock draw_mutex;
@@ -116,7 +164,7 @@ let triangles_prg : unit Shaders.program =
 (* We set the uniform parameters of the shader. *)
 let triangles_prg = Shaders.float1_cst_uniform triangles_prg  "specular"     0.2
 let triangles_prg = Shaders.float1_cst_uniform triangles_prg  "shininess"    10.0
-let triangles_prg = Shaders.float3v_cst_uniform triangles_prg "lightPos"     [|0.0;1.0;4.0|]
+let triangles_prg = Shaders.float3v_cst_uniform triangles_prg "lightPos"     [|10.0;10.0;-25.0|]
 let triangles_prg = Shaders.float4v_cst_uniform triangles_prg "lightDiffuse" [|0.6;0.6;0.6;1.0|]
 let triangles_prg = Shaders.float4v_cst_uniform triangles_prg "lightAmbient" [|0.1;0.1;0.1;1.0|]
 
@@ -153,7 +201,7 @@ let draw : unit -> unit = fun () ->
   Gles3.clear [`color_buffer; `depth_buffer];
   Mutex.lock draw_mutex;
   let (<*>) = Matrix.mul in
-  let p = Matrix.perspective 45.0 !window_ratio 1.0 25.0 <*> !projection in
+  let p = Matrix.perspective 45.0 !window_ratio 0.1 100.0 <*> projection() in
   List.iter (draw_triangle_object p) !triangle_objects;
   List.iter (draw_line_object p) !line_objects;
   Mutex.unlock draw_mutex;
@@ -161,8 +209,16 @@ let draw : unit -> unit = fun () ->
   Egl.swap_buffers ()
 
 let key_cb ~key ~state ~x ~y =
-  if key = Char.code 'n' then restart ()
-  else Printf.printf "%d %d\n%!" key state
+  let c = if key < 256 then Char.chr key else Char.chr 0 in
+  match key, c with
+  | _    , ('n'|'N') -> restart ()
+  | 65363, _         -> if state = 0 then move_right () else rotate_right ()
+  | 65361, _         -> if state = 0 then move_left () else rotate_left ()
+  | 65362, _         -> if state = 0 then move_up () else rotate_up ()
+  | 65364, _         -> if state = 0 then move_down () else rotate_down ()
+  | _    , ' '       -> move_forward ()
+  | _    , ('b'|'B') -> move_back ()
+  | _                -> Printf.printf "%d %d\n%!" key state
 
 let init () =
   (* Initialise its viewport. *)
@@ -307,7 +363,7 @@ module Make(R:Field.S) = struct
         setv (3*i+0) R.(x.(0)/.x.(3));
         setv (3*i+1) R.(x.(1)/.x.(3));
         setv (3*i+2) R.(x.(2)/.x.(3));
-        let g = normal x in
+        let g = normalise (normal x) in
         setn (3*i+0) g.(0);
         setn (3*i+1) g.(1);
         setn (3*i+2) g.(2);
