@@ -37,6 +37,7 @@ module Parse(R:Field.S) = struct
         let (s0,n0) =
           if c <> 'E' && c <> 'e' then (s0,n0) else
             begin
+              Buffer.add_char b c;
               let (c,s,n) =
                 let (c,s,n as r) = Input.read s n in
                 if c = '+' then
@@ -47,7 +48,7 @@ module Parse(R:Field.S) = struct
               in
               if not (c >= '0' && c <= '9') then Lex.give_up ();
               Buffer.add_char b c;
-              let (_,s,n,_,_) = fn s n in (s,n)
+              let (_,_,_,s,n) = fn s n in (s,n)
             end
         in
         (R.of_string (Buffer.contents b), s0, n0)
