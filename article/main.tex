@@ -5,6 +5,7 @@
 \usepackage{enumitem}
 \usepackage{amssymb,amsmath,amsthm} %must be before unicode-math
 \usepackage[mathletters]{ucs}
+\DeclareUnicodeCharacter{8348}{_t}
 \DeclareUnicodeCharacter{8339}{_x}
 \DeclareUnicodeCharacter{8345}{_n}
 \DeclareUnicodeCharacter{7522}{_i}
@@ -31,7 +32,8 @@
 \newcommand{\cardinal}[1]{%
   \#{#1}%
 }
-
+\newcommand{\PNR}{{\cal P}^n(ℝ)}
+\newcommand{\SNR}{{\cal S}^n(ℝ)}
 
 \newtheorem{theo}{Theorem}
 \newtheorem{nota}[theo]{Notation}
@@ -45,39 +47,43 @@
 \maketitle
 
 \begin{nota}
-  We consider the real projective plane $Pⁿ(ℝ)$.
+  We consider the real projective plane $\PNR$.
   When ${x ∈ ℝ^{n+1}}$, we write $\overline{x} = \{ λx, λ∈ℝ_* \} ∈
-  Pⁿ(ℝ)$ the equivalent class of $x$. We define $πₙ:ℝ^{n+1} → Pⁿ(ℝ)$ the
+  \PNR$ the equivalent class of $x$. We define $πₙ:ℝ^{n+1} → \PNR$ the
   projection $x ↦ \overline{x}$.
-  We use on $Pⁿ(ℝ)$ the measure induced by
-  the chord metric of $Sⁿ(ℝ)$:
+  We use on $\PNR$ the measure induced by
+  the chord metric of the unit sphere $\SNR$:
   $$d(\overline{x},\overline{y}) = \min\left(
-  \left\|{x \over \|x\|} - {y \over \|y\|}\right\|, \left\|{x \over \|x\|} + {y \over \|y\|}\right\|\right) (∀\overline{x},\overline{y} ∈ Pⁿ(ℝ)).$$
+  \left\|{x \over \|x\|} - {y \over \|y\|}\right\|, \left\|{x \over \|x\|} + {y
+    \over \|y\|}\right\|\right) (∀\overline{x},\overline{y} ∈ \PNR).$$
+
+  We write $\cardinal{S}$ the cardinal of a set $S$.
 \end{nota}
 
 \begin{defi}
   A \emph{simplicial partition} of
-  $Pⁿ(ℝ)$ is a finite set of closed simplices $(Δᵢ)_{i∈I}$ such that
+  $\PNR$ is a finite set of closed simplices $(Δᵢ)_{i∈I}$ such that
   \begin{itemize}
-  \item $⋃_{i∈I} Δᵢ = Pⁿ(ℝ)$,
-  \item for all $i≠j ∈ I$, $Δᵢ ∩ Δⱼ$ is a common lower-dimensional facet of $Δᵢ$
-    and $Δⱼ$.
+  \item $⋃_{i∈I} Δᵢ = \PNR$,
+  \item for all $i≠j ∈ I$, $Δᵢ ∩ Δⱼ$ is a included in an hyperplane of $\PNR$.
+  \item for all simplices in $Δ$, there is a projective plane of $\PNR$ that do
+    not meet $Δ$.
   \end{itemize}
   We say that $Δᵢ$ and $Δⱼ$ are neighbour if $Δᵢ ∩ Δⱼ$ is infinite,
-  i.e. contains at least two points. The neighbourhood
-  relation
-  is clearly reflexive and symmetric.
-  For $i \in I$, we define $v(i) = \{ j \in I; \cardinal{Δᵢ ∩ Δⱼ} > 2\}$.
+  i.e. contains at least two points. We do not consider simplices sharing only
+  on vertex to be neighbour.  The neighbourhood relation is clearly reflexive
+  and symmetric.  For $i \in I$, we define $V(i) = \{ j \in I; \cardinal{(Δᵢ ∩
+    Δⱼ)} > 2\}$.
 \end{defi}
 
 \begin{defi}
-  Let $ε$ be a positive real. A \emph{simplicial partition} $(Δᵢ)_{i∈I}$ of $Pⁿ(ℝ)$ is said to be
-  $ε$-thin if for any $i,j ∈ I$, for any $x∈Δᵢ$ and $y ∈ Δⱼ$, if $d(x,y) <
-  ε$, then $Δᵢ ∩ Δⱼ ≠ ∅$.
+  Let $ε$ be a positive real. A \emph{simplicial partition} $(Δᵢ)_{i∈I}$ of $\PNR$ is said to be
+  $ε$-fat if for any $i,j ∈ I$, for any $x∈Δᵢ$ and $y ∈ Δⱼ$, if $d(x,y) <  ε$,
+  then $Δᵢ ∩ Δⱼ ≠ ∅$.
 \end{defi}
 
 \begin{prop}
-  Any \emph{simplicial partition} $(Δᵢ)_{i∈I}$ of $Pⁿ(ℝ)$ is $ε$-thin for
+  Any \emph{simplicial partition} $(Δᵢ)_{i∈I}$ of $\PNR$ is $ε$-fat for
   some $ε > 0$ small enough.
 \end{prop}
 
@@ -86,73 +92,104 @@
   finite and for all $i ∈ I$, $Δᵢ$ is compact.
 \end{proof}
 
-
-plan: on prend p un polynome, qui ne s'annule pas au sommet des Δᵢ.
-on définit f linéaire sur chaque $̣Δᵢ$ et qui coincide avec p au sommet des $Δᵢ$.
-
-On définit $ε$ tel que $p$ et $f$ ne s'annule dans aucune boule centrée au
-sommet d'un $Δᵢ$ et de rayon $ε$.
-
-  Let $s:ℝ^{n+1} → ℝ$ a $C^∞$ map with support included in $B_ε(0)$ and such
-  that $∫_{ℝ^{n+1}} s(t)dt = 1$ (1) for the usual measure $dt$ of $ℝ^{n+1}$.
-
-  We define $g(x) = (f ∗ s)(x) = ∫_{ℝ^{n+1}} f(t)s(x-t) dt$ the convolution product of $f$ and
-  $s$. $g$ is $C^∞$. $|f(x) - g(x)| = |∫_{ℝ^{n+1}} (f(x) - f(t))s(x-t) dt| <
-  \max_{t∈B_ε(x)} |f(x) - f(t)| → 0$ when $ε → 0$.
-
-  Finally, we define $gₜ = tg + (1 - t)p$.
-
-  on montre que $f = 0$ et $g = 0$ sont homémorphes et
-  que $g$ et $gₜ$ aussi si la condition sur les gradients est vérifié.
-
-  Ce qui donne $f = 0$ et $p = 0$ homéomorphe.
-
 \begin{defi}
-   Let $Δ = (Δᵢ)_{i∈I}$ be  a \emph{simplicial partition} of $Pⁿ(ℝ)$, a
+   Let $Δ = (Δᵢ)_{i∈I}$ be  a \emph{simplicial partition} of $\PNR$, a
    \emph{$Δ$-piecewise linear map}
    is a map $f : ℝ^{n+1} → ℝ$ which is
 continuous, piecewise linear and linear
-  on each $πₙ^{-1}(Δᵢ)$ for $i ∈ I$.
+on each $πₙ^{-1}(Δᵢ)$ for $i ∈ I$.
+
+  For such a map, an for all $x ∈ π^{-1}Δᵢ$, we define $∇ᵢf(x) = ∇ᵢf = ∇f(y)$ for any $y ∈
+  π^{-1}\interior{Δᵢ}$. For
+  any point $x∈ℝ^{n+1}$, we define $∇_cf(x)$ the convex-hull of $\{∇ᵢf(x),
+  \hbox{ for } i \hbox{ s.t. } x ∈
+  π^{-1}Δᵢ\}$. For $x$ in $π^{-1}\interior{Δᵢ}$, $∇_cf(x) = \{∇f(x)\}$.
 \end{defi}
 
-\begin{nota}
-  For such a map, we write $∇ᵢf$ for $∇f(x)$, for any $x ∈
-  \interior{Δᵢ}$. We also define $C_\epsilon f(x)$ the convex hull
-  of $\{ ∇f(y), y∈Sⁿ(ℝ) ∩ B_ε(x))\}$. $Hᵢ$ is also a convex cone because $f$ is
-  homogeneous.
-
-\end{nota}
 \begin{defi}
-  We say that a $Δ$-map $f$ is smooth if for all $i ∈ I$, $Hᵢf$ does not
+  We say that a $Δ$-map $f$ is smooth if for all $x ∈ \PNR$, $∇_cf(x)$ does not
     contains $0$.
 \end{defi}
 
 \begin{prop}
-  Let $Δ = (Δᵢ)_{i∈I}$ be  a \emph{simplicial partition} of $Pⁿ(ℝ)$ and
+  Let $Δ = (Δᵢ)_{i∈I}$ be a \emph{simplicial partition} of $\PNR$ and
   let $f$ be a smooth \emph{$Δ$-map}.
-  There exists $ε>0$ and a $C^∞$ function
-  $f_ε : ℝ^{n+1} → ℝ$ such that
+  For any $ε_M>0$ such that $Δ$ is $ε$-fat, there exists a family of $C^∞$ function
+  $ε ↦ f_ε : \SNR → ℝ$ such that
   \begin{itemize}
-  \item $∀x ∈ Sⁿ, \|f(x) - f_ε(x)\| < ε$
-  \item $∀i ∈ I, ∀x ∈ πₙ^{-1}(Δᵢ) ∩ Sⁿ(ℝ), ∇f_ε(x)$ is in $Hᵢ$. the convex hull of
-    $\{ ∇f(x), x ∈ πₙ^{⁻1}(\interior{Δⱼ} ∩ B_ε(x)), Δᵢ ∩ Δⱼ ≠ 0\}$ where
-    $B_ε(x)$ denotes the ball of $ℝ^{n+1}$ of radius $ε$ and center $x$.
+  \item $∀x ∈ \SNR, f(x) - f_ε(x) → 0$ when $ε → 0$
+  \item $∀i ∈ I, ∀x ∈ ℝ^{n+1}, ∇f_ε(x) ∈ ∇_cf(x)$.
+  \item All functions $f_ε$ and $f$ have homeomorphic zero level.
   \end{itemize}
 \end{prop}
 
 \begin{proof}
-  Let $s:ℝ^{n+1} → ℝ$ a $C^∞$ map with support included in $B_ε(x)$ and such
-  that $∫_{ℝ^{n+1}} s(t)dt = 1$ (1) for the usual measure $dt$ of $ℝ^{n+1}$.
+  Let $B_r(x)$ denote the unit ball of center $x$ and radius $r$.
+  Let $s:ℝ^{n+1} → ℝ⁺$ a $C^∞$ map with support included in $B_1(x)$ and such
+  that $∫_{ℝ^{n+1}} s(t)dt = 1$ for the usual measure $dt$ of $ℝ^{n+1}$. We also
+  assume that $s(-x) = s(x)$.
+  We define $s_ε(x) = ε^{-n-1}s(ε^{-1} x)$, which has support in $B_ε(x)$ and
+  satisfies $∫_{ℝ^{n+1}} s_\epsilon(t)dt = 1$
 
-  We define $f_ε(x) = f ∗ s = ∫_{ℝ^{n+1}} f(t)s(x-t) dx$ the convolution product of $f$ and
-  $s$. $f_ε$ is $C^∞$. $|f(x) - f_ε(x)| = |∫_{ℝ^{n+1}} (f(x) - f(t))s(x-t) dt| <
-  \max_{t∈B_ε(x)} |f(x) - f(t)| → 0$.
+  We define $f_ε(x) = f ∗ s = ∫_{ℝ^{n+1}} f(x-t)s_ε(t) dt$ the convolution product of $f$ and
+  $s_{ε}$. $f_ε$ is $C^∞$ on $\SNR$. $|f(x) - f_ε(x)| = |∫_{ℝ^{n+1}} (f(x) - f(t))s_{ε}(x-t) dt| <
+  \max_{t∈B_ε(x)} |f(x) - f(t)| → 0$  when $ε → 0$ because $f$ is continuous.
 
-  Finally, $∇f_ε(x) = ∫_{ℝ^{n+1}} f(t)∇s(x-t) dx = Σ_{i∈I(x)}∫_{Δᵢ} f(t)∇s(x-t) dx =
-    Σ_{i∈I(x)}∫_{Δᵢ} ∇f(t)s(x-t) dx = Σ_{i∈I(x)} λᵢ ∇ᵢf$ with
-    $λᵢ = ∫_{Δᵢ} s(x-t) dx$. By (1) we have $Σ_{i∈I(x)} λᵢ = 1$.
+  Remark: $f_ε$ is not homogeneous, this is why we restrict its domain to
+  $\SNR$.
 
-  \end{proof}
+  For the gradient, we have,
+  \begin{eqnarray*}
+    ∇f_ε(x) &=& ∇∫_{ℝ^{n+1}} f(x-t)s_{ε}(t) dt\cr
+     &=& ∇∫_{ℝ^{n+1}} f(u)∇s_{ε}(x-u) du\cr
+     &=& ∫_{ℝ^{n+1}} f(u)∇s_{ε}(x-u) du\cr
+    &=& Σ_{i∈V(x)}∫_{Δᵢ} f(x-t)∇s_{ε}(t) dt\cr
+    &=& Σ_{i∈v(x)}∫_{Δᵢ} ∇f(x-t)s_{ε}(t) dt\cr
+    &=& Σ_{i∈V(x)} λᵢ ∇ᵢf \hbox{ with } λᵢ = ∫_{Δᵢ} s_{ε}(x-t) dx > 0
+  \end{eqnarray*}
+
+  Hence $∇f_ε(x)$ is in the convex hull of the $∇ᵢf$ for $i ∈ V(x)$ because
+  $$Σ_{i∈I(x)} λᵢ = Σ_{i∈v(x)}∫_{Δᵢ} s_ε(x-t) dx =  1$$
+
+  To build the homeomorphism between the variaous zero levels, we consider the
+  following differential equation on for $γ(ε) : ℝ ↦ ℝ^{n+1}$:
+
+  $$ γ'(ε) = g(ε,γ(ε)) \hbox{ with } g(ε,x) = \frac{\frac{∂f_ε}{∂ε}(x) ∇f_ε(x)}{||∇f_ε(x)||} $$
+
+  The function $g$ is ${\cal
+    C}^∞$ for $0 < ε < ε_M$ and $x ∈ ℝ^{n+1}$ because $∇f_ε(x) ≠ 0$ on the
+  considered domain. the first thing to show it can be
+  prolongated to $ε = 0$. We have
+
+  \begin{eqnarray*}
+    ∇s_ε(x) &=& ∇(ε\|x\|)^{-n-1} s((ε\|x\|)^{-1}x) \cr
+                    &=& (-n-1) (ε\|x\|)^{-n-2} s((ε\|x\|)^{-1}x)
+    }\frac{x}{\|x\|} \cr
+     && + (ε\|x\|)^{-n-1} ∇s((ε\|x\|)^{-1}x) \left((ε\|x\|)^{-1} -
+      (ε\|x\|)^{-2}  \frac{x}{\|x\|}\right) \cr
+     && + (ε\|x\|)^{-n-1} ∇s((ε\|x\|)^{-1}x) \left((ε\|x\|)^{-1} -
+      (ε\|x\|)^{-2}\right)  \frac{x}{\|x\|} \cr
+  \end{eqnarray*}
+  \begin{eqnarray*}
+    \frac{∂}{∂ε} s_{ε\|x\|}(x-t)
+      &=& \frac{∂}{∂ε} (ε\|x\|)^{-n-1} s((ε\|x\|)^{-1}(x-t)) \cr
+    &=& \frac{∂}{∂ε} (-n-1)\|x\|(ε\|x\|)^{-n-2} s((ε\|x\|)^{-1}(x-t))
+                      - ε^{-1}(ε\|x\|)^{-n-2} ∇s((ε\|x\|)^{-1}(x-t)).(x-t)\cr
+    &=& \frac{∂}{∂ε} (-n-1)ε s_ε(x-t)
+                      - ε^{-1}(ε\|x\|)^{-n-2} ∇s((ε\|x\|)^{-1}(x-t)).(x-t)\cr
+  \end{eqnarray*}
+
+    \begin{eqnarray*}
+    \frac{∂f_ε(x)}{∂ε} &=& \frac{∂}{∂ε} ∫_{ℝ^{n+1}} f(x-t)s_{ε}(t) dt \cr
+    &=& \frac{∂}{∂ε} ∫_{ℝ^{n+1}} f(t)s_{ε\|x\|}(x-t) dt \cr
+    &=&  \frac{∂}{∂ε} Σ_{i∈V(x)} ∫_{Δᵢ} f(t)s_{ε\|x\|}(x-t) du \cr
+    &=&  Σ_{i∈V(x)} ∫_{Δᵢ} f(t) \frac{∂}{∂ε} s_{ε\|x\|}(x-t) du \cr
+       &=& Σ_{i∈V(x)}∫_{Δᵢ} f(x-t) s_{ε\|x\|}(t) dt
+  \end{eqnarray*}
+
+
+
+\end{proof}
 
   \begin{prop}
     Let $p$ be an homogeneous polynomial in $n+1$ variables.
