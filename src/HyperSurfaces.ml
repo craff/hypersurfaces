@@ -36,7 +36,7 @@ module Make(R:Field.S) = struct
   type status =
     | Unknown
     | NonZero
-    | NonDege of R.t array
+    | NonDege
 
   type simplicies =
     { s : simplex
@@ -194,11 +194,9 @@ module Make(R:Field.S) = struct
 
     let recheck s =
       match s.k with
-      | Unknown   -> true
-      | NonZero   -> true
-      | NonDege v ->
-         let gd = all_gradients s in
-         Array.for_all (fun w -> w *.* v <. zero) gd
+      | Unknown -> true
+      | NonZero -> true
+      | NonDege -> false
     in
 
     let re_add acc s =
@@ -222,7 +220,7 @@ module Make(R:Field.S) = struct
                            print_simplex s.s print_polynome s.p;
           if !debug then Array.iter (fun v -> Printf.eprintf " %a\n%!"
                                                 print_vector v) gd;
-          match zih gd with Some v -> NonDege v | None ->Unknown
+          if zih_new gd then Unknown else NonDege
         end
     in
 

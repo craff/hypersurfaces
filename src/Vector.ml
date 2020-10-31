@@ -410,6 +410,79 @@ module Make(R:Field.S) = struct
        else
          (if !debug then Printf.printf "REJECT\n%!"; None)
 
+  let zih_new m =
+    let nb  = Array.length m in
+    let dim = Array.length m.(0) in
+    let m = Array.mapi (fun i x -> (normalise x, i)) m in
+    let ml = Array.sub m 0 dim in
+    let mr = Array.sub m dim (nb - dim) in
+    let det m = det (Array.map fst m) in
+    let d = det ml in
+    try
+      if d =. zero then raise Not_found;
+      if d <. zero then swap ml 0 1;
+      let faces =
+        List.init dim (fun i ->
+            let a =
+              Array.init (dim-1) (fun j ->
+                  if j < i then ml.(j) else ml.(j+1))
+            in
+            if i mod 2 = 1 then swap a 0 1;
+            a);
+      in
+      (*Printf.printf "init faces:\n";
+      List.iter (fun f -> Printf.printf "%a\n%!" print_matrix f) faces;*)
+      let visible x d =
+        let a = Array.init dim (fun i -> if i = 0 then x else d.(i-1)) in
+        det a <. zero
+      in
+      let add_one faces x =
+        let (hole, faces) = List.partition (visible x) faces in
+        (*Printf.printf "hole for x:%a\n" print_vector x;
+        List.iter (fun f -> Printf.printf "%a\n%!" print_matrix f) hole;*)
+        if faces = [] then raise Not_found;
+        let facet s =
+          List.init (dim-1) (fun i ->
+              let a =
+                Array.init (dim-2) (fun j ->
+                    if j < i then s.(j) else s.(j+1))
+              in
+              let a' = Array.map snd a in
+              Array.sort compare a';
+              (a', a,i))
+        in
+        let facets = List.flatten (List.map facet hole) in
+        (*Printf.printf "%d\n%!" (List.length facets);*)
+        let rec fn acc = function
+          | [] -> acc
+          | (x,_,_)::(y,_,_)::l when x = y -> fn acc l
+          | t::l -> fn (t::acc) l
+        in
+        let cmp ((a:int Array.t),_,_) (b, _,_) = Stdlib.compare a b in
+        let facets = List.sort cmp facets in
+        (*Printf.printf "sorted hole for x:%a\n" print_vector x;
+        List.iter (fun (f,_,_) -> Printf.printf "%a\n%!" print_matrix f) facets;*)
+        let facets = fn [] facets in
+        (*Printf.printf "%d\n%!" (List.length facets);*)
+        let mk_new (_,facet,i) =
+          Array.init (dim-1) (fun j ->
+                      if j < i then facet.(j)
+                      else if j = i then x
+                      else facet.(j-1))
+        in
+        let news = List.map mk_new facets in
+        (*Printf.printf "new faces x:%a\n" print_vector x;
+        List.iter (fun f -> Printf.printf "%a\n%!" print_matrix f) news;
+        Printf.printf "old faces x:%a\n" print_vector x;
+        List.iter (fun f -> Printf.printf "%a\n%!" print_matrix f) faces;*)
+        news @ faces
+      in
+      let _faces = Array.fold_left add_one faces mr in
+      false
+    with
+      Not_found -> true
+
+
        (*
   let a =
     Array.map (Array.map of_int)
