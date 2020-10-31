@@ -317,28 +317,16 @@ module Make(R:Field.S) = struct
     add_line_object obj;
     obj
 
-  let mk_triangles_from_polyhedron p normal =
-    let tbl = Hashtbl.create 1001 in
-    let count = ref 0 in
+  let mk_triangles_from_polyhedron p =
     let (size, p) = List.fold_left (fun (j,acc) a ->
         if Array.length a <> 3 && Array.length a <> 4 then invalid_arg "dimension not 3";
         let f (j,acc) x1 x2 x3 =
-          let fn x =
-            try Hashtbl.find tbl x
-            with
-              Not_found ->
-              let i = !count in
-              incr count;
-              Hashtbl.add tbl x i;
-              i
-          in
-          let gn x y z = (fn x, fn y, fn z) in
-          let (ln, lp) = List.partition (fun x -> x.(3) <. zero) [x1;x2;x3] in
+          let (ln, lp) = List.partition (fun x -> x.(3) <=. zero) [x1;x2;x3] in
           match (lp, ln) with
-          | [x;y;z], _ | _, [x;y;z] -> (j+1, gn x1 x2 x3 :: acc)
+          | [x;y;z], _ | _, [x;y;z] -> (j+1, (x1, x2, x3) :: acc)
           | [x;y], [z] | [z], [x;y] ->
              let zn = List.length ln = 1 in
-             let h =     one /. of_int 1_000_000 in
+             let h =     one /. of_int 100_000 in
              let lambda1     = (h -. z.(3)) /. (x.(3) -. z.(3)) in
              let mu1 = one -. lambda1 in
              let lambda2 = (~-. h -. z.(3)) /. (x.(3) -. z.(3)) in
@@ -352,37 +340,46 @@ module Make(R:Field.S) = struct
              let yz1 = comb lambda1 y mu1 z in
              let yz2 = comb lambda2 y mu2 z in
              if zn then
-               (j+3, gn x y xz1 :: gn xz1 y yz1 :: gn xz2 yz2 z :: acc)
+               (j+3, (x, y, xz1) :: (xz1, y, yz1) :: (xz2, yz2, z) :: acc)
              else
-               (j+3, gn x y xz2 :: gn xz2 y yz2 :: gn xz1 yz1 z :: acc)
+               (j+3, (x, y, xz2) :: (xz2, y, yz2) :: (xz1, yz1, z) :: acc)
           | _ -> assert false
         in
         if Array.length a = 3 then
           f (j,acc) a.(0) a.(1) a.(2)
         else
-          (
-          f (f (j,acc) a.(0) a.(1) a.(3)) a.(0) a.(2) a.(3)
-                      )) (0, []) p
+          begin
+            let _n1 = V.norm2 V.(a.(1) --- a.(2)) in
+            let _n2 = V.norm2 V.(a.(0) --- a.(3)) in
+            if _n1 > _n2 then
+              f (f (j,acc) a.(0) a.(1) a.(2)) a.(1) a.(2) a.(3)
+            else
+              f (f (j,acc) a.(0) a.(1) a.(3)) a.(0) a.(2) a.(3)
+          end) (0, []) p
     in
     let elem = create_uint_bigarray (size * 3) in
-    List.iteri (fun i (i1,i2,i3) ->
+    let vert = create_float_bigarray (size * 9) in
+    let norm = create_float_bigarray (size * 9) in
+    List.iteri (fun i (x,y,z) ->
         let sete i x = Bigarray.Genarray.set elem [|i|] (Int32.of_int x) in
-        sete (3*i+0) i1;
-        sete (3*i+1) i2;
-        sete (3*i+2) i3) p;
-    let vert = create_float_bigarray (Hashtbl.length tbl * 3) in
-    let norm = create_float_bigarray (Hashtbl.length tbl * 3) in
-    Hashtbl.iter (fun x i ->
         let setv i x = Bigarray.Genarray.set vert [|i|] (R.to_float x) in
         let setn i x = Bigarray.Genarray.set norm [|i|] (R.to_float x) in
-        setv (3*i+0) R.(x.(0)/.x.(3));
-        setv (3*i+1) R.(x.(1)/.x.(3));
-        setv (3*i+2) R.(x.(2)/.x.(3));
-        let g = normalise (normal x) in
-        setn (3*i+0) g.(0);
-        setn (3*i+1) g.(1);
-        setn (3*i+2) g.(2);
-      ) tbl;
+        sete (3*i+0) (3*i+0);
+        sete (3*i+1) (3*i+1);
+        sete (3*i+2) (3*i+2);
+        let (a : R.t array) = [| R.(x.(0)/.x.(3)); R.(x.(1)/.x.(3)); R.(x.(2)/.x.(3))|] in
+        let b = [| R.(y.(0)/.y.(3)); R.(y.(1)/.y.(3)); R.(y.(2)/.y.(3))|] in
+        let c = [| R.(z.(0)/.z.(3)); R.(z.(1)/.z.(3)); R.(z.(2)/.z.(3))|] in
+        setv (9*i+0) a.(0); setv (9*i+1) a.(1); setv (9*i+2) a.(2);
+        setv (9*i+3) b.(0); setv (9*i+4) b.(1); setv (9*i+5) b.(2);
+        setv (9*i+6) c.(0); setv (9*i+7) c.(1); setv (9*i+8) c.(2);
+        let module V = Vector.Make(R) in
+        let a : R.t array = a in
+        let n = V.(normalise (vp (b --- (a : R.t array)) (c --- a))) in
+        setn (9*i+0) n.(0); setn (9*i+1) n.(1); setn (9*i+2) n.(2);
+        setn (9*i+3) n.(0); setn (9*i+4) n.(1); setn (9*i+5) n.(2);
+        setn (9*i+6) n.(0); setn (9*i+7) n.(1); setn (9*i+8) n.(2);
+      ) p;
     let obj =
       mk_object vert norm elem [|0.2;0.2;0.6;1.0|] Matrix.idt
     in

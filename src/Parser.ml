@@ -123,13 +123,11 @@ module Parse(R:Field.S) = struct
     ; "display" (name::ident) ';' =>
         (try
            let p = Hashtbl.find polys name in
-           let g = tgradient p.poly in
-           let normal x = eval_grad g x in
            let o =
              if hdim p = 2 then
                D.mk_lines_from_polyhedron p.triangulation
              else if hdim p = 3 then
-               D.mk_triangles_from_polyhedron p.triangulation normal
+               D.mk_triangles_from_polyhedron p.triangulation
              else
                D.mk_lines_from_polyhedron []
            in

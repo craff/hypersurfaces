@@ -410,6 +410,7 @@ module Make(R:Field.S) = struct
        else
          (if !debug then Printf.printf "REJECT\n%!"; None)
 
+       (*
   let a =
     Array.map (Array.map of_int)
       [|
@@ -430,5 +431,5 @@ module Make(R:Field.S) = struct
          |]
 
   let _ = assert (zih a = None)
-
+        *)
 end
