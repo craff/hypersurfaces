@@ -414,8 +414,7 @@ module Make(R:Field.S) = struct
           end;
         if pos = [] || neg = [] then
           begin
-            if !debug then
-              Printf.eprintf "keep nothin\n%!";
+            if !debug then Printf.eprintf "keep nothing\n%!";
             incr nb_remove
           end
         else

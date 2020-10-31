@@ -20,7 +20,7 @@ module Make(R:Field.S) = struct
 
   let ( --- ) v1 v2 =
     assert (Array.length v1 = Array.length v2);
-    Array.mapi (fun i x -> x -. v2.(i)) v1
+    Array.map2 (fun x y -> x -. y) v1 v2
 
   let subq v1 v2 = Array.iteri (fun i x -> v1.(i) <- x -. v2.(i)) v1
 
