@@ -8,3 +8,6 @@ clean:
 
 test:
 	dune exec Main -- tests/*.txt
+
+pdf:
+	cd article && rubber --pdf main.tex
