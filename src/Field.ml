@@ -180,5 +180,4 @@ module Q:S =
     let of_string = of_string
     let print ch x = Printf.fprintf ch "%s" (to_string x)
     let exact = true
-    let _ = print stdout (sqrt (of_int 2)); Printf.printf " %.15e %.15e \n%!" (to_float (sqrt (of_int 2))) (Stdlib.sqrt 2.0)
   end)

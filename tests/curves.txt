@@ -28,8 +28,8 @@ zeros q2; display q2;
 let q3(x,y) = (x^2+y^2-1)^2 + 1/2000 * x * y * (x-y) * (x+y);
 zeros q3; display q3;
 
-#let q3(x,y) = (x^2+y^2-1)^2 + 1/20000 * x * y * (x-y) * (x+y);
-#zeros q3; display q3;
+let q3(x,y) = (x^2+y^2-1)^2 + 1/20000 * x * y * (x-y) * (x+y);
+zeros q3; display q3;
 
 let e5(x,y) = 500  * (x-1)^2 + (y-1)^2 - 1;
 zeros e5; display e5;

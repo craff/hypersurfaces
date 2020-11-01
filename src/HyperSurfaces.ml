@@ -8,8 +8,6 @@ module Make(R:Field.S) = struct
   open Poly
   module Vec = Vector.Make(R)
   open Vec
-  module D = Display.Make(R)
-  open D
 
   let all_dirs d =
     let res = ref [] in

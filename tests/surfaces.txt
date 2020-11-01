@@ -1,14 +1,14 @@
-let s1(x,y,z,t) = x^2 + y^2 + z^2 - t^2;
+let s1(x,y,z) = x^2 + y^2 + z^2 - 1;
 zeros s1; display s1;
 
-let h1(x,y,z,t) = x^2 + y^2 - z^2 - t^2;
+let h1(x,y,z) = x^2 + y^2 - z^2 - 1;
 zeros h1; display h1;
 
-let s2(x,y,z,t) = (x-t)^2 + (y-t)^2 + (z-t)^2 - t^2;
+let s2(x,y,z) = (x-1)^2 + (y-1)^2 + (z-1)^2 - 1;
 zeros s2; display s2;
 
-let h2(x,y,z,t) = (x-t)^2 + (y-t)^2 - (z-t)^2 - t^2;
+let h2(x,y,z) = (x-1)^2 + (y-1)^2 - (z-1)^2 - 1;
 zeros h2; display h2;
 
-let e1(x,y,z,t) = x^2 + y^2 + 20 * z^2 - t^2;
+let e1(x,y,z) = x^2 + y^2 + 2000 * z^2 - 1;
 zeros e1; display e1;

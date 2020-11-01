@@ -295,47 +295,4 @@ module Make(R:Field.S) = struct
     in
     subst p q
 
-  let positive p =
-    Printf.printf "P = %a\n%!" print_polynome p;
-    let dim = dim p in
-    let deg = degree p in
-    if deg < 2 then List.for_all (fun (_,c) -> c >=. zero) p else
-    let res = ref [] in
-    let rec fn acc dim degree =
-      if dim = 1 then res := (degree::acc)::!res else
-        for i = 0 to degree do
-          fn (i::acc) (dim - 1) (degree-i)
-        done;
-    in
-    fn [] dim deg;
-    let monomials = !res in
-    let mat = List.map (fun l -> [l,one]) monomials in
-    let mat = ref (List.rev mat) in
-    List.iter (fun (l,c) ->
-        if c <. zero then
-          for i = 0 to dim - 1 do
-            for j = i+1 to dim - 1 do
-              if List.nth l i >= 1 && List.nth l j >= 1 then
-                let lx2 = List.mapi (fun k x -> if i = k then x - 1 else if j = k then x + 1 else x) l in
-                let ly2 = List.mapi (fun k x -> if j = k then x - 1 else if i = k then x +1 else x) l in
-                mat := [(lx2,one); (ly2,one); (l,~-.one)] :: !mat
-            done
-          done) p;
-    let mat = List.rev !mat in
-    let m = List.map (fun ls -> List.map (fun l -> try List.assoc l ls with Not_found -> zero) monomials) mat in
-    let m = Array.of_list (List.map Array.of_list m) in
-    let b = List.map (fun l -> try List.assoc l p with Not_found -> zero) monomials in
-    let b = Array.of_list b in
-    let pos = Array.make (Array.length m) true in
-    V.(try let _s = solve_pos m b pos in
-           V.(Printf.printf "%a X = %a\n  ==>%a\n%!" print_matrix m print_vector b print_vector _s);
-
-           true with Not_found -> false)
-
-
-
-(*
-    let _ = assert (positive [ ([2;0],one); ([1;1],~-. one /. of_int 2); ([0;2], one) ])
-    let _ = assert (positive [ ([2;0;0],one); ([1;1;0],~-. one /. of_int 2); ([0;2;0], one) ])
- *)
 end
