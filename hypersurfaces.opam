@@ -1,16 +1,19 @@
-synopsis: "un parser du français"
+synopsis: "Algebraic equation solver"
 
 opam-version: "2.0"
 maintainer: "Christophe Raffalli <christophe@raffalli.eu>"
 authors: [
   "Christophe Raffalli <christophe@raffalli.eu>" ]
 license: "MIT"
+homepage: "https:raffalli.eu/hypersurfaces"
+bug-reports: "christophe@raffalli.eu"
 
 depends: [
   "ocaml" { >= "4.04.0" }
   "dune"  { build & >= "1.2.0" }
   "pacomb" { build }
+  "gles3" { }
 ]
 
-build: [ [ "dune" "build" "-p" name "-j" jobs ] ]
-run-test: [ [ "dune" "runtest" "-p" name "-j" jobs ] ]
+build: [ [ "dune" "build" "--release" "-p" name "-j" jobs ] ]
+run-test: [ [ "dune" "runtest" "--release" "-p" name "-j" jobs ] ]

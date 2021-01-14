@@ -1,0 +1,36 @@
+let e1(x,y) = 10 * x^2 + y^2 - 1;
+let e2(x,y) = x^2 + 10 * y^2 - 1;
+let p = zeros e1 e2;
+display p p__t;
+display p;
+
+
+let e1(x,y) = 1000 * x^2 + y^2 - 1;
+let e2(x,y) = x^2 + 1000 * y^2 - 1;
+let p2 = zeros e1 e2;
+display p2 p2__t;
+display p2;
+
+let e1(x,y) = (x-0.99)^2 + y^2 - 1;
+let e2(x,y) = (x+0.99)^2 + y^2 - 1;
+let p3 = zeros e1 e2;
+display p3 p3__t;
+display p3;
+
+let e1(x,y) = (x-0.999)^2 + y^2 - 1;
+let e2(x,y) = (x+0.999)^2 + y^2 - 1;
+let p4 = zeros e1 e2;
+display p4 p4__t;
+display p4;
+
+let e1(x,y) = (x-1.001)^2 + y^2 - 1;
+let e2(x,y) = (x+1.001)^2 + y^2 - 1;
+let p5 = zeros e1 e2;
+display p5 p5__t;
+display p5;
+
+let e1(x,y) = (x-1.2)^2 + y^2 - 1;
+let e2(x,y) = (x+0.6)^2 + y^2 - 1;
+let p6 = zeros e1 e2;
+display p6 p6__t;
+display p6;

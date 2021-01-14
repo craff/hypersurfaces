@@ -1,29 +1,48 @@
+open FieldGen
 
-module Make(R:Field.S) = struct
+module Make(R:S) = struct
   open R
 
   (** vector *)
+  type t = R.t
   type vector = R.t array
-  type t = Vector
+  type v = vector
 
   (** column matrix *)
   type matrix = vector array
+  type m = matrix
+
+  let addq v1 v2 =
+    for i = 0 to Array.length v1 - 1 do
+      v1.(i) <- v1.(i) +. v2.(i)
+    done;
+    [@@inlined always]
+
+  let adds v0 v1 v2 =
+    for i = 0 to Array.length v1 - 1 do
+      v0.(i) <- v1.(i) +. v2.(i)
+    done;
+    [@@inlined always]
 
   let ( +++ ) v1 v2 =
-    assert (Array.length v1 = Array.length v2);
-    Array.map2 (+.) v1 v2
+    let v = Array.make (Array.length v1) zero in
+    adds v v1 v2; v[@@inlined always]
 
-  let addq v1 v2 = Array.iteri (fun i x -> v1.(i) <- x +. v2.(i)) v1
+  let subq v1 v2 =
+    for i = 0 to Array.length v1 - 1 do
+      v1.(i) <- v1.(i) -. v2.(i)
+    done;
+    [@@inlined always]
 
-  let adds v0 v1 v2 = Array.iteri (fun i x -> v0.(i) <- x +. v2.(i)) v1
+  let subs v0 v1 v2 =
+    for i = 0 to Array.length v1 - 1 do
+      v0.(i) <- v1.(i) -. v2.(i)
+    done;
+    [@@inlined always]
 
   let ( --- ) v1 v2 =
-    assert (Array.length v1 = Array.length v2);
-    Array.map2 (-.) v1 v2
-
-  let subq v1 v2 = Array.iteri (fun i x -> v1.(i) <- x -. v2.(i)) v1
-
-  let subs v0 v1 v2 = Array.iteri (fun i x -> v0.(i) <- x -. v2.(i)) v1
+    let v = Array.make (Array.length v1) zero in
+    subs v v1 v2; v[@@inlined always]
 
   let vp v1 v2 =
     assert (Array.length v1 = 3);
@@ -32,32 +51,50 @@ module Make(R:Field.S) = struct
      ; v1.(2) *. v2.(0) -. v1.(0) *. v2.(2)
      ; v1.(0) *. v2.(1) -. v1.(1) *. v2.(0) |]
 
-  let comb t v1 u v2 =
-    assert (Array.length v1 = Array.length v2);
-    Array.mapi (fun i x -> t*.x +. u*.v2.(i)) v1
-
   let combq t v1 u v2 =
-    assert (Array.length v1 = Array.length v2);
-    Array.iteri (fun i x -> v1.(i) <- t*.x +. u*.v2.(i)) v1
+    for i = 0 to Array.length v1 - 1 do
+      v1.(i) <- t*.v1.(i) +. u*.v2.(i)
+    done [@@inlined always]
+
+  let combqo v1 u v2 =
+    for i = 0 to Array.length v1 - 1 do
+      v1.(i) <- v1.(i) +. u*.v2.(i)
+    done [@@inlined always]
 
   let combs v0 t v1 u v2 =
-    assert (Array.length v1 = Array.length v2);
-    Array.iteri (fun i x -> v0.(i) <- t*.x +. u*.v2.(i)) v1
+    for i = 0 to Array.length v1 - 1 do
+      v0.(i) <- t*.v1.(i) +. u*.v2.(i)
+    done [@@inlined always]
+
+  let comb t v1 u v2 =
+    let n = Array.length v1 in
+    let v = Array.make n zero in
+    combs v t v1 u v2; v [@@inlined always]
 
   let ( *.* ) v1 v2 =
-    assert (Array.length v1 = Array.length v2);
     let res = ref zero in
-    Array.iteri (fun i x -> res := !res +. x *. v2.(i)) v1;
+    for i = 0 to Array.length v1 - 1 do
+      res := !res +. v1.(i) *. v2.(i);
+    done;
     !res
 
   let zero_v d = Array.make d zero
 
+  let smulq x v =
+    for i = 0 to Array.length v - 1 do
+      v.(i) <- x*.v.(i)
+    done [@@inlined always]
+
   let ( **. ) x v =
-    Array.map (fun y -> x*.y) v
+    let n = Array.length v in
+    let r = Array.make n zero in
+    for i = 0 to n - 1 do
+      r.(i) <- x*.v.(i)
+    done; r [@@inlined always]
 
-  let ( //. ) v x = (one /. x) **. v
+  let ( //. ) v x = (one /. x) **. v [@@inlined always]
 
-  let opp v = Array.map (~-.) v
+  let opp v = (~-.one) **. v [@@inlined always]
 
   let norm2 v = v *.* v
 
@@ -68,19 +105,18 @@ module Make(R:Field.S) = struct
   let dist2 v1 v2 = norm2 (v1 --- v2)
 
   let abs_norm v =
-    Array.fold_left (fun acc x -> acc +. abs x) zero v
+    let r = ref zero in
+    for i = 0 to Array.length v - 1 do
+      r := !r +. abs v.(i)
+    done;
+    !r [@@inlined always]
 
-  let normalise v =
-    let n = one /. norm v in
-    Array.map (fun x -> x *. n) v
 
-  let normaliseq v =
-    let n = one /. norm v in
-    Array.iteri (fun i x -> v.(i) <- x *. n) v
+  let normalise v = (one /. norm v) **. v [@@inlined always]
 
-  let abs_normalise v =
-    let n = one /. abs_norm v in
-    Array.map (fun x -> x *. n) v
+  let normaliseq v = smulq (one /. norm v) v [@@inlined always]
+
+  let abs_normalise v = (one /. abs_norm v) **. v [@@inlined always]
 
   let print_array fn ch v =
     Printf.fprintf ch "(";
@@ -97,6 +133,13 @@ module Make(R:Field.S) = struct
         (fun i -> Printf.fprintf ch "%s%d" (if i <> 0 then ", " else "")) l
     in
     Printf.fprintf ch "(%a)" pr l
+
+  let sprint_list () l =
+    let pr () l =
+      String.concat "" (List.mapi
+        (fun i -> Printf.sprintf "%s%d" (if i <> 0 then ", " else "")) l)
+    in
+    Printf.sprintf "(%a)" pr l
 
   (** matrix vector multiplication *)
   let ( *** ) m v =
@@ -133,13 +176,13 @@ module Make(R:Field.S) = struct
 
   let swap v i j =
     let tmp = v.(i) in
-    v.(i) <- v.(j); v.(j) <- tmp
+    v.(i) <- v.(j); v.(j) <- tmp [@@inlined always]
 
   (** determinant with principal Gauss pivot *)
   let unsafe_det m =
     let len = Array.length m in
-    let d = ref one in
     try
+      let d = ref one in
       for i = 0 to len - 1 do
         let best = ref (abs m.(i).(i)) in
         let best_j = ref i in
@@ -160,7 +203,11 @@ module Make(R:Field.S) = struct
         let p = m.(i).(i) in
         if p =. zero then raise Exit;
         for j = i+1 to len - 1 do
-          combq one m.(j) (-. m.(j).(i) /. p) m.(i);
+          let v = m.(j).(i) in
+          m.(j).(i) <- zero;
+          for k = i+1 to len - 1 do
+            m.(j).(k) <- m.(j).(k) -. v /. p *. m.(i).(k);
+          done;
         done;
       done;
       for i = 0 to len - 1 do
@@ -189,23 +236,23 @@ module Make(R:Field.S) = struct
     with
       Exit -> false
 
-  let (//.) x y = if y =. zero then raise Not_found else x /. y
-
   let solve_unsafe mat vector0 =
     let vector = Array.copy vector0 in
     let dim = Array.length vector in
 
     for i = 0 to dim - 2 do
       (*Printf.printf "%d %a %a\n%!" i print_matrix mat print_vector vector;*)
-      let pivot_i, pivot_val =
-        let r = ref (-1, zero) in
+      let pivot_i, _, pivot_val =
+        let r = ref (-1, zero, zero) in
         for j = i to dim - 1 do
 	  let v = mat.(j).(i) in
-	  let (_,t) = !r in
-	  if abs v > abs t then r := (j, v)
+          let av = abs v in
+          let (_,aw,_) = !r in
+	  if av >. aw then r := (j, av, v)
         done;
         !r
       in
+      (*Printf.printf "pivot: %d %a\n%!" pivot_i print pivot_val;*)
       if pivot_i < 0 then raise Not_found;
       if pivot_i <> i then
         begin
@@ -234,6 +281,7 @@ module Make(R:Field.S) = struct
       for j = i + 1 to dim - 1 do
         r.(i) <- r.(i) -. r.(j) *. mat.(i).(j)
       done;
+      if mat.(i).(i) =. zero then raise Not_found;
       r.(i) <- r.(i) /. mat.(i).(i)
     done;
 
@@ -250,7 +298,7 @@ module Make(R:Field.S) = struct
 
    (* solves m x = y for m symmetric positive definite (spd)
       remark: if m is invertible tm * m is spd *)
-  let irm_cg m b =
+  let irm_cg ?(epsilon=zero) m b =
     let d = Array.length b in
     let x = zero_v d in
     let r = b --- m x in
@@ -258,8 +306,8 @@ module Make(R:Field.S) = struct
     let prev = ref (x,r2) in
     let i = ref 0 in
     try
-      if r2 <=. zero then raise Exit;
-      let q = r2 //. (r *.* m r) in
+      if r2 <=. epsilon then raise Exit;
+      let q = r2 /. (r *.* m r) in
       let p = q **. r in
       let beta = m p in
       while true do
@@ -270,7 +318,7 @@ module Make(R:Field.S) = struct
            Printf.printf "step: %d, x: %a => %a\n%!" !i print_vector x print nr2;*)
         let (_,pr2) = !prev in
         if nr2 <. pr2 then prev := (x,nr2);
-        if nr2 <=. zero || !i >= 2*d then raise Exit;
+        if nr2 <=. epsilon || !i >= 2*d then raise Exit;
         let alpha = m r in
         let a11 = r *.* alpha in
         let a12 = p *.* alpha in
@@ -350,214 +398,536 @@ module Make(R:Field.S) = struct
     solve m b
 
   (** Coordinate *)
-  let pcoord v m =
-    solve_transpose m v
+  let pcoord v m = try solve (m **** transpose m)  (m *** v) with Not_found -> assert false
 
+  (* transform a linear application v fomr base m1 to m2 *)
   let transform v m1 m2 =
-    let len = Array.length v in
-    assert (Array.length m1 = len);
-    assert (Array.length m2 = len);
-    Array.init len (fun i ->
-        let w = pcoord m2.(i) m1 in
-        v *.* w)
+    m2 *** solve m1 v
 
   exception Found of R.t array
 
   let distance m k x =
     let m = Array.init k (fun i -> m.(i)) in
-    try norm2 (x --- m **- (solve (m **** transpose m) (m *** x)))
+    Printf.printf "coucou D\n%!";
+    let mtm = m **** transpose m in
+    let mx = m *** x in
+    let y = solve mtm mx in
+    Printf.printf "coucou E\n%!";
+    try norm2 (x --- m **- y)
     with Not_found -> zero
+
+  let print_point ch (a,i) =
+    Printf.fprintf ch "%d:%a" i print_vector a
+
+  let rec print_points ch l =
+    match l with
+    | [] -> ()
+    | [x] -> print_point ch x
+    | x::l -> Printf.fprintf ch "%a, %a" print_point x print_points l
+
+  let print_face ch a =
+    let a = Array.to_list a in
+    Printf.fprintf ch "%a\n" print_points a
+
+  let print_faces ch faces =
+    List.iteri (fun i face -> Printf.fprintf ch "%d) %a" i print_face face) faces
+
+  exception Zih
+
+  let solve2 f a b c =
+    (*    Printf.printf "solve2: a: %a, b: %a, c: %a\n%!" print a print b print c;*)
+    let x1, x2 =
+      if a =. zero then (-.c /. b, -.c /. b) else
+        if c =. zero then (zero, -.b /. a)     else
+          begin
+            let delta = b *. b -. of_int 4 *. a *. c in
+            (*            Printf.printf "a: %a, b: %a, c: %a, delta: %a\n%!" print a print b print c print delta;*)
+            if delta <. zero then raise Not_found;
+            if b >. zero then
+              ((-. b -. sqrt delta) /. (of_int 2 *. a),
+               (of_int 2 *. c) /. (-.b -. sqrt delta))
+            else
+              ((-. b +. sqrt delta) /. (of_int 2 *. a),
+               (of_int 2 *. c) /. (-. b +. sqrt delta))
+          end
+    in
+    let x = if f x1 <. f x2 then x1 else x2 in
+    (*    Printf.printf "x: %a\n%!" print x;*)
+(*    let good = ref true in
+    for i = -100 to 200 do
+      let t = of_int i /. of_int 100 in
+      let u = one -. t in
+      let y = t *. x1 +. u *. x2 in
+      Printf.printf "i: %d, x: %a, f(x): %a, y: %a, f(y): %a\n%!"
+         i print x print (f x) print y print (f y);
+      if not (f x <=. f y) then good := false;
+    done;
+    assert !good;*)
+    x
+
+  let set_one r =
+    let nb = Array.length r in
+    let s = ref zero in
+    for j = 0 to nb - 1 do
+      s := !s +. r.(j);
+    done;
+    for j = 0 to nb - 1 do
+      r.(j) <- r.(j) /. !s;
+    done
+
+  type zih_steps = {
+      mutable nb_call : int;
+      mutable nb_abort : int;
+      mutable max : int;
+      mutable sum : int
+    }
+
+  let zih_steps = { nb_call = 0; nb_abort = 0; max = 0; sum = 0 }
+  let reset_zih () =
+    zih_steps.nb_call <- 0;
+    zih_steps.nb_abort <- 0;
+    zih_steps.max <- 0;
+    zih_steps.sum <- 0
+
+  let print_zih_summary () =
+    Printf.printf "zih: average steps: %g, max steps: %d, nb_abort: %d\n%!"
+      Stdlib.(float zih_steps.sum /. float zih_steps.nb_call)
+      zih_steps.max zih_steps.nb_abort;
+    reset_zih ()
+
+  exception ExitZih of bool
+
+  let exit_zih ?(abort=false) step r =
+    zih_steps.nb_call <- zih_steps.nb_call + 1;
+    if abort then zih_steps.nb_abort <- zih_steps.nb_abort + 1
+    else if zih_steps.max < step then zih_steps.max <- step;
+    zih_steps.sum <- zih_steps.sum + step;
+    raise (ExitZih r)
+
+  let zih ?r0 m = try
+    let m = List.map normalise m in
+    let m = List.sort_uniq compare m in
+    let m = Array.of_list m in
+    zih_log "zih: %a" print_matrix m;
+    let nb  = Array.length m in
+    let _dim = Array.length m.(0) in
+    if not (Array.for_all (fun v -> abs (norm2 v -. one) <. of_float 1e-15) m) then
+      begin
+        zih_log "opposite";
+        exit_zih 0 true;
+      end;
+    let r = match r0 with
+      | Some r -> Array.copy r
+      | None -> Array.make nb (one /. of_int nb)
+    in
+    let pcoef = Array.make nb zero in
+    let rec fn step v v2 =
+      let dir_i = ref (-1) in
+      let dir_s = ref zero in
+      for i = 0 to nb - 1 do
+        let s = m.(i) *.* v in
+        if s <=. !dir_s then (dir_s := s; dir_i := i)
+      done;
+      let i = !dir_i in
+      if i < 0 then (zih_log "false"; exit_zih step false);
+      let p = m **- pcoef in
+      let p2 = norm2 p in
+      let pv = p *.* v in
+      let pw = p *.* m.(i) in
+      let vw = !dir_s in
+      let w2 = norm2 m.(i) in
+      let sigma = ref zero in
+      for j = 0 to nb-1 do
+        sigma := !sigma +. pcoef.(j)
+      done;
+      let sigma = !sigma in
+      let find_alpha beta =
+        let w2 = beta *. beta *. p2 +. of_int 2 *. beta *. pw +. w2 in
+        let vw = beta *. pv +. vw in
+        let sigma = beta *. sigma +. one in
+        let f alpha =
+          let d = one +. alpha *. sigma in
+          (v2 +. of_int 2 *. alpha *. vw +. alpha *. alpha *. w2) /. (d*.d)
+        in
+        if vw >=. zero then (zero, f zero) else
+          let a = sigma *. (w2 -. vw *. sigma) in
+          let b = w2 -. v2 *. sigma *. sigma in
+          let c = vw -. sigma *. v2 in
+          let alpha = try solve2 f a b c with Not_found -> assert false in
+          (alpha, f alpha);
+      in
+      let g = (sqrt (of_int 5) -. one) /. of_int 2 in
+      let max_step = 50 in
+      let trichotomie beta0 beta3 =
+          let beta1 = beta3 -. g *. (beta3 -. beta0) in
+          let beta2 = beta0 +. g *. (beta3 -. beta0) in
+          let (_, f1) = find_alpha beta1 in
+          let (_, f2) = find_alpha beta2 in
+          let rec fn step beta0 beta2 f2 beta3 =
+            if step >= max_step then beta2 else
+              begin
+                let step = step + 1 in
+                let beta1 = beta3 -. g *. (beta3 -. beta0) in
+                let (_, f1) = find_alpha beta1 in
+                if f1 <. f2 then fn step beta0 beta1 f1 beta2
+                else gn step beta1 beta2 f2 beta3
+              end
+            and gn step beta0 beta1 f1 beta3 =
+            if step >= max_step then beta1 else
+              begin
+                let step = step + 1 in
+                let beta2 = beta0 +. g *. (beta3 -. beta0) in
+                let (_, f2) = find_alpha beta2 in
+                if f1 <. f2 then fn step beta0 beta1 f1 beta2
+                else gn step beta1 beta2 f2 beta3
+              end
+          in
+          if f1 <. f2 then fn 1 beta0 beta1 f1 beta2
+          else gn 1 beta1 beta2 f2 beta3
+      in
+      let beta =
+        if p2 >. zero then
+          begin
+            let beta0 = zero in
+            let beta1 = if pv >. zero then -. vw /. pv else of_int 100 in
+            trichotomie beta0 beta1
+          end
+        else
+          zero
+      in
+      let (alpha, fa) = find_alpha beta in
+      for j = 0 to nb - 1 do
+        pcoef.(j) <- pcoef.(j) *. beta;
+      done;
+      pcoef.(i) <- pcoef.(i) +. one;
+      Array.iteri (fun j c -> r.(j) <- r.(j) +. c *. alpha) pcoef;
+      set_one r;
+      let nv = m **- r in
+      let nv2 = norm2 nv in
+      zih_log "step: %d, index: %d, beta: %a, alpha: %a, norm: %a = %a" step i print beta print alpha print fa print nv2;
+      let lin_step () =
+        let sel = ref [] in
+        for i = 0 to nb - 1 do
+          if pcoef.(i) >. zero || m.(i) *.* v <. zero then sel := i :: !sel;
+        done;
+        let sel = Array.of_list !sel in
+        let ms = Array.map (fun k -> Array.append m.(k) [|one|]) sel in
+        let mm = transpose ms **** ms in
+        let b = Array.append v [|zero|] in
+        let t = solve_cg mm b in
+        let s = ms *** t in
+        let alpha = ref one in
+        Array.iteri (fun i k ->
+            if !alpha *. s.(i) >. r.(k) then alpha := r.(k) /. s.(i)) sel;
+        let alpha = !alpha in
+        zih_log "lin step step: %d alpha: %a, det: %a, sel: %a" step print alpha print (det mm) print_list (Array.to_list sel);
+        let r = Array.copy r in
+        Array.iteri (fun i k ->
+            r.(k) <- r.(k) -. alpha *. s.(i)) sel;
+        set_one r;
+        r
+      in
+      let nv,nv2 =
+        if step mod nb = nb - 1 then (
+          let nr = lin_step () in
+          let nnv = m **- nr in
+          let nnv2 = norm2 nnv in
+          zih_log "linstep norm %a, keep %b" print nnv2 (nnv2 <=. nv2);
+          if nnv2 <=. nv2 then (Array.blit nr 0 r 0 nb; (nnv,nnv2))
+          else (nv, nv2)
+        ) else (nv,nv2)
+      in
+      if nv2 >=. v2 then
+        begin
+          zih_log "no progress %a >= %a" print nv2 print v2;
+          exit_zih step true;
+        end;
+      if step > 100 * nb then
+        begin
+          zih_log "too long %d" step;
+          exit_zih ~abort:true step true;
+        end;
+      fn (step+1) nv nv2
+    in
+    let v = m **- r in
+    let v2 = norm2 v in
+    fn 0 v v2
+    with ExitZih b -> b
+
+  type point = R.t array * int
+  type faces = point array list
+
+  let pdet (m:point array) = det (Array.map fst m)
+
+  let eqv v w =
+    let r = ref true in
+    Array.iteri (fun i x -> r := !r && x =. w.(i)) v;
+    !r
+
+  let visibility (x:point) (d:point array) =
+    Printf.printf "vis: %d %a\n%!" (Array.length d) print_face d;
+    try
+      let c = center (Array.map fst d) in
+      let v = norm2 (c --- fst x) -. norm2 (c --- fst d.(0))  in
+      Printf.printf "vis: %a %a\n%!" print v print_vector c;
+      v
+    with Not_found -> -. inf
+
+  let visible x f = visibility x f <. zero
 
   let search_best m f k =
     let nb  = Array.length m in
     let best_i = ref k in
     let best = ref (f m.(k)) in
     for i = k + 1 to nb-1 do
+      Printf.printf "coucou X\n%!";
       let x = f m.(i) in
+      Printf.printf "coucou F\n%!";
       if x >. !best then (best := x; best_i := i)
     done;
+    Printf.printf "coucou Z %d %d\n%!" !best_i k;
     if !best_i <> k then swap m k !best_i
 
-  let zih_log fmt = Debug.new_debug "zih" 'z' fmt
+  let reorder dim m =
+    search_best m (fun x -> x.(0)) 0;
+    Printf.printf "coucouB\n%!";
 
-  let zih m =
+    for i = 1 to dim - 1 do
+      Printf.printf "coucouC %d %d %d\n%!" i dim (Array.length m);
+      search_best m (distance m i) i
+    done
+
+  let delauney m =
+    let m = Array.of_list m in
     let nb  = Array.length m in
     let dim = Array.length m.(0) in
-    if not (Array.for_all (fun x -> norm2 x >. zero) m) then true else
-    let m = Array.map normalise m in
-    search_best m (fun x -> x.(0)) 0;
-    for i = 1 to dim - 1 do
-      search_best m (distance m i) i
-    done;
+    Printf.printf "coucouA\n%!";
+    reorder dim m;
+    Printf.printf "coucou0\n%!";
     let m = Array.mapi (fun i x -> (x, i)) m in
-    let ml = Array.sub m 0 dim in
-    let mr = Array.sub m dim (nb - dim) in
-    let det m = det (Array.map fst (Array.sub m 0 dim)) in
-    let d = det ml in
-    assert (d <>. zero);
-    if d <. zero then swap ml 0 1;
-    let print_point ch (a,i) =
-      Printf.fprintf ch "%d:%a" i print_vector a
+    let faces = Hashtbl.create 128 in
+    let edges = Hashtbl.create 128 in
+    let face_key face =
+      let k = Array.map snd face in
+      Array.sort compare k;
+      k
     in
-    let rec print_points ch l =
+    let edge_key face i =
+      let k =
+        Array.init (dim - 1) (fun j ->
+            if j < i then snd (face.(j)) else snd (face.(j+1)))
+      in
+      Array.sort compare k;
+      k
+    in
+    let add_edge ml i =
+      let key = edge_key ml i in
+      let l = try Hashtbl.find edges key with Not_found -> [] in
+      Hashtbl.replace edges key ((ml,i)::l)
+    in
+    let get_face face =
+      let key = face_key face in
+      try snd (Hashtbl.find faces key) with Not_found -> assert false
+    in
+    let set_face face points =
+      let key = face_key face in
+      Hashtbl.replace faces key (face, points)
+    in
+    let rm_edge ml i =
+      let key = edge_key ml i in
+      let l = try Hashtbl.find edges key with Not_found -> [] in
+      let l = List.filter ((<>) (ml,i)) l in
+      if l = [] then Hashtbl.remove edges key else
+        Hashtbl.replace edges key l
+    in
+    let get_edge ml i =
+      let key = edge_key ml i in
+      let l =  Hashtbl.find edges key in
       match l with
-      | [] -> ()
-      | [x] -> print_point ch x
-      | x::l -> Printf.fprintf ch "%a, %a" print_point x print_points l
+        [x] -> x
+      | _ -> assert false
     in
-    let print_face ch ((a,i),l) =
-      let a = Array.to_list a in
-      Printf.fprintf ch "%a\\%d\n => [%a]\n" print_points a i print_points l
+    let add_face face =
+      set_face face [];
+      for i = 0 to dim - 1 do
+        add_edge face i
+      done
     in
-    let print_faces ch faces =
-      List.iteri (fun i face -> Printf.fprintf ch "%d) %a" i print_face face) faces
-    in
-    let points = Array.to_list mr in
-    let visibility x (d,i) =
-      let a = Array.init dim (fun j ->
-                  if j < i then d.(j)
-                  else if j = i then x
-                  else d.(j -1)) in
-      det a
-    in
-    let visible x f = visibility x f <. zero in
-    let faces =
-      List.init dim (fun i ->
-          let a =
-            Array.init (dim-1) (fun j ->
-                if j < i then ml.(j) else ml.(j+1))
-          in
-          ((a,i),[]))
+    let rm_face face =
+      let key = face_key face in
+      Hashtbl.remove faces key;
+      for i = 0 to dim - 1 do
+        rm_edge face i
+      done
     in
     let distribute points faces =
-      let faces = List.map (fun (f, l) -> (f, ref l)) faces in
+      List.iter add_face faces;
       let rec gn points =
         match points with
         | [] -> ()
         | point::points ->
            let best_l = ref None in
-           let best_v = ref zero in
-           List.iter (fun (face, l) ->
+           let best_v = ref inf  in
+           List.iter (fun face ->
                let v = visibility point face in
                if v <. !best_v then
-                 (best_v := v; best_l := Some l)) faces;
+                 (best_v := v; best_l := Some face)) faces;
            begin
              match !best_l with
-             | None -> ()
-             | Some l -> l := point :: !l
+             | None -> assert false
+             | Some face -> set_face face (point :: get_face face)
            end;
            gn points
       in
       gn points;
-      List.map (fun (f,l) -> (f, !l)) faces
     in
-    let add_one points faces face x =
-      let (hole, faces) = List.partition (fun (f,l) -> visible x f) faces in
-      (*zih_log "hole for x:%a\n" print_vector (fst x);
-        List.iter (fun (f,_) -> zih_log "%a\n%!" print_matrix (tm f)) hole;*)
-      if faces = [] then raise Not_found;
-      let (hole, remains) = List.split hole in
-      let hole = face :: hole in
-      let points = List.flatten (points :: remains) in
-      let facet (s,k) =
-        List.init (dim-1) (fun i ->
-            let a =
-              Array.init (dim-2) (fun j ->
-                  if j < i then s.(j) else s.(j+1))
-            in
-            let a' = Array.map snd a in
-            Array.sort compare a';
-            (a', a,i,k))
-      in
-      let facets = List.flatten (List.map facet hole) in
-      zih_log "%d\n%!" (List.length facets);
-      let cmp (a,_,_,_) (b,_,_,_) = Stdlib.compare a b in
-      let facets = List.sort cmp facets in
-      let rec remove_double acc = function
-        | [] -> acc
-        | (x,_,_,_)::(y,_,_,_)::l when x = y -> remove_double acc l
-        | t::l -> remove_double (t::acc) l
-      in
-      let facets = remove_double [] facets in
-      (*zih_log "sorted hole for x:%a\n" print_vector (fst x);
-        List.iter (fun (_,f,_,_) -> zih_log "%a\n%!" print_matrix (tm f)) facets;*)
-      (*zih_log "%d\n%!" (List.length facets);*)
-      let mk_new (_,facet,i,k) =
-        let a =
-          Array.init (dim-1) (fun j ->
-              if j < i then facet.(j)
-              else if j = i then x
-              else facet.(j-1))
-        in
-        let d = det (Array.init dim (fun j -> if j < k then a.(j)
-                                              else if j = k then ml.(j)
-                                              else a.(j-1))) in
-        if d <. zero then swap a 0 1;
-        zih_log "New face: det:%a, %a" print d print_face ((a,k),[]);
-        ((a, k), [])
-      in
-      let new_faces = List.map mk_new facets in
-      zih_log "New faces:\n%a" print_faces new_faces;
-      zih_log "Old faces:\n%a" print_faces faces;
-      zih_log "Remaining:\n%a" print_points points;
-      (points, new_faces @ faces)
-    (*zih_log "new faces x:%a\n" print_vector (fst x);
-      List.iter (fun (f,_) -> zih_log "%a\n%!" print_matrix (tm f)) news;
-      zih_log "old faces x:%a\n" print_vector (fst x);
-      List.iter (fun (f,_) -> zih_log "%a\n%!" print_matrix (tm f)) faces;*)
+    let border_tbl = Hashtbl.create 128 in
+    let set_border () =
+      Hashtbl.clear border_tbl;
+      Hashtbl.iter (fun key l ->
+          if List.length l = 1 then Hashtbl.add border_tbl key ()) edges;
     in
-    let rec loop faces =
-      let rec fn acc faces =
-        match faces with
-        | [] -> acc
-        | (face,(x::points))::faces ->
-           zih_log "Addind point %a to %a"
-             print_point x print_face (face,points);
-           let (points, faces) = add_one points (acc@faces) face x in
-           let faces = distribute points faces in
-           zih_log "Loop:\n%a" print_faces faces;
-           loop faces
-        | (_, [] as face)::faces ->
-           fn (face :: acc) faces
-      in fn [] faces
+    let is_border face i =
+      Hashtbl.mem border_tbl (edge_key face i)
     in
-  try
-    let faces = distribute points faces in
-    zih_log "Init faces (%d points):\n %a" (Array.length mr) print_faces faces;
-    let faces = loop faces in
-    zih_log "Final hull:\n%a" print_faces faces;
-    false
-  with
-    Not_found ->
-    zih_log "Zero in hull!";
-    assert(
-        let indexes = Array.init dim (fun i -> i) in
-        Array.for_all (fun i ->
-            Array.exists (fun (x,_) -> x.(i) >=. zero) m &&
-              Array.exists (fun (x,_) -> x.(i) <=. zero) m) indexes);
-    true
+    let rec add_one border points face x =
+      if visible x face then
+        begin
+          points := List.rev_append (get_face face) !points;
+          rm_face face;
+          for i = 0 to dim - 1 do
+            try
+              let (face,_) = get_edge face i in
+              add_one border points face x
+            with
+              Not_found ->
+               if is_border face i then
+                 begin
+                   let a = Array.init dim (fun j -> if i = j then x else face.(j)) in
+                   if not (visible face.(i) a) then
+                     if List.for_all (fun b -> face_key b <> face_key a) !border
+                               then border := a :: !border
+                 end
+          done;
+        end
+      else
+        begin
+          for i = 0 to dim - 1 do
+            let a = Array.init dim (fun j -> if i = j then x else face.(j)) in
+            if not (visible face.(i) a) then
+              if List.for_all (fun b -> face_key b <> face_key a) !border
+                   then border := a :: !border
+          done
+        end
+    in
 
+    let rec loop () =
+      try
+        Hashtbl.iter (fun _ (face, points) ->
+          match points with
+          | [] -> ()
+          | x::points ->
+             zih_log "Addind point %a to %a"
+               print_point x print_face face;
+             set_face face points;
+             let points = ref [] in
+             let border = ref [] in
+             set_border ();
+             add_one border points face x;
+             assert (!border <> []);
+             distribute !points !border;
+             raise Exit) faces
+      with Exit -> loop ()
+    in
 
-(*
-  let a =
-    Array.map (Array.map of_int)
-      [|
-        [|-1;0;0|];
-        [|0;-1;0|];
-        [|0;0;-1|];
-         |]
+    let face = Array.sub m 0 dim in
+    let points = Array.to_list (Array.sub m dim (nb - dim)) in
+    add_face face;
+    set_face face points;
+    loop ();
 
-  let _ = assert (zih a <> None)
+    let res = ref [] in
+    Hashtbl.iter (fun _ (face,points) ->
+        assert (points = []);
+        res := Array.map fst face :: !res) faces;
+    !res
 
-  let a =
-    Array.map (Array.map of_int)
-      [|
-        [|1;0;0|];
-        [|-1;1;1|];
-        [|0;-1;0|];
-        [|0;0;-1|];
-         |]
+  module Test = struct
+    let a =
+      List.map (Array.map of_int)
+        [
+          [|-1;0;0|];
+           [|0;-1;0|];
+           [|0;0;-1|];
+           ]
 
-  let _ = assert (zih a = None)
- *)
+    let _ = assert (exact || not (zih a))
+
+    let a =
+      List.map (Array.map of_int)
+        [
+          [|1;0;0|];
+          [|-1;1;1|];
+           [|0;-1;0|];
+           [|0;0;-1|];
+           ]
+
+    let _ = assert (exact || zih a)
+
+    let _ = Debug.set_debugs "h"
+
+  end
+end
+
+module type V = sig
+  type t
+  type vector = t array
+  type v = vector
+  type matrix = vector array
+  type m = matrix
+
+  val zero_v : int -> v
+  val print_vector : out_channel -> vector -> unit
+  val print_array  : (out_channel -> 'a -> unit)
+                       -> out_channel -> 'a array -> unit
+  val print_matrix : out_channel -> matrix -> unit
+  val print_list : out_channel -> int list -> unit
+  val sprint_list : unit -> int list -> string
+
+  val norm2   : v -> t
+  val norm    : v -> t
+  val ( *.* ) : v -> v -> t
+  val normalise : v -> v
+  val dist2 : v -> v -> t
+
+  val transpose : 'a array array ->'a array array
+
+  val opp : v -> v
+  val ( **. ) : t -> v -> v
+  val ( //. ) : v -> t -> v
+  val ( --- ) : v -> v -> v
+  val ( +++ ) : v -> v -> v
+  val comb : t -> v -> t -> v -> v
+
+  val det : m -> t
+  val ( **** ) : m -> m -> m
+  val ( *** ) : m -> v -> v
+  val ( **- ) : m -> v -> v
+
+  val center : m -> v
+  val pcoord : v -> m -> v
+  val transform : v -> m -> m -> v
+
+  val solve : m -> v -> v
+  val solve_cg : m -> v -> v
+
+  type point = t array * int
+  type faces = point array list
+  exception Zih
+  val reorder : int -> m -> unit
+  val delauney : v list -> m list
+  val visibility : point -> point array -> t
+
+  val zih : ?r0:vector -> vector list -> bool
+  val print_zih_summary : unit -> unit
 end

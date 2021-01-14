@@ -1,0 +1,5 @@
+precision 53;
+
+let f(x,y) = (x + 0.123) * (y - 0.426);
+let f = zeros f;
+display f f__t;

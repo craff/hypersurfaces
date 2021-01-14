@@ -1,0 +1,32 @@
+let pi = 3.14159265358979312;
+let tetra_angle = 1.23095941734077474;
+let cz = 1/3;
+let cy = 0.942809041582063467;
+
+let s2p3 = 0.866025403784438708;
+let pt1(x,y,z) = z - 1;
+let pt2(x,y,z) = -1*cy*y + cz*z + 1;
+let pt3(x,y,z) = s2p3*cy*x + 1/2*cy*y + cz*z + 1;
+let pt4(x,y,z) = -s2p3*cy*x + 1/2*cy*y + cz*z + 1;
+
+let r1 = 2;
+let s1(x,y,z) = x^2 + y^2 + z^2 - r1^2;
+
+let s1 = zeros s1;
+#let d1 = zeros s1 pt1;
+#let d2 = zeros s1 pt2;
+#let d3 = zeros s1 pt3;
+#let d4 = zeros s1 pt4;
+
+#display d1 d2 d3 d4;
+
+let q0(x,y,z) = pt1(x,y,z)*pt2(x,y,z)*pt3(x,y,z)*pt4(x,y,z) + 0.05;
+
+let ps = zeros q0 s1;
+display ps ps__t;
+
+let q1(x,y,z) = 0.5* s1(x,y,z)^2 + q0(x,y,z);
+let ds = zeros q1;
+
+display ds;
+display ds ds__t;

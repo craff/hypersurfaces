@@ -1,0 +1,30 @@
+
+let pt1(x,y) = y - 1;
+let pt2(x,y) = 0.866 * x - 0.5 * y - 1;
+let pt3(x,y) = -0.866 * x - 0.5 * y - 1;
+
+let pt1 = zeros pt1;
+let pt2 = zeros pt2;
+let pt3 = zeros pt3;
+
+display pt1 pt2 pt3;
+
+let s(x,y) = x^2 + y^2  - 4;
+let c(x,y) = pt1(x,y)*pt2(x,y)*pt3(x,y) + 0.1 * s(x,y);
+
+let c = zeros c;
+display c c__t;
+
+let p1 = zeros c pt1;
+display p1__t p1 c;
+
+let p2 = zeros c pt2;
+display p2__t p2 c;
+
+let p3 = zeros c pt3;
+display p3__t p3 c;
+
+let pty(x,y,tx) = x;
+
+let p4 = zeros c pty;
+display p4__t p4 c;
