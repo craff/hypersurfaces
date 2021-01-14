@@ -1,6 +1,6 @@
 ; Add project-wide flags here.
 (env
   (dev     (flags :standard -w -9-32)
-           (ocamlopt_flags -inline 10000 -O3))
+           (ocamlopt_flags -inline 50000 -O3))
   (release (flags :standard -w -9-32)
-           (ocamlopt_flags -inline 10000 -O3)))
+           (ocamlopt_flags -inline 50000 -O3)))
