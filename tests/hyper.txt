@@ -1,11 +1,29 @@
-let s1(x,y,z,t,u) = x^2 + y^2 + z^2 + t^2 - u^2;
-zeros s1;
+let s4(x,y,z,t) = x^2 + y^2 + z^2 + t^2 - 1;
+let s4 = zeros s4;
 
-let h1(x,y,z,t,u) = x^2 + y^2 + z^2 - t^2 - u^2;
-zeros h1;
+let h4(x,y,z,t) = x^2 + y^2 + z^2 - t^2 - 1;
+let h4 = zeros h4;
 
-let s2(x,y,z,t,u) = (x-t)^2 + (y-t)^2 + (z-t)^2 + (u-t)^2 - t^2;
-zeros s2;
+let s5(x,y,z,t,u) = x^2 + y^2 + z^2 + t^2 + u^2 - 1;
+let s5 = zeros s5;
 
-let h2(x,y,z,t,u) =  (x-t)^2 + (y-t)^2 + (z-t)^2 - (u-t)^2 - t^2;
-zeros h2;
+let h5(x,y,z,t,u) = x^2 + y^2 + z^2 + t^2 - u^2 - 1;
+let h5 = zeros h5;
+
+let k5(x,y,z,t,u) = x^2 + y^2 + z^2 - t^2 - u^2 - 1;
+let k5 = zeros k5;
+
+let s6(x,y,z,s,t,u) = x^2 + y^2 + z^2 + s^2 + t^2 + u^2 - 1;
+let s6 = zeros s6;
+
+let h6(x,y,z,s,t,u) = x^2 + y^2 + z^2 + s^2 + t^2 - u^2 - 1;
+let h6 = zeros h6;
+
+let k6(x,y,z,s,t,u) = x^2 + y^2 + z^2 + s^2 - t^2 - u^2 - 1;
+let k6 = zeros k6;
+
+let s4a(x,y,z,t) = (x-1)^2 + (y-1)^2 + (z-1)^2 + (t-1)^2 - 1;
+let s4a = zeros s4a; display s4a__t;
+
+let h4a(x,y,z,t) =  (x-1)^2 + (y-1)^2 + (z-1)^2 - (t-1)^2 - 1;
+let h4a = zeros h4a;

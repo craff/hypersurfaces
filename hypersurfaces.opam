@@ -1,6 +1,6 @@
+opam-version: "2.0"
 synopsis: "Algebraic equation solver"
 
-opam-version: "2.0"
 maintainer: "Christophe Raffalli <christophe@raffalli.eu>"
 authors: [
   "Christophe Raffalli <christophe@raffalli.eu>" ]
@@ -12,9 +12,7 @@ depends: [
   "ocaml" { >= "4.04.0" }
   "dune"  { build & >= "1.2.0" }
   "pacomb" { build }
-  "gles3" {}
-  "zarith" {}
-  "mlgmpidl" {}
+  "gles3" "zarith" "mlgmpidl"
 ]
 
 build: [ [ "dune" "build" "--release" "-p" name "-j" jobs ] ]

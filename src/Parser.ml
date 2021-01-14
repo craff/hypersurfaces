@@ -1,10 +1,13 @@
 open Pacomb
 
-module Parse(R:Field.S) = struct
+module Parse(R:Field.SPlus) = struct
 
-  open Bernstein.Make(R)
+  module P = Expr.Make(R)
+  module B = R.B
   module H = HyperSurfaces.Make(R)
   module D = Display.Make(R)
+
+  open P
 
   (** Parses a float in base 10. [".1"] is as ["0.1"]. *)
   let float_lit : R.t Lex.t =
@@ -66,88 +69,101 @@ module Parse(R:Field.S) = struct
       () => ([],())
     ; '(' (x::ident) (l:: ~* ( ',' (v::ident) => v )) ')' => (x::l, ())
 
-  type p = Atom | Prod | Sum
+  type p = Atom | Prod | Sum | Pow
 
   let string_of_prio = function
     | Atom -> "A"
     | Prod -> "P"
     | Sum  -> "S"
+    | Pow  -> "W"
 
   (* for printing, we provide a function to convert priorities to string *)
   let poly vars =
-    let dim = List.length vars in
-    let vars = List.mapi (fun i v -> (v,i)) vars in
     let%parser [@print_param string_of_prio] rec poly p =
-        Atom < Prod < Sum
-      ; (p=Atom) (x :: float)                      => cst dim x
+        Atom < Pow < Prod < Sum
+      ; (p=Atom) (x :: float)                      => Cst(x)
       ; (p=Atom) '(' (p::poly Sum) ')'             => p
-      ; (p=Atom) (v::ident)                        =>
-          (let n = try List.assoc v vars
-                   with Not_found -> Lex.give_up () in
-           [(var_power n dim 1, R.one)])
-      ; (p=Atom) (x::poly Atom) '^' (n::INT)       => pow x n
-      ; (p=Prod) (x::poly Prod) '*' (y::poly Atom) => x ** y
-      ; (p=Prod) (x::poly Prod) '/' (y::float)     => div_cst x y
-      ; (p=Sum)  (x::poly Sum ) '+' (y::poly Prod) => x ++ y
-      ; (p=Sum)  (x::poly Sum ) '-' (y::poly Prod) => x -- y
+      ; (p=Atom) (v::ident) (args::args)           =>
+          (try
+             if args <> [] then raise Not_found;
+             if not (List.mem v vars) then raise Not_found;
+             Var v
+           with Not_found -> try
+             let p = Hashtbl.find polys v in
+             let nb = List.length args in
+             if p.dim <> nb then
+               Lex.give_up ~msg:("bad arity for "^ v) ();
+             App(p,args)
+           with Not_found ->
+              Lex.give_up ~msg:("unbound variable "^v) ())
+
+      ; (p=Pow) (x::poly Pow) '^' (n::INT)         => P.Pow(x, n)
+      ; (p=Prod) '-' (x::poly Pow)                 =>
+          (match x with Cst _ -> Lex.give_up ()
+                       | _ -> Pro(Cst R.(-. one), x))
+      ; (p=Prod) (x::poly Prod) '*' (y::poly Pow)  => Pro(x, y)
+      ; (p=Prod) (x::poly Prod) '/' (y::float)     => Pro(Cst R.(one /. y),x)
+      ; (p=Sum)  (x::poly Sum ) '+' (y::poly Prod) => P.Sum(x,y)
+      ; (p=Sum)  (x::poly Sum ) '-' (y::poly Prod) => Sub(x,y)
+
+    and args =
+        () => []
+      ; '(' (x::poly Sum) (l:: ~* ( ',' (y::poly Sum) => y )) ')' => x::l
     in
     poly
 
-  type poly_rec =
-    { name : string
-    ; dim : int
-    ; hom : bool
-    ; vars: string list
-    ; poly : polynomial
-    ; mutable triangulation : R.t Array.t Array.t list }
-
-  let hdim p = if p.hom then p.dim - 1 else p.dim
-
-  let polys = Hashtbl.create 101
+  let%parser expected =
+    ()  => H.Nothing
+  ; n::INT => H.Int n
+  ; '(' ')' => H.Int 0
+  ; '(' (n::INT) (l:: ~* (',' (n::INT) => n))  ')' => H.List (n::l)
 
   let%parser cmd =
       "let" (name::ident) ((vars,()) >: params) '=' (p::poly vars Sum) ';' =>
-        (Hashtbl.add polys name
-           { name; vars
-           ; dim=List.length vars
-           ; hom=homogeneous p
-           ; poly=p
-           ; triangulation = [] };
-         Printf.printf "%a\n%!" print_polynome p)
-    ; "zeros" (name::ident) ';' =>
-        (try
-           let p = Hashtbl.find polys name in
-           let (ts, _, _) = H.triangulation (homogeneisation p.poly) in
-           p.triangulation <- ts
-         with Not_found -> Lex.give_up ())
-    ; "display" (name::ident) ';' =>
-        (try
-           let p = Hashtbl.find polys name in
-           let o =
-             if hdim p = 2 then
-               D.mk_lines_from_polyhedron p.triangulation
-             else if hdim p = 3 then
-               D.mk_triangles_from_polyhedron p.triangulation
-             else
-               D.mk_lines_from_polyhedron []
-           in
-           Display.wait ();
-           if hdim p = 2 then
-             Display.rm_line_object o
-           else if hdim p = 3 then
-             Display.rm_triangle_object o
-           else ();
-         with Not_found -> Lex.give_up ())
+        (let p = P.mk name vars p in
+         Printf.printf "%a\n%!" B.print_polynome p.bern)
+     ; "let" (name::ident) '=' "zeros" (names:: ~+ ident) (t::expected) ';' =>
+        (let p name =
+           try (Hashtbl.find polys name).bern
+           with Not_found -> Lex.give_up ~msg:("unbound variable "^name) ()
+         in
+         let ps = List.map p names in
+         let (ts, es) = try H.triangulation ~expected:t ps with e ->
+                            Printf.eprintf "exception: %s\n%!" (Printexc.to_string e);
+                            Printexc.print_backtrace stderr;
+                            assert false in
+         let os =
+           if ts <> [] then
+             begin
+               let dim = Array.length (List.hd ts) in
+               if dim = 1 then
+                 [D.mk_points_from_polyhedron name ts]
+               else if dim = 2 then
+                 [D.mk_lines_from_polyhedron name ts]
+               else if dim = 3 then
+                 [D.mk_triangles_from_polyhedron name ts]
+               else []
+             end
+           else []
+         in
+         let e_name = name ^ "__t" in
+         let _os =
+           if es <> [] then
+             D.mk_lines_from_polyhedron e_name ~color:[|0.4;0.7;0.4;1.0|] es::os
+           else os
+         in
+         ())
+     ; "display" (names :: ~+ ident) ';' =>
+         (Display.display names;
+          if not (!Args.cont) then Display.wait ())
 
+  let%parser cmds = (~* cmd) => ()
 
-    let%parser cmds = (~* cmd) => ()
+end
 
- end
-
-
- let%parser main =
-     (let module P = Parse(Field.Float) in P.cmds) => ()
-   ; "precision" ((n,()) >: (n::INT => (n,())))
-       (let module R = struct let prec=n end in
-        let module P = Parse(Field.Gmp_R(R)) in
-        P.cmds) => ()
+let%parser main =
+  (let module P = Parse(Field.Float) in P.cmds) => ()
+  ; "precision" ((n,()) >: (n::INT => (n,()))) ';'
+      (let module P = Parse(Field.Gmp) in
+       Field.Gmp.set_prec n;
+       P.cmds) => ()

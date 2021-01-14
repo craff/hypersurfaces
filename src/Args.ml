@@ -1,27 +1,38 @@
 let batch = ref false
-let debug = ref false
+let cont  = ref false
 let show  = ref false
-
+let rmax  = ref (1. /. 3.) (* should depend upon the dim ?*)
+let quick_test = ref true
+let debug_string = ref ""
 
 let spec =
-  [ ( "-b"
+  [ ( "-c"
+    , Arg.Set cont
+    , "continue after display commands")
+  ; ( "--continue"
+    , Arg.Set cont
+    , "continue after display commands")
+  ; ( "-b"
     , Arg.Set batch
     , "run as batch and ignore all display")
   ; ( "--batch"
     , Arg.Set batch
     , "run as batch and ignore all display")
   ; ( "-d"
-    , Arg.Set debug
+    , Arg.Set_string debug_string
     , "output debug information")
   ; ( "--debug"
-    , Arg.Set debug
+    , Arg.Set_string debug_string
     , "output debug information")
-  ; ( "-s"
-    , Arg.Set debug
-    , "display each computation step")
-  ; ( "--show"
-    , Arg.Set debug
-    , "display each computation step")
+  ; ( "--rmax"
+    , Arg.Set_float rmax
+    , "maximum distance to center when optimizing vertex position")
+  ; ( "--qt"
+    , Arg.Set quick_test
+    , "enable test of scalar product of gradients before quick hull")
+  ; ( "--nqt"
+    , Arg.Clear quick_test
+    , "disable test scalar of product of gradients before quick hull")
   ]
 
 let files = ref []

@@ -2,10 +2,10 @@
 
 (executable
   (name Main)
-  (public_name Main)
+  (public_name Hyper)
   (modules :standard)
   (preprocess (pps pacomb.ppx))
-  (libraries unix threads zarith gles3 gles3.egl gmp pacomb))
+  (libraries unix threads zarith gles3 gmp pacomb))
 
 (rule
   (targets lines_shader.ml)

@@ -1,36 +1,6 @@
 
-module Make(R:Field.S) = struct
+module Make(R:Field.SPlus) = struct
   open R
-  module Poly = Bernstein.Make(R)
-  open Poly
-  module V = Vector.Make(R)
-
-  (** often need 1/2 *)
-  let demi = one /. of_int 2
-
-  (** Produces all vertices of the Newton polytope inside our simplex.
-      This is simply all monomials *)
-  let all_vertices dim degree =
-    let res = ref [] in
-    let rec fn acc dim degree =
-      if dim = 1 then res := (degree::acc)::!res else
-        for i = 0 to degree do
-          fn (i::acc) (dim - 1) (degree-i)
-        done;
-    in
-    fn [] dim degree;
-    !res
-
-  (** For simplicity, we need all monomials to be present in the polynomial *)
-  (* FIXME: the can be improved by sorting the vertices first *)
-  let complete p =
-    let dim = dim p in
-    let degree = degree p in
-    let l = all_vertices dim degree in
-    let res = ref p in
-    List.iter (fun l -> if not (List.exists (fun (l',_) -> l = l') p) then res := (l,zero)::!res) l;
-    List.sort (fun (l1,_) (l2,_) -> compare l2 l1) !res
-
 
   type vertex = { v : V.vector; p : bool; uid : int }
 
@@ -62,7 +32,7 @@ module Make(R:Field.S) = struct
     let e = s.(i) in
     if e.p then Array.map (~-.) e.v else e.v
 
-  let to_matrix ?(opp=false) s : V.matrix =  Array.init (Array.length s) (fun i -> vec s i)
+  let to_matrix s : V.matrix =  Array.init (Array.length s) (fun i -> vec s i)
 
   let print_simplex ch s =
     let pr ch v =
@@ -102,121 +72,52 @@ module Make(R:Field.S) = struct
     in
     gn [] q0 (dim-2)
 
-  (** midpoint *)
-  let milieu a1 a2 =
-    Array.mapi (fun i x -> demi *. (x +. a2.(i))) a1
+  let delauney_dim dim m =
+    let open V in
+    let m = Array.of_list m in
+    assert (Array.length m > dim);
+    let base = Array.map to_vec m in
+    Printf.printf "delauney_dim: %d %a\n%!" dim print_matrix base;
+    reorder (dim+1) base;
+    Printf.printf "ccoucou Q\n%!";
+    let base = Array.sub base 0 (dim+1) in
+    Printf.printf "ccoucou S\n%!";
+    let mc = Array.map (fun x -> pcoord (to_vec x) base, x) m in
+    Printf.printf "ccoucou T\n%!";
+    let test = Array.map (fun (v,x) -> norm2 (base **- v --- to_vec x)) mc in
+    let mc = Array.map (fun (v,x) -> (normalise v, x)) mc in
+    let mcp = Array.map fst mc in
+    Printf.printf "mc: %a %a\n%!" print_matrix mcp print_vector test;
+    let faces = delauney (Array.to_list mcp) in
+    let mc = Array.to_list mc in
+    Printf.printf "%d\n%!" (List.length faces);
+    Printf.printf "result: %a\n%!" (fun ch l -> List.iter (fun m -> print_matrix ch m) l) faces;
+    let faces = List.map (Array.map (fun x ->
+                              try List.assoc x mc with Not_found -> assert false)) faces in
+    Printf.printf "result: %a\n%!" (fun ch l -> List.iter (fun m -> print_simplex ch m) l) faces;
+    faces
 
-  (** subdivise a polynomial, TODO comments *)
-  let subdivise_half p t u i0 j0 =
-    let d = dim p in
-    let var i = Array.to_list (Array.init d (fun j -> if i = j then 1 else 0)) in
-    (* Y = y/2, X = x + y/2 *)
-    let values = Array.init d (fun i ->
-                     if i = j0 then [(var j0, u)]
-                     else if i = i0 then [(var j0,t)]++[(var i0,one)]
-                     else [(var i,one)])
-    in
-    subst p (Array.to_list values)
+  module Test = struct
+    let a = List.map (fun x -> mk (Array.map of_int x) true)
+        [
+          [|0;0;1|];
+          [|1;1;1|];
+          [|0;1;1|];
+          [|1;0;1|];
+        ]
 
-  let subdivise p t u i0 j0 =
-    (subdivise_half p t u i0 j0, subdivise_half p u t j0 i0)
+    let _ = delauney_dim 2 a
 
-  let select i l =
-    let rec fn acc i = function
-      | [] -> assert false
-      | x::l -> if i = 0 then (x, List.rev_append acc l) else fn (x::acc) (i-1) l
-    in (fn [] i l : int * int list)
+    let a = List.map (fun x -> mk (Array.map of_float x) true)
+        [
+          [|0.;0.;1.|];
+          [|0.5;0.5;1.|];
+          [|0.;1.;1.|];
+          [|1.;0.;1.|];
+        ]
 
-  let insert i x l =
-    let rec fn acc i l =
-      if i = 0 then List.rev_append acc (x::l) else
-        match l with
-        | [] -> assert false
-        | x::l -> fn (x::acc) (i-1) l
-    in (fn [] i l: int list)
+    let _ = delauney_dim 2 a
 
-  let select2 i j l =
-    assert (i < j);
-    let y,l = select j l in
-    let x,l = select i l in
-    (l,(x,y))
-
-  let insert2 i j (l,(x,y)) =
-    assert (i < j);
-    insert j y (insert i x l)
-
-  let swap (x,y) = (y,x)
-
-
-  let subdivise2 p t u i0 j0 =
-    if i0 > j0 then swap (subdivise p u t j0 i0) else (
-      (* on travaille à i+j fixé *)
-      (*Printf.printf "coucou\n%!";*)
-      let d = degree p in
-      let res1 = ref [] in
-      let res2 = ref [] in
-      for i = 0 to d do
-        (*Printf.printf "step %d\n%!" i;*)
-        let q = List.filter (fun (l,c) -> List.nth l i0 + List.nth l j0 = i) p in
-        (*print_polynome stdout q; print_newline ();*)
-        let q = List.sort (fun ((l1,_), _) ((l2,_), _) -> compare l2 l1)
-                          (List.map (fun (l,c) -> (select2 i0 j0 l, c)) q) in
-        (*print_polynome' stdout q; print_newline ();*)
-        let qs = List.fold_left (fun acc x ->
-                     match acc, x with
-                     | ((((l,_),_)::_ as first)::rest), (((l',_),_) as c) when l = l' ->
-	                (c::first)::rest
-                     | _, x -> [x]::acc) [] q
-        in
-        let qs = List.map List.rev qs in
-        let hn q =
-          (*Printf.printf "hn: ";
-	  print_polynome' stdout q; print_newline ();*)
-          let triangle = Array.make (i+1) [] in
-          triangle.(0) <- q;
-          for j = 1 to i do
-            (*Printf.printf "hn(%d): " j;*)
-	    let rec fn acc l = match l with
-	      | ((l1,(x1,y1)),c1)::_ when y1 <> 0 && acc = [] ->
-	         fn (((l1,(x1,y1-1)), u *. c1)::acc) l
-	      | [(l1,(x1,y1)),c1] when x1 <> 0 ->
-	         List.rev (((l1,(x1-1,y1)), t *. c1)::acc)
-	      | ((l1,(x1,y1)),c1)::(((l2,(x2,y2)),c2)::_ as l') ->
-  	         assert(x1 > x2);
-	         assert(y1 < y2);
-	         if x1 - 1 > x2  then
-	           fn (((l2,(x2,y2-1)), u *. c2)::((l1,(x1-1,y1)), t *. c1)::acc) l'
-	         else
-	           fn (((l1,(x1-1,y1)), t*.c1+.u*.c2)::acc) l'
-	      | _ -> List.rev acc
-	    in
-	    triangle.(j) <- fn [] triangle.(j-1);
-            (*print_polynome' stdout triangle.(j); print_newline ();*)
-          done;
-          for j = 0 to i  do
-	    (match triangle.(j) with
-	     | ((l,(x,y)),c)::_ when y = 0 ->
-	        res1 := (insert2 i0 j0 (l,(x,y+j)), c)::!res1
-	     | _ -> ());
-	    (match List.rev triangle.(j) with
-	     | ((l,(x,y)),c)::_ when x = 0 ->
-	        res2 := (insert2 i0 j0 (l,(x+j,y)), c)::!res2
-	     | _ -> ());
-          done;
-        in
-        List.iter hn qs
-      done;
-      let cmp (l,_) (l',_) = compare l' l in
-      List.sort cmp !res1, List.sort cmp !res2)
-
-  exception Found
-
-  let faces s =
-    let rec fn i s =
-      let r = ref [] in
-      Array.iteri (fun j v -> if i <> j then r := v :: !r) s;
-      List.sort (fun v1 v2 -> compare v1.uid v2.uid)
-    in
-    List.init (Array.length s) (fun i -> fn i s)
+  end
 
 end
