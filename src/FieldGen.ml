@@ -1,3 +1,5 @@
+(** {1: General code for fields implementation} *)
+
 (** Minimal signature for a field *)
 module type SMin = sig
   type t
@@ -23,21 +25,43 @@ module type SMin = sig
   val of_float : float -> t
   val of_string : string -> t
   val print : out_channel -> t -> unit
+  (** true is computation are exact, for rational for instance *)
   val exact : bool
 end
 
-(** Field signature *)
+(** Complete field signature, with a few extra functions *)
 module type S = sig
   include SMin
+  (** power function, in O(ln n) *)
   val pow : t -> int -> t
-  val digho : (t -> t) -> t -> t -> t -> t -> int -> t
+
+  type stop_cond =
+    { precision : t      (** |x - y| <= value *)
+    ; max_steps : int    (** maximum number of steps *)
+    }
+
+  val default_stop_cond : stop_cond
+  (** = { precision = zero
+        ; max_steps = max_int }
+  By default, dighotomie stops when value become equal, which always
+  happens in precision steps. Will loop for rational.
+  *)
+
+  (** [digho ?stop_cond f x y] finds an approximation of
+      a root of [f] between [x] and [y].*)
+  val digho : ?stop_cond:stop_cond -> (t -> t) -> t -> t -> t
+
+  (** [trigho ?stop_cond f x y] finds an approximation of
+      a local minimum of [f] between [x] and [y].
+      we use the "golden ratio" version that ensures a minimum
+      number of computation of [f] te reach a given precision
+   *)
+  val tricho : ?stop_cond:stop_cond -> (t -> t) -> t -> t -> t
+  (** least float such that [one + epsilon != one] *)
   val epsilon : t
+  (** square of epsilon *)
   val epsilon2 : t
 end
-
-let zih_log = Debug.new_debug "hull" 'h'
-let zih_tst = zih_log.tst
-let zih_log fmt = zih_log.log fmt
 
 module Make(R:SMin) = struct
   include R
@@ -54,24 +78,74 @@ module Make(R:SMin) = struct
     in
     fn n
 
-  let digho f x fx y fy nb =
+  type stop_cond =
+    { precision : t      (** |x - y| <= value *)
+    ; max_steps : int    (** maximum number of steps *)
+    }
+
+  let default_stop_cond = { precision = zero
+                          ; max_steps = max_int }
+
+  let digho ?(stop_cond=default_stop_cond) f x y =
+    let fx = f x and fy = f y in
+    let steps = ref 0 in
     let h = one /. of_int 2 in
-    let rec fn x fx y fy nb =
+    let rec fn x fx y fy =
+      incr steps;
       Printf.printf "*%!";
       let z = (x +. y) *. h in
-      if nb = 0 then z else
+      if abs (y -. x) <=. stop_cond.precision
+         || !steps > stop_cond.max_steps then z
+      else
         let fz = f z in
         match cmp fz zero with
         | 0 -> z
-        | c when c < 0 -> fn z fz y fy (nb - 1)
-        | _ -> fn x fx z fz (nb -1)
+        | c when c < 0 -> fn z fz y fy
+        | _ -> fn x fx z fz
     in
     match cmp fx zero, cmp fy zero with
     | 0, _ -> x
     | _, 0 -> y
-    | c1, c2 when c1 < 0 && c2 > 0 -> fn x fx y fy nb
-    | c1, c2 when c1 > 0 && c2 < 0 -> fn y fy x fx nb
+    | c1, c2 when c1 < 0 && c2 > 0 -> fn x fx y fy
+    | c1, c2 when c1 > 0 && c2 < 0 -> fn y fy x fx
     | _ -> invalid_arg "digho same sign"
+
+  let g = (sqrt (of_int 5) -. one) /. of_int 2
+
+  let tricho ?(stop_cond=default_stop_cond) f beta0 beta3 =
+    let steps = ref 0 in
+    let rec fn beta0 beta2 f2 beta3 =
+      if !steps >= stop_cond.max_steps
+         || abs (beta3 -. beta0) <=. stop_cond.precision
+      then beta2 else
+        begin
+          incr steps;
+          let beta1 = beta3 -. g *. (beta3 -. beta0) in
+          let f1 = f beta1 in
+          if f1 <. f2 then fn beta0 beta1 f1 beta2
+          else if f2 <. f1 then gn beta1 beta2 f2 beta3
+          else beta2
+        end
+    and gn beta0 beta1 f1 beta3 =
+      if !steps >= stop_cond.max_steps
+         || abs (beta3 -. beta0) <=. stop_cond.precision
+      then beta1 else
+        begin
+          incr steps;
+          let beta2 = beta0 +. g *. (beta3 -. beta0) in
+          let f2 = f beta2 in
+          if f1 <. f2 then fn beta0 beta1 f1 beta2
+          else if f2 <. f1 then gn beta1 beta2 f2 beta3
+          else beta1
+        end
+    in
+    let beta1 = beta3 -. g *. (beta3 -. beta0) in
+    let f1 = f beta1 in
+    let beta2 = beta0 +. g *. (beta3 -. beta0) in
+    let f2 = f beta2 in
+    if f1 <. f2 then fn beta0 beta1 f1 beta2
+    else if f2 <. f1 then gn beta1 beta2 f2 beta3
+    else beta2
 
   (* precision *)
   let epsilon = if exact then zero else

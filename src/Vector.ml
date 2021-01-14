@@ -1,5 +1,9 @@
 open FieldGen
 
+let zih_log = Debug.new_debug "hull" 'h'
+let zih_tst = zih_log.tst
+let zih_log fmt = zih_log.log fmt
+
 module Make(R:S) = struct
   open R
 
@@ -556,41 +560,14 @@ module Make(R:S) = struct
           let alpha = try solve2 f a b c with Not_found -> assert false in
           (alpha, f alpha);
       in
-      let g = (sqrt (of_int 5) -. one) /. of_int 2 in
-      let max_step = 50 in
-      let trichotomie beta0 beta3 =
-          let beta1 = beta3 -. g *. (beta3 -. beta0) in
-          let beta2 = beta0 +. g *. (beta3 -. beta0) in
-          let (_, f1) = find_alpha beta1 in
-          let (_, f2) = find_alpha beta2 in
-          let rec fn step beta0 beta2 f2 beta3 =
-            if step >= max_step then beta2 else
-              begin
-                let step = step + 1 in
-                let beta1 = beta3 -. g *. (beta3 -. beta0) in
-                let (_, f1) = find_alpha beta1 in
-                if f1 <. f2 then fn step beta0 beta1 f1 beta2
-                else gn step beta1 beta2 f2 beta3
-              end
-            and gn step beta0 beta1 f1 beta3 =
-            if step >= max_step then beta1 else
-              begin
-                let step = step + 1 in
-                let beta2 = beta0 +. g *. (beta3 -. beta0) in
-                let (_, f2) = find_alpha beta2 in
-                if f1 <. f2 then fn step beta0 beta1 f1 beta2
-                else gn step beta1 beta2 f2 beta3
-              end
-          in
-          if f1 <. f2 then fn 1 beta0 beta1 f1 beta2
-          else gn 1 beta1 beta2 f2 beta3
-      in
+      let stop_cond = { default_stop_cond with max_steps = 50 } in
+      let f beta = snd (find_alpha beta) in
       let beta =
         if p2 >. zero then
           begin
             let beta0 = zero in
             let beta1 = if pv >. zero then -. vw /. pv else of_int 100 in
-            trichotomie beta0 beta1
+            tricho ~stop_cond f beta0 beta1
           end
         else
           zero
