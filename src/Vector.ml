@@ -1,10 +1,12 @@
+open Printing
 open FieldGen
 
-let zih_log = Debug.new_debug "hull" 'h'
-let zih_tst = zih_log.tst
-let zih_log fmt = zih_log.log fmt
+(** log for zero in convex hull test *)
+let Debug.{ tst = zih_tst; log = zih_log } = Debug.new_debug "hull" 'h'
 
+(** Functor with linear algebra code for the given field *)
 module Make(R:S) = struct
+
   open R
 
   (** vector *)
@@ -12,42 +14,49 @@ module Make(R:S) = struct
   type vector = R.t array
   type v = vector
 
-  (** column matrix *)
+  (** matrix, line major *)
   type matrix = vector array
   type m = matrix
 
+  (** in place addition *)
   let addq v1 v2 =
     for i = 0 to Array.length v1 - 1 do
       v1.(i) <- v1.(i) +. v2.(i)
     done;
     [@@inlined always]
 
+  (** set v0 to v1 + v2 *)
   let adds v0 v1 v2 =
     for i = 0 to Array.length v1 - 1 do
       v0.(i) <- v1.(i) +. v2.(i)
     done;
     [@@inlined always]
 
+  (** addition that allocates a new vector *)
   let ( +++ ) v1 v2 =
     let v = Array.make (Array.length v1) zero in
     adds v v1 v2; v[@@inlined always]
 
+  (** in place subtraction *)
   let subq v1 v2 =
     for i = 0 to Array.length v1 - 1 do
       v1.(i) <- v1.(i) -. v2.(i)
     done;
     [@@inlined always]
 
+  (** set v0 to v1 - v2 *)
   let subs v0 v1 v2 =
     for i = 0 to Array.length v1 - 1 do
       v0.(i) <- v1.(i) -. v2.(i)
     done;
     [@@inlined always]
 
+  (** subtraction that allocates a new vector *)
   let ( --- ) v1 v2 =
     let v = Array.make (Array.length v1) zero in
     subs v v1 v2; v[@@inlined always]
 
+  (** vector product in dimension 3 only *)
   let vp v1 v2 =
     assert (Array.length v1 = 3);
     assert (Array.length v2 = 3);
@@ -55,26 +64,31 @@ module Make(R:S) = struct
      ; v1.(2) *. v2.(0) -. v1.(0) *. v2.(2)
      ; v1.(0) *. v2.(1) -. v1.(1) *. v2.(0) |]
 
+  (** set v1 to t v1 + u v2*)
   let combq t v1 u v2 =
     for i = 0 to Array.length v1 - 1 do
       v1.(i) <- t*.v1.(i) +. u*.v2.(i)
     done [@@inlined always]
 
+  (** set v1 to v1 + u v2 *)
   let combqo v1 u v2 =
     for i = 0 to Array.length v1 - 1 do
       v1.(i) <- v1.(i) +. u*.v2.(i)
     done [@@inlined always]
 
+  (** set v0 to t v1 + u v2 *)
   let combs v0 t v1 u v2 =
     for i = 0 to Array.length v1 - 1 do
       v0.(i) <- t*.v1.(i) +. u*.v2.(i)
     done [@@inlined always]
 
+  (** allocates a new vector with value t v1 + u v2 *)
   let comb t v1 u v2 =
     let n = Array.length v1 in
     let v = Array.make n zero in
     combs v t v1 u v2; v [@@inlined always]
 
+  (** scalar product *)
   let ( *.* ) v1 v2 =
     let res = ref zero in
     for i = 0 to Array.length v1 - 1 do
@@ -82,32 +96,47 @@ module Make(R:S) = struct
     done;
     !res
 
+  (** allocation of the null vector of dimension d *)
   let zero_v d = Array.make d zero
 
+  (** set v to x v *)
   let smulq x v =
     for i = 0 to Array.length v - 1 do
       v.(i) <- x*.v.(i)
     done [@@inlined always]
 
+  (** set v0 to x v1 *)
+  let smuls v0 x v1 =
+    for i = 0 to Array.length v1 - 1 do
+      v0.(i) <- x*.v1.(i)
+    done [@@inlined always]
+
+  (** alocates a new vector with x v *)
   let ( **. ) x v =
     let n = Array.length v in
     let r = Array.make n zero in
-    for i = 0 to n - 1 do
-      r.(i) <- x*.v.(i)
-    done; r [@@inlined always]
+    smuls r x v;
+    r
 
+  (** division by a scalar *)
   let ( //. ) v x = (one /. x) **. v [@@inlined always]
 
+  (** opposite *)
   let opp v = (~-.one) **. v [@@inlined always]
 
-  let norm2 v = v *.* v
+  (** square of the Euclidian norm *)
+  let norm2 v = v *.* v [@@inlined always]
 
-  let norm v = sqrt (norm2 v)
+  (** Euclidian norm *)
+  let norm v = sqrt (norm2 v) [@@inlined always]
 
-  let dist v1 v2 = norm (v1 --- v2)
+  (** Eucidian distance *)
+  let dist v1 v2 = norm (v1 --- v2) [@@inlined always]
 
-  let dist2 v1 v2 = norm2 (v1 --- v2)
+  (** Square of Euclidian distance *)
+  let dist2 v1 v2 = norm2 (v1 --- v2) [@@inlined always]
 
+  (** absolute norm *)
   let abs_norm v =
     let r = ref zero in
     for i = 0 to Array.length v - 1 do
@@ -115,55 +144,31 @@ module Make(R:S) = struct
     done;
     !r [@@inlined always]
 
-
+  (** return the normalisation of v *)
   let normalise v = (one /. norm v) **. v [@@inlined always]
 
+  (** normalise v in place *)
   let normaliseq v = smulq (one /. norm v) v [@@inlined always]
 
+  (** normalisation for absolute norm *)
   let abs_normalise v = (one /. abs_norm v) **. v [@@inlined always]
 
-  let print_array fn ch v =
-    Printf.fprintf ch "(";
-    Array.iteri (fun i x ->
-        if i <> 0 then Printf.fprintf ch ", ";
-        fn ch x) v;
-    Printf.fprintf ch ")"
-
+  (** printing functions *)
   let print_vector = print_array R.print
   let print_matrix = print_array print_vector
-  let print_list ch l =
-    let pr ch l =
-      List.iteri
-        (fun i -> Printf.fprintf ch "%s%d" (if i <> 0 then ", " else "")) l
-    in
-    Printf.fprintf ch "(%a)" pr l
-
-  let sprint_list () l =
-    let pr () l =
-      String.concat "" (List.mapi
-        (fun i -> Printf.sprintf "%s%d" (if i <> 0 then ", " else "")) l)
-    in
-    Printf.sprintf "(%a)" pr l
 
   (** matrix vector multiplication *)
   let ( *** ) m v =
     assert (Array.length v = Array.length (m.(0)));
     Array.map (( *.* ) v) m
 
-  let ( **- ) m v =
-    let dim = Array.length v in
-    let d2 = Array.length m.(0) in
-    assert (dim = Array.length m);
-    Array.init d2 (fun i -> let r = ref zero in
-                             Array.iteri (fun j x -> r := !r +. m.(j).(i) *. x) v;
-                             !r)
-
   (** transpose matrix vector multiplicaiton *)
-  let ( *+* ) v m =
-    let len = Array.length m in
-    let res = Array.make len zero in
-    for i = 0 to len - 1 do
-      for j = 0 to len -1 do
+  let ( **- ) m v =
+    let d1 = Array.length m in
+    let d2 = Array.length m.(0) in
+    let res = Array.make d2 zero in
+    for i = 0 to d1 - 1 do
+      for j = 0 to d2 -1 do
         res.(j) <- res.(j) +. v.(i) *. m.(i).(j)
       done
     done;
@@ -173,16 +178,19 @@ module Make(R:S) = struct
   let ( **** ) m n =
     Array.map (fun v -> n **- v) m
 
+  (** transposition **)
   let transpose m =
     let n1 = Array.length m in
     let n2 = Array.length m.(0) in
     Array.init n2 (fun j -> Array.init n1 (fun i -> m.(i).(j)))
 
+  (** swap in a vector *)
   let swap v i j =
     let tmp = v.(i) in
     v.(i) <- v.(j); v.(j) <- tmp [@@inlined always]
 
-  (** determinant with principal Gauss pivot *)
+  (** determinant with full principal Gauss pivot.
+      the matrice is overwritten *)
   let unsafe_det m =
     let len = Array.length m in
     try
@@ -220,6 +228,7 @@ module Make(R:S) = struct
       !d
     with Exit -> zero
 
+  (** safe determinant that do not touch the matrix *)
   let det m =
     let m = Array.map Array.copy m in
     unsafe_det m
@@ -240,8 +249,7 @@ module Make(R:S) = struct
     with
       Exit -> false
 
-  let solve_unsafe mat vector0 =
-    let vector = Array.copy vector0 in
+  let solve_unsafe mat vector =
     let dim = Array.length vector in
 
     for i = 0 to dim - 2 do
@@ -294,11 +302,13 @@ module Make(R:S) = struct
 
   let solve mat0 vector0 =
     let mat = Array.map Array.copy mat0 in
-    solve_unsafe mat vector0
+    let vector = Array.copy vector0 in
+    solve_unsafe mat vector
 
   let solve_transpose mat0 vector0 =
     let mat = transpose mat0 in
-    solve_unsafe mat vector0
+    let vector = Array.copy vector0 in
+    solve_unsafe mat vector
 
    (* solves m x = y for m symmetric positive definite (spd)
       remark: if m is invertible tm * m is spd *)
@@ -365,13 +375,13 @@ module Make(R:S) = struct
     let r2 = norm2 (mul m s2 --- a) in
     if d >. of_float 1e-6 || r1 >. of_float 1e-6 || r2 >. of_float 1e-6 then
       begin
-        Printf.printf "BAD SOLVE %a %a %a %a (%a %a|%a = %a)\n%!"
+        printf "BAD SOLVE %a %a %a %a (%a %a|%a = %a)\n%!"
           print d print r1 print r2 print (det m)
           print_matrix m print_vector s1 print_vector s2 print_vector a;
         assert false
       end
     else
-      Printf.printf "%s %a %a\n%!"
+      printf "%s %a %a\n%!"
         (if r1 =. r2 then "EQ" else if r1 <. r2 then "CG" else "GAUSS")
         print (r2 /. r1) print (r1 /. r2);
     if !nf then raise Not_found else s2
@@ -412,40 +422,38 @@ module Make(R:S) = struct
 
   let distance m k x =
     let m = Array.init k (fun i -> m.(i)) in
-    Printf.printf "coucou D\n%!";
     let mtm = m **** transpose m in
     let mx = m *** x in
     let y = solve mtm mx in
-    Printf.printf "coucou E\n%!";
     try norm2 (x --- m **- y)
     with Not_found -> zero
 
   let print_point ch (a,i) =
-    Printf.fprintf ch "%d:%a" i print_vector a
+    fprintf ch "%d:%a" i print_vector a
 
   let rec print_points ch l =
     match l with
     | [] -> ()
     | [x] -> print_point ch x
-    | x::l -> Printf.fprintf ch "%a, %a" print_point x print_points l
+    | x::l -> fprintf ch "%a, %a" print_point x print_points l
 
   let print_face ch a =
     let a = Array.to_list a in
-    Printf.fprintf ch "%a\n" print_points a
+    fprintf ch "%a\n" print_points a
 
   let print_faces ch faces =
-    List.iteri (fun i face -> Printf.fprintf ch "%d) %a" i print_face face) faces
+    List.iteri (fun i face -> fprintf ch "%d) %a" i print_face face) faces
 
   exception Zih
 
   let solve2 f a b c =
-    (*    Printf.printf "solve2: a: %a, b: %a, c: %a\n%!" print a print b print c;*)
+    (*    printf "solve2: a: %a, b: %a, c: %a\n%!" print a print b print c;*)
     let x1, x2 =
       if a =. zero then (-.c /. b, -.c /. b) else
         if c =. zero then (zero, -.b /. a)     else
           begin
             let delta = b *. b -. of_int 4 *. a *. c in
-            (*            Printf.printf "a: %a, b: %a, c: %a, delta: %a\n%!" print a print b print c print delta;*)
+            (*            printf "a: %a, b: %a, c: %a, delta: %a\n%!" print a print b print c print delta;*)
             if delta <. zero then raise Not_found;
             if b >. zero then
               ((-. b -. sqrt delta) /. (of_int 2 *. a),
@@ -456,13 +464,13 @@ module Make(R:S) = struct
           end
     in
     let x = if f x1 <. f x2 then x1 else x2 in
-    (*    Printf.printf "x: %a\n%!" print x;*)
+    (*    printf "x: %a\n%!" print x;*)
 (*    let good = ref true in
     for i = -100 to 200 do
       let t = of_int i /. of_int 100 in
       let u = one -. t in
       let y = t *. x1 +. u *. x2 in
-      Printf.printf "i: %d, x: %a, f(x): %a, y: %a, f(y): %a\n%!"
+      printf "i: %d, x: %a, f(x): %a, y: %a, f(y): %a\n%!"
          i print x print (f x) print y print (f y);
       if not (f x <=. f y) then good := false;
     done;
@@ -494,7 +502,7 @@ module Make(R:S) = struct
     zih_steps.sum <- 0
 
   let print_zih_summary () =
-    Printf.printf "zih: average steps: %g, max steps: %d, nb_abort: %d\n%!"
+    printf "zih: average steps: %g, max steps: %d, nb_abort: %d\n%!"
       Stdlib.(float zih_steps.sum /. float zih_steps.nb_call)
       zih_steps.max zih_steps.nb_abort;
     reset_zih ()
@@ -525,12 +533,17 @@ module Make(R:S) = struct
       | None -> Array.make nb (one /. of_int nb)
     in
     let pcoef = Array.make nb zero in
+    let last_cancel = ref (-1) in
     let rec fn step v v2 =
       let dir_i = ref (-1) in
       let dir_s = ref zero in
       for i = 0 to nb - 1 do
         let s = m.(i) *.* v in
-        if s <=. !dir_s then (dir_s := s; dir_i := i)
+        if s <=. !dir_s then
+          begin
+            dir_s := s;
+            dir_i := i
+          end
       done;
       let i = !dir_i in
       if i < 0 then (zih_log "false"; exit_zih step false);
@@ -585,7 +598,7 @@ module Make(R:S) = struct
       let lin_step () =
         let sel = ref [] in
         for i = 0 to nb - 1 do
-          if pcoef.(i) >. zero || m.(i) *.* v <. zero then sel := i :: !sel;
+          if r.(i) >. zero && i <> !last_cancel then sel := i :: !sel;
         done;
         let sel = Array.of_list !sel in
         let ms = Array.map (fun k -> Array.append m.(k) [|one|]) sel in
@@ -594,13 +607,17 @@ module Make(R:S) = struct
         let t = solve_cg mm b in
         let s = ms *** t in
         let alpha = ref one in
+        let cancel = ref (-1) in
         Array.iteri (fun i k ->
-            if !alpha *. s.(i) >. r.(k) then alpha := r.(k) /. s.(i)) sel;
+            if !alpha *. s.(i) >. r.(k) then (alpha := r.(k) /. s.(i); cancel := k)) sel;
         let alpha = !alpha in
-        zih_log "lin step step: %d alpha: %a, det: %a, sel: %a" step print alpha print (det mm) print_list (Array.to_list sel);
+        let cancel = !cancel in
+        last_cancel := cancel;
+        zih_log "lin step step: %d alpha: %a, cancel: %d, det: %a, sel: %a" step print alpha cancel print (det mm) print_int_list (Array.to_list sel);
         let r = Array.copy r in
         Array.iteri (fun i k ->
-            r.(k) <- r.(k) -. alpha *. s.(i)) sel;
+            if k = cancel then r.(k) <- zero
+            else r.(k) <- r.(k) -. alpha *. s.(i)) sel;
         set_one r;
         r
       in
@@ -610,7 +627,7 @@ module Make(R:S) = struct
           let nnv = m **- nr in
           let nnv2 = norm2 nnv in
           zih_log "linstep norm %a, keep %b" print nnv2 (nnv2 <=. nv2);
-          if nnv2 <=. nv2 then (Array.blit nr 0 r 0 nb; (nnv,nnv2))
+          if nnv2 <=. nv2 then (Array.blit nr 0 r 0 nb; Array.blit nr 0 pcoef 0 nb; (nnv,nnv2))
           else (nv, nv2)
         ) else (nv,nv2)
       in
@@ -642,11 +659,11 @@ module Make(R:S) = struct
     !r
 
   let visibility (x:point) (d:point array) =
-    Printf.printf "vis: %d %a\n%!" (Array.length d) print_face d;
+    (*printf "vis: %d %a\n%!" (Array.length d) print_face d;*)
     try
       let c = center (Array.map fst d) in
       let v = norm2 (c --- fst x) -. norm2 (c --- fst d.(0))  in
-      Printf.printf "vis: %a %a\n%!" print v print_vector c;
+      (*printf "vis: %a %a\n%!" print v print_vector c;*)
       v
     with Not_found -> -. inf
 
@@ -657,20 +674,15 @@ module Make(R:S) = struct
     let best_i = ref k in
     let best = ref (f m.(k)) in
     for i = k + 1 to nb-1 do
-      Printf.printf "coucou X\n%!";
       let x = f m.(i) in
-      Printf.printf "coucou F\n%!";
       if x >. !best then (best := x; best_i := i)
     done;
-    Printf.printf "coucou Z %d %d\n%!" !best_i k;
     if !best_i <> k then swap m k !best_i
 
   let reorder dim m =
     search_best m (fun x -> x.(0)) 0;
-    Printf.printf "coucouB\n%!";
 
     for i = 1 to dim - 1 do
-      Printf.printf "coucouC %d %d %d\n%!" i dim (Array.length m);
       search_best m (distance m i) i
     done
 
@@ -678,9 +690,7 @@ module Make(R:S) = struct
     let m = Array.of_list m in
     let nb  = Array.length m in
     let dim = Array.length m.(0) in
-    Printf.printf "coucouA\n%!";
     reorder dim m;
-    Printf.printf "coucou0\n%!";
     let m = Array.mapi (fun i x -> (x, i)) m in
     let faces = Hashtbl.create 128 in
     let edges = Hashtbl.create 128 in
@@ -829,6 +839,7 @@ module Make(R:S) = struct
         res := Array.map fst face :: !res) faces;
     !res
 
+
   module Test = struct
     let a =
       List.map (Array.map of_int)
@@ -851,8 +862,6 @@ module Make(R:S) = struct
 
     let _ = assert (exact || zih a)
 
-    let _ = Debug.set_debugs "h"
-
   end
 end
 
@@ -864,12 +873,8 @@ module type V = sig
   type m = matrix
 
   val zero_v : int -> v
-  val print_vector : out_channel -> vector -> unit
-  val print_array  : (out_channel -> 'a -> unit)
-                       -> out_channel -> 'a array -> unit
-  val print_matrix : out_channel -> matrix -> unit
-  val print_list : out_channel -> int list -> unit
-  val sprint_list : unit -> int list -> string
+  val print_vector : formatter -> vector -> unit
+  val print_matrix : formatter -> matrix -> unit
 
   val norm2   : v -> t
   val norm    : v -> t

@@ -1,3 +1,4 @@
+open Printing
 
 module Make(R:Field.SPlus) = struct
   open R
@@ -37,9 +38,9 @@ module Make(R:Field.SPlus) = struct
   let print_simplex ch s =
     let pr ch v =
       let sg = if v.p then "+" else "-" in
-      Printf.fprintf ch "%s%a(%d)" sg V.print_vector v.v v.uid
+      fprintf ch "%s%a(%d)" sg V.print_vector v.v v.uid
     in
-    V.print_array pr ch s
+    print_array pr ch s
 
   let pos s i = s.(i).p
   let neg s i = not (pos s i)
@@ -77,24 +78,21 @@ module Make(R:Field.SPlus) = struct
     let m = Array.of_list m in
     assert (Array.length m > dim);
     let base = Array.map to_vec m in
-    Printf.printf "delauney_dim: %d %a\n%!" dim print_matrix base;
+    (*printf "delauney_dim: %d %a\n%!" dim print_matrix base;*)
     reorder (dim+1) base;
-    Printf.printf "ccoucou Q\n%!";
     let base = Array.sub base 0 (dim+1) in
-    Printf.printf "ccoucou S\n%!";
     let mc = Array.map (fun x -> pcoord (to_vec x) base, x) m in
-    Printf.printf "ccoucou T\n%!";
-    let test = Array.map (fun (v,x) -> norm2 (base **- v --- to_vec x)) mc in
     let mc = Array.map (fun (v,x) -> (normalise v, x)) mc in
     let mcp = Array.map fst mc in
-    Printf.printf "mc: %a %a\n%!" print_matrix mcp print_vector test;
+    (*let test = Array.map (fun (v,x) -> norm2 (base **- v --- to_vec x)) mc in
+    printf "mc: %a %a\n%!" print_matrix mcp print_vector test;*)
     let faces = delauney (Array.to_list mcp) in
     let mc = Array.to_list mc in
-    Printf.printf "%d\n%!" (List.length faces);
-    Printf.printf "result: %a\n%!" (fun ch l -> List.iter (fun m -> print_matrix ch m) l) faces;
+    (*printf "%d\n%!" (List.length faces);
+    printf "result: %a\n%!" (fun ch l -> List.iter (fun m -> print_matrix ch m) l) faces;*)
     let faces = List.map (Array.map (fun x ->
                               try List.assoc x mc with Not_found -> assert false)) faces in
-    Printf.printf "result: %a\n%!" (fun ch l -> List.iter (fun m -> print_simplex ch m) l) faces;
+    (*printf "result: %a\n%!" (fun ch l -> List.iter (fun m -> print_simplex ch m) l) faces;*)
     faces
 
   module Test = struct

@@ -1,3 +1,4 @@
+open Printing
 
 let debug_list = ref []
 
@@ -9,13 +10,13 @@ let debug_list = ref []
     requires computation that could have a significant cost. A
     test can be used to avoid the computation when the default
     channel is not active. *)
-type debug = { log : 'a.('a, out_channel, unit) format -> 'a
+type debug = { log : 'a. ('a, formatter, unit) format -> 'a
              ; tst : unit -> bool }
 
 (** create a new debug channel, with its name and a given letter.
     This gives 26 possible debug channel if using only lowercase letter.
     much more is using more characteres. *)
-let new_debug ?(ch=stderr) name letter =
+let new_debug ?(ch=err_formatter) name letter =
   let pr = ref false in
   if List.mem_assoc letter !debug_list then
     begin
@@ -25,7 +26,7 @@ let new_debug ?(ch=stderr) name letter =
   debug_list := (letter, pr) :: !debug_list;
   let tst () = !pr in
   let log fmt =
-    let pr = if tst () then Printf.fprintf else Printf.ifprintf in
+    let pr = if tst () then fprintf else ifprintf in
     pr ch ("%s: " ^^ fmt ^^ "\n%!") name
   in
   {tst; log}
@@ -37,7 +38,7 @@ let set_debugs debugs =
   String.iter (fun c ->
       try let pr = List.assoc c !debug_list in pr := true
       with Not_found ->
-        let msg = Printf.sprintf "%C: no debug" c in
+        let msg = sprintf "%C: no debug" c in
         failwith msg) debugs
 
 (** check if at least one debug channel is active *)
@@ -45,9 +46,8 @@ let has_debug () = List.exists (fun (_,pr) -> !pr) !debug_list
 
 (** print to stderr and assert false *)
 let assert_log fmt =
-  Printf.kfprintf (fun _ -> assert false) stderr fmt
+  kfprintf (fun _ -> assert false) err_formatter fmt
 
 (** if cond is true, print to stderr and assert false *)
 let assert_cond cond fmt =
-  if cond then
-    Printf.kfprintf (fun _ -> assert false) stderr fmt
+  if cond then kfprintf (fun _ -> assert false) err_formatter fmt

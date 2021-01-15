@@ -1,5 +1,7 @@
 (** {1: General code for fields implementation} *)
 
+open Printing
+
 (** Minimal signature for a field *)
 module type SMin = sig
   type t
@@ -24,7 +26,7 @@ module type SMin = sig
   val to_float : t -> float
   val of_float : float -> t
   val of_string : string -> t
-  val print : out_channel -> t -> unit
+  val print : formatter -> t -> unit
   (** true is computation are exact, for rational for instance *)
   val exact : bool
 end
@@ -92,7 +94,6 @@ module Make(R:SMin) = struct
     let h = one /. of_int 2 in
     let rec fn x fx y fy =
       incr steps;
-      Printf.printf "*%!";
       let z = (x +. y) *. h in
       if abs (y -. x) <=. stop_cond.precision
          || !steps > stop_cond.max_steps then z

@@ -1,3 +1,4 @@
+open Printing
 open Pacomb
 
 module Parse(R:Field.SPlus) = struct
@@ -121,7 +122,7 @@ module Parse(R:Field.SPlus) = struct
   let%parser cmd =
       "let" (name::ident) ((vars,()) >: params) '=' (p::poly vars Sum) ';' =>
         (let p = P.mk name vars p in
-         Printf.printf "%a\n%!" B.print_polynome p.bern)
+         printf "%a\n%!" B.print_polynome p.bern)
      ; "let" (name::ident) '=' "zeros" (names:: ~+ ident) (t::expected) ';' =>
         (let p name =
            try (Hashtbl.find polys name).bern
@@ -129,7 +130,7 @@ module Parse(R:Field.SPlus) = struct
          in
          let ps = List.map p names in
          let (ts, es) = try H.triangulation ~expected:t ps with e ->
-                            Printf.eprintf "exception: %s\n%!" (Printexc.to_string e);
+                            eprintf "exception: %s\n%!" (Printexc.to_string e);
                             Printexc.print_backtrace stderr;
                             assert false in
          let os =

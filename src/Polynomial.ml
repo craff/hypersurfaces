@@ -1,3 +1,4 @@
+open Printing
 open FieldGen
 
 module Make(R:S) (V:Vector.V with type t = R.t) = struct
@@ -268,16 +269,16 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
     List.iter (fun (l,c) ->
         if c <> zero then
           begin
-            if not !first then Printf.fprintf ch " + ";
+            if not !first then fprintf ch " + ";
             first := false;
-            Printf.fprintf ch "%a " print c;
+            fprintf ch "%a " print c;
             Array.iteri (fun i e ->
                 if e <> 0 then
                   if e > 1 then
-                    Printf.fprintf ch "%c^%d "
+                    fprintf ch "%c^%d "
                                    (Char.chr (Char.code 'a' + i)) e
                   else
-                    Printf.fprintf ch "%c "
+                    fprintf ch "%c "
                                    (Char.chr (Char.code 'a' + i))) l;
           end) p
   (** second version, limited to dimension 3, starts with 'x' ! *)
@@ -286,16 +287,16 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
     List.iter (fun (l,c) ->
         if c <> zero then
           begin
-            if not !first then Printf.fprintf ch " + ";
+            if not !first then fprintf ch " + ";
             first := false;
-            Printf.fprintf ch "%a " print c;
+            fprintf ch "%a " print c;
             Array.iteri (fun i e ->
                 if e <> 0 then
                   if e > 1 then
-                    Printf.fprintf ch "%c^%d "
+                    fprintf ch "%c^%d "
                                    (Char.chr (Char.code 'x' + i)) e
                   else
-                    Printf.fprintf ch "%c"
+                    fprintf ch "%c"
                                    (Char.chr (Char.code 'x' + i))) l;
           end) p
 
@@ -304,17 +305,17 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
   let print_monomial ch l =
     Array.iteri (fun i e ->
         if e <> 0 then
-          if e > 1 then Printf.fprintf ch "X%d^%d " i e
-          else  Printf.fprintf ch "X%d " i) l
+          if e > 1 then fprintf ch "X%d^%d " i e
+          else  fprintf ch "X%d " i) l
 
   let print_polynome ch p =
     let first = ref true in
     List.iter (fun (l,c) ->
         if c <> zero then
           begin
-            if not !first then Printf.fprintf ch " + ";
+            if not !first then fprintf ch " + ";
             first := false;
-            Printf.fprintf ch "%a %a" print c
+            fprintf ch "%a %a" print c
               print_monomial l;
           end) p
 
@@ -323,9 +324,9 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
     List.iter (fun (l,c) ->
         if Array.exists (fun x -> x <>. zero) c then
           begin
-            if not !first then Printf.fprintf ch " + ";
+            if not !first then fprintf ch " + ";
             first := false;
-            Printf.fprintf ch "%a %a" print_vector c
+            fprintf ch "%a %a" print_vector c
               print_monomial l;
           end) p
 
@@ -353,8 +354,8 @@ module type B = sig
   type polynomial = t p
   type polynomial_v = v p
 
-  val print_polynome : out_channel -> polynomial -> unit
-  val print_gradient : out_channel -> polynomial_v -> unit
+  val print_polynome : formatter -> polynomial -> unit
+  val print_gradient : formatter -> polynomial_v -> unit
 
   val dim : 'a p -> int
   val degree : 'a p -> int

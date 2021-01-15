@@ -1,3 +1,5 @@
+open Printing
+
 module type SPlus = sig
   include FieldGen.S
 
@@ -6,7 +8,6 @@ module type SPlus = sig
                                type v = V.v and
                                type m = V.m
 end
-
 
 (** Float field *)
 module FloatMin =
@@ -33,7 +34,7 @@ module FloatMin =
     let to_float x = x  [@@inlined always]
     let of_float x = x  [@@inlined always]
     let of_string = float_of_string
-    let print ch = Printf.fprintf ch "%g"
+    let print ch = fprintf ch "%g"
     let exact = false
   end
 
@@ -70,7 +71,7 @@ module GmpMin = struct
   let to_float x = to_float x
   let of_float x = of_float x mode
   let of_string x = of_string x mode
-  let print ch x = output_string ch (to_string x)
+  let print ch x = fprintf ch "%s" (to_string x)
   let exact = false
 end
 
@@ -117,7 +118,7 @@ module QMin =
     let to_float = to_float
     let of_float = of_float
     let of_string = of_string
-    let print ch x = Printf.fprintf ch "%s" (to_string x)
+    let print ch x = fprintf ch "%s" (to_string x)
     let exact = true
   end
 

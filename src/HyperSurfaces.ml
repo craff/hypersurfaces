@@ -1,3 +1,5 @@
+open Printing
+
 let decomp_log = Debug.new_debug "decomposition" 'd'
 let decomp_tst = decomp_log.tst
 let decomp_log fmt = decomp_log.log fmt
@@ -32,13 +34,13 @@ module Make(R:Field.SPlus) = struct
     let first = ref true in
     List.iter (fun (l,c) ->
           begin
-            if not !first then Printf.fprintf ch " + ";
+            if not !first then fprintf ch " + ";
             first := false;
-            Printf.fprintf ch "%a " print_vector c;
+            fprintf ch "%a " print_vector c;
             List.iteri (fun i e ->
                 if e <> 0 then
-                  if e > 1 then Printf.fprintf ch "X%d^%d " i e
-                  else  Printf.fprintf ch "X%d " i) l;
+                  if e > 1 then fprintf ch "X%d^%d " i e
+                  else  fprintf ch "X%d " i) l;
           end) p
 
   type status =
@@ -80,8 +82,8 @@ module Make(R:Field.SPlus) = struct
       | (i,p)::r -> (i, List.map (fun (j,q) -> (j, p = q)) r)
 
   let print_face_key ch (i, l) =
-    Printf.fprintf ch "%d" i;
-    List.iter (fun (j,b) -> Printf.fprintf ch ", %s%d" (if b then "+" else "-") j) l
+    fprintf ch "%d" i;
+    List.iter (fun (j,b) -> fprintf ch ", %s%d" (if b then "+" else "-") j) l
 
 
   let h = one /. of_int 2
@@ -387,12 +389,12 @@ module Make(R:Field.SPlus) = struct
                         let x = eval_grad p c in acc +++  x) (zero_v dim) dp0
       in
       let rec loop steps sgn fc c dc ndc qc lambda =
-        (* Printf.printf "objectif: %a lambda: %a rc: %a r: %a r-rc: %a\n %a => %a\n %a\n%!"
+        (* printf "objectif: %a lambda: %a rc: %a r: %a r-rc: %a\n %a => %a\n %a\n%!"
           print objectif print lambda print rc print r print (r -. rc) print_vector c print fc
           print_vector s.l;*)
         if lambda <. of_float 1e-8 || steps > 1000 then (c,fc,qc,steps) else
           let force = force sgn c dc ndc in
-          (*Printf.printf "force: %a (%a)\n%!" print_vector force print (norm force);*)
+          (*printf "force: %a (%a)\n%!" print_vector force print (norm force);*)
           let c' = normalise (comb one c lambda force) in
           let fc' = eval c' in
           let dc' = eval_grad c' in
@@ -423,7 +425,7 @@ module Make(R:Field.SPlus) = struct
         let x = to_vec x in
         let m = Array.map (fun p -> p --- x) s.m in
         let m' = Array.map (fun p -> p +++ x) s.m in
-        Printf.printf "\nx: %a(%a) s:%a => %a\n%a => %a\n%a => %a\n%!"
+        printf "\nx: %a(%a) s:%a => %a\n%a => %a\n%a => %a\n%!"
           print_vector x print (norm2 x)
           print_matrix s.m print_vector (Array.map norm2 s.m)
           print_matrix m print (det m)
@@ -531,7 +533,7 @@ module Make(R:Field.SPlus) = struct
       in
       let ok = ref true in
       Hashtbl.iter (fun k l -> if List.length l <> 2 then
-        (ok := false; Printf.eprintf "len = %d for key %a\n%!"
+        (ok := false; eprintf "len = %d for key %a\n%!"
                         (List.length l) print_face_key k)) by_face;
       assert !ok;
       let add_local acc s =
@@ -559,7 +561,7 @@ module Make(R:Field.SPlus) = struct
                     debug := true;
                     let b = decision s in
                     debug := save;
-                    Printf.printf "found %b\n%!" (b <> Unknown);
+                    printf "found %b\n%!" (b <> Unknown);
                     raise Exit
                   end) l) by_face
       with
@@ -607,12 +609,12 @@ module Make(R:Field.SPlus) = struct
       let time1 = Unix.gettimeofday () in
       let dt = Stdlib.(time1 -. time0) in
       let (hd,tail) = if Debug.has_debug () then "", "\n" else "\r", "     " in
-      Printf.eprintf "%sto do:%.3f%% %06d worst:%.2e, time: %.1fs%s%!"
+      eprintf "%sto do:%.3f%% %06d worst:%.2e, time: %.1fs%s%!"
         hd Stdlib.(!total *. 100.0) (List.length !to_do) x dt tail;
 
     done;
 
-    Printf.eprintf "\r%f%% %d\n%!" Stdlib.(!total *. 100.0) (List.length !to_do);
+    eprintf "\r%f%% %d\n%!" Stdlib.(!total *. 100.0) (List.length !to_do);
 
     (*check ();*)
 
@@ -664,7 +666,7 @@ module Make(R:Field.SPlus) = struct
       (*match !dim0 with
       | Some dim ->
          (*Hashtbl.iter (fun (_,l) (c,f) ->
-             Printf.printf "%d %d => %d %a\n%!" dim (dim - (1 + List.length l)) !c
+             printf "%d %d => %d %a\n%!" dim (dim - (1 + List.length l)) !c
                        print_simplex f
            )
          tbl;*)
@@ -765,7 +767,7 @@ module Make(R:Field.SPlus) = struct
         match l with
         | [] -> assert false
         | (i,j,s)::_ ->
-(*           Printf.printf "testing %a %a\n%!" print_vector (to_vec s.(i))
+(*           printf "testing %a %a\n%!" print_vector (to_vec s.(i))
              print_vector (to_vec s.(j));*)
            let k = simplex_key s in
            let (_,l) = try Hashtbl.find simplices k with Not_found -> assert false in
@@ -785,7 +787,7 @@ module Make(R:Field.SPlus) = struct
             assert (t >. zero);
             assert (u >. zero);
             let x0 = comb t (to_vec si) u (to_vec sj) in
-            (*            Printf.printf "splitting: %a\n%!" print_vector x0;*)
+            (*            printf "splitting: %a\n%!" print_vector x0;*)
             let x0 = Simp.mk x0 true in
             let fn (i,j,s) =
               let sign,t,u =
@@ -812,15 +814,15 @@ module Make(R:Field.SPlus) = struct
                                else
                                  x) v) l
               in
-(*              Printf.printf "old: %a, " print_simplex s;
-              List.iter (fun v -> Printf.printf "%a " print_vector v) l;
+(*              printf "old: %a, " print_simplex s;
+              List.iter (fun v -> printf "%a " print_vector v) l;
               print_newline();*)
               rm_simplex dirs edges simplices s;
-(*              Printf.printf "new: %a, " print_simplex s1;
-              List.iter (fun v -> Printf.printf "%a " print_vector v) l1;
+(*              printf "new: %a, " print_simplex s1;
+              List.iter (fun v -> printf "%a " print_vector v) l1;
               print_newline();
-              Printf.printf "new: %a, " print_simplex s2;
-              List.iter (fun v -> Printf.printf "%a " print_vector v) l2;
+              printf "new: %a, " print_simplex s2;
+              List.iter (fun v -> printf "%a " print_vector v) l2;
               print_newline();*)
               add_simplex dirs edges simplices s1 l1;
               add_simplex dirs edges simplices s2 l2;
@@ -846,15 +848,15 @@ module Make(R:Field.SPlus) = struct
              (List.rev !l, ls)
         in
         let nb_keep = List.length keep in
-        (*        Printf.printf "s: %a, nb_keep: %d %d\n%!" print_simplex s nb_keep dim;*)
+        (*        printf "s: %a, nb_keep: %d %d\n%!" print_simplex s nb_keep dim;*)
         assert (nb_keep <= dim);
         if nb_keep = dim then
           begin
             let s = Array.of_list (List.map (fun i -> s.(i)) keep) in
             let l = List.map (fun v ->
                         Array.of_list (List.map (fun i -> v.(i)) keep)) l in
-(*            Printf.printf "keep: %a, " print_simplex s;
-            List.iter (fun v -> Printf.printf "%a " print_vector v) l;
+(*            printf "keep: %a, " print_simplex s;
+            List.iter (fun v -> printf "%a " print_vector v) l;
             print_newline();*)
             add_simplex new_dirs new_edges new_simplices s l
           end
@@ -883,26 +885,26 @@ module Make(R:Field.SPlus) = struct
     let keep = List.length all in
     let time1 = Unix.gettimeofday () in
     let dt = Stdlib.(time1 -. time0) in
-    Printf.printf "total: %d/%d, time: %fs, " keep total dt;
+    printf "total: %d/%d, time: %fs, " keep total dt;
     print_zih_summary ();
     let cps = components all in
     let chr = List.map euler cps in
-    Printf.printf "%d components %a\n%!" (List.length cps) print_list chr;
+    printf "%d components %a\n%!" (List.length cps) print_int_list chr;
     begin
       match expected with
       | Nothing -> ()
       | Int n ->
          if List.length chr <> n then
            failwith
-             (Printf.sprintf "wrong number of components: %d, expected %d"
+             (sprintf "wrong number of components: %d, expected %d"
                 (List.length chr) n)
       | List l ->
          let l = List.sort compare l in
          let chr = List.sort compare chr in
          if  l <> chr then
            failwith
-             (Printf.sprintf "wrong characteristics of components: %a, expected %a"
-                sprint_list chr sprint_list l)
+             (sprintf "wrong characteristics of components: %a, expected %a"
+                print_int_list chr print_int_list l)
 
     end;
 
