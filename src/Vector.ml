@@ -249,6 +249,7 @@ module Make(R:S) = struct
     with
       Exit -> false
 
+  (** solve a linear system with Gauss pivot (partial principal for now) *)
   let solve_unsafe mat vector =
     let dim = Array.length vector in
 
@@ -287,13 +288,14 @@ module Make(R:S) = struct
 
     (*Printf.printf "DIAG %a %a\n%!" print_matrix mat print_vector vector;*)
 
+    if mat.(dim-1).(dim-1) =. zero then raise Not_found;
     let r = vector in
 
     for i = dim - 1 downto 0 do
       for j = i + 1 to dim - 1 do
         r.(i) <- r.(i) -. r.(j) *. mat.(i).(j)
       done;
-      if mat.(i).(i) =. zero then raise Not_found;
+      assert (mat.(i).(i) <>. zero);
       r.(i) <- r.(i) /. mat.(i).(i)
     done;
 
@@ -522,7 +524,7 @@ module Make(R:S) = struct
     let m = Array.of_list m in
     zih_log "zih: %a" print_matrix m;
     let nb  = Array.length m in
-    let _dim = Array.length m.(0) in
+    let dim = Array.length m.(0) in
     if not (Array.for_all (fun v -> abs (norm2 v -. one) <. of_float 1e-15) m) then
       begin
         zih_log "opposite";
@@ -602,10 +604,21 @@ module Make(R:S) = struct
         done;
         let sel = Array.of_list !sel in
         let ms = Array.map (fun k -> Array.append m.(k) [|one|]) sel in
-        let mm = transpose ms **** ms in
         let b = Array.append v [|zero|] in
-        let t = solve_cg mm b in
-        let s = ms *** t in
+        let (mm,s) =
+          if Array.length sel > dim then
+            begin
+              let mm = transpose ms **** ms in
+              let t = solve_cg mm b in
+              (mm, ms *** t)
+            end
+          else
+            begin
+              let mm = ms **** transpose ms in
+              let t = solve_cg mm (ms *** b) in
+              (mm, t)
+            end
+        in
         let alpha = ref one in
         let cancel = ref (-1) in
         Array.iteri (fun i k ->
@@ -619,15 +632,20 @@ module Make(R:S) = struct
             if k = cancel then r.(k) <- zero
             else r.(k) <- r.(k) -. alpha *. s.(i)) sel;
         set_one r;
-        r
+        (r, cancel = -1)
       in
       let nv,nv2 =
         if step mod nb = nb - 1 then (
-          let nr = lin_step () in
+          let (nr,stop) = lin_step () in
           let nnv = m **- nr in
-          let nnv2 = norm2 nnv in
-          zih_log "linstep norm %a, keep %b" print nnv2 (nnv2 <=. nv2);
-          if nnv2 <=. nv2 then (Array.blit nr 0 r 0 nb; Array.blit nr 0 pcoef 0 nb; (nnv,nnv2))
+          let nnv2 = if stop then zero else norm2 nnv in
+          let keep = nnv2 <=. nv2 in
+          zih_log "linstep norm %a, keep %b" print nnv2 keep;
+          if keep then
+            begin
+              Array.blit nr 0 r 0 nb;
+              Array.blit nr 0 pcoef 0 nb; (nnv,nnv2)
+            end
           else (nv, nv2)
         ) else (nv,nv2)
       in
