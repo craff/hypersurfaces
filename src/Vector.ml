@@ -554,14 +554,13 @@ module Make(R:S) = struct
       let pv = p *.* v in
       let pw = p *.* m.(i) in
       let vw = !dir_s in
-      let w2 = norm2 m.(i) in
       let sigma = ref zero in
       for j = 0 to nb-1 do
         sigma := !sigma +. pcoef.(j)
       done;
       let sigma = !sigma in
       let find_alpha beta =
-        let w2 = beta *. beta *. p2 +. of_int 2 *. beta *. pw +. w2 in
+        let w2 = beta *. beta *. p2 +. of_int 2 *. beta *. pw +. one in
         let vw = beta *. pv +. vw in
         let sigma = beta *. sigma +. one in
         let f alpha =
@@ -600,7 +599,7 @@ module Make(R:S) = struct
       let lin_step () =
         let sel = ref [] in
         for i = 0 to nb - 1 do
-          if r.(i) >. zero && i <> !last_cancel then sel := i :: !sel;
+          if r.(i) >. zero then sel := i :: !sel;
         done;
         let sel = Array.of_list !sel in
         let ms = Array.map (fun k -> Array.append m.(k) [|one|]) sel in
@@ -635,7 +634,7 @@ module Make(R:S) = struct
         (r, cancel = -1)
       in
       let nv,nv2 =
-        if step mod nb = nb - 1 then (
+        if step mod dim = dim - 1 then (
           let (nr,stop) = lin_step () in
           let nnv = m **- nr in
           let nnv2 = if stop then zero else norm2 nnv in
