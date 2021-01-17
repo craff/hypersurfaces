@@ -49,6 +49,11 @@ module type S = sig
   happens in precision steps. Will loop for rational.
   *)
 
+  val solve_trinome : t -> t -> t -> t * t
+  (** solve_trinome a b c: gives the two solutions of ax^2 + bx + c = 0.
+      if no solution exists, raises Not_found. It one solution exists,
+      it is duplicated *)
+
   (** [digho ?stop_cond f x y] finds an approximation of
       a root of [f] between [x] and [y].*)
   val digho : ?stop_cond:stop_cond -> (t -> t) -> t -> t -> t
@@ -84,6 +89,20 @@ module Make(R:SMin) = struct
     { precision : t      (** |x - y| <= value *)
     ; max_steps : int    (** maximum number of steps *)
     }
+
+  let solve_trinome a b c =
+    if a =. zero then (-.c /. b, -.c /. b) else
+      begin
+        let delta = b *. b -. of_int 4 *. a *. c in
+        if delta <. zero then raise Not_found;
+        if b >. zero then
+          ((-. b -. sqrt delta) /. (of_int 2 *. a),
+           (of_int 2 *. c) /. (-.b -. sqrt delta))
+        else
+          ((-. b +. sqrt delta) /. (of_int 2 *. a),
+           (of_int 2 *. c) /. (-. b +. sqrt delta))
+      end
+
 
   let default_stop_cond = { precision = zero
                           ; max_steps = max_int }

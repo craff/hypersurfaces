@@ -27,27 +27,27 @@ let q = zeros q (2,-18);
 display q;
 display q q__t;
 
-let s1a(x,y,z) = x^2 + y^2 + z^2 - (r1+1)^2;
-let s2a(x,y,z) = x^2 + y^2 + z^2 - (r2-1)^2;
+#let s1a(x,y,z) = x^2 + y^2 + z^2 - (r1+1)^2;
+#let s2a(x,y,z) = x^2 + y^2 + z^2 - (r2-1)^2;
 
-let qs1 = zeros q pt1;
-display qs1 qs1__t;
-let qs2 = zeros q pt2;
-display qs2 qs2__t;
-let qs3 = zeros s1a pt3;
-display qs3 qs3__t;
-let qs4 = zeros s1a pt4;
-display qs4 qs4__t;
+#let qs1 = zeros q pt1;
+#display qs1 qs1__t;
+#let qs2 = zeros q pt2;
+#display qs2 qs2__t;
+#let qs3 = zeros s1a pt3;
+#display qs3 qs3__t;
+#let qs4 = zeros s1a pt4;
+#display qs4 qs4__t;
 
-display q qs1 qs2 qs3 qs4;
+#display q qs1 qs2 qs3 qs4;
 
-let qs1p1 = zeros q s1a pt1;
-let qs1p2 = zeros q s1a pt2;
-let qs1p3 = zeros q s1a pt3;
-let qs1p4 = zeros q s1a pt4;
-display qs1p1;
+#let qs1p1 = zeros q s1a pt1;
+#let qs1p2 = zeros q s1a pt2;
+#let qs1p3 = zeros q s1a pt3;
+#let qs1p4 = zeros q s1a pt4;
+#display qs1p1;
 
-let qs1 = zeros q s1;
-let qs2 = zeros q s2;
-display qs1 qs1__t;
-display qs2 qs2__t;
+#let qs1 = zeros q s1;
+#let qs2 = zeros q s2;
+#display qs1 qs1__t;
+#display qs2 qs2__t;

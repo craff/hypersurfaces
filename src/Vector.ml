@@ -448,37 +448,6 @@ module Make(R:S) = struct
 
   exception Zih
 
-  let solve2 f a b c =
-    (*    printf "solve2: a: %a, b: %a, c: %a\n%!" print a print b print c;*)
-    let x1, x2 =
-      if a =. zero then (-.c /. b, -.c /. b) else
-        if c =. zero then (zero, -.b /. a)     else
-          begin
-            let delta = b *. b -. of_int 4 *. a *. c in
-            (*            printf "a: %a, b: %a, c: %a, delta: %a\n%!" print a print b print c print delta;*)
-            if delta <. zero then raise Not_found;
-            if b >. zero then
-              ((-. b -. sqrt delta) /. (of_int 2 *. a),
-               (of_int 2 *. c) /. (-.b -. sqrt delta))
-            else
-              ((-. b +. sqrt delta) /. (of_int 2 *. a),
-               (of_int 2 *. c) /. (-. b +. sqrt delta))
-          end
-    in
-    let x = if f x1 <. f x2 then x1 else x2 in
-    (*    printf "x: %a\n%!" print x;*)
-(*    let good = ref true in
-    for i = -100 to 200 do
-      let t = of_int i /. of_int 100 in
-      let u = one -. t in
-      let y = t *. x1 +. u *. x2 in
-      printf "i: %d, x: %a, f(x): %a, y: %a, f(y): %a\n%!"
-         i print x print (f x) print y print (f y);
-      if not (f x <=. f y) then good := false;
-    done;
-    assert !good;*)
-    x
-
   let set_one r =
     let nb = Array.length r in
     let s = ref zero in
@@ -525,11 +494,6 @@ module Make(R:S) = struct
     zih_log "zih: %a" print_matrix m;
     let nb  = Array.length m in
     let dim = Array.length m.(0) in
-    if not (Array.for_all (fun v -> abs (norm2 v -. one) <. of_float 1e-15) m) then
-      begin
-        zih_log "opposite";
-        exit_zih 0 true;
-      end;
     let r = match r0 with
       | Some r -> Array.copy r
       | None -> Array.make nb (one /. of_int nb)
@@ -571,8 +535,11 @@ module Make(R:S) = struct
           let a = sigma *. (w2 -. vw *. sigma) in
           let b = w2 -. v2 *. sigma *. sigma in
           let c = vw -. sigma *. v2 in
-          let alpha = try solve2 f a b c with Not_found -> assert false in
-          (alpha, f alpha);
+          let alpha1, alpha2 =
+            try solve_trinome a b c with Not_found -> assert false
+          in
+          let f1 = f alpha1 and f2 = f alpha2 in
+          if f1 <. f2 then (alpha1, f1) else (alpha2, f2);
       in
       let stop_cond = { default_stop_cond with max_steps = 50 } in
       let f beta = snd (find_alpha beta) in
