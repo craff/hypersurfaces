@@ -303,6 +303,8 @@ module Make(R:Field.SPlus) = struct
       !gd
     in
 
+    let open struct exception Zih end in
+
     let decision_face vs s =
       let p = sub s.p vs in
       let dp = sub (List.map Lazy.force s.dp) vs in
@@ -323,7 +325,6 @@ module Make(R:Field.SPlus) = struct
       in
       fn [] dp gd
     in
-
 
     let iter_facets gn dim =
       let vs = Array.make dim false in

@@ -6,8 +6,9 @@ clean:
 	dune clean
 	cd article && rubber --clean --pdf main.tex
 
-test:
-	dune exec Main --release -- tests/*.txt
+.PHONY: tests
+tests: all
+	dune exec Hyper --release -- tests/*.txt -b > tests.log 2>&1
 
 pdf:
 	cd article && rubber --pdf main.tex

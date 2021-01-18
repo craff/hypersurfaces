@@ -1,7 +1,7 @@
 (include_subdirs unqualified)
 
 (executable
-  (name Main)
+  (name Hyper)
   (public_name Hyper)
   (modules :standard)
   (preprocess (pps pacomb.ppx))
