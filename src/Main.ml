@@ -1,3 +1,4 @@
+open Printing
 open Pacomb
 
 (* blanks *)
@@ -7,6 +8,7 @@ let _ =
   let files = Args.files in
   Debug.set_debugs !Args.debug_string;
   List.iter (fun fn ->
+      printf "reading %S\n%!" fn;
       let f () = Grammar.parse_file Parser.main blank fn in
       Pos.handle_exception ~error:(fun e ->
           Printexc.print_backtrace stderr;
