@@ -574,25 +574,30 @@ module Make(R:S) = struct
         let (mm,s) =
           if Array.length sel > dim then
             begin
-              let mm = transpose ms **** ms in
-              let t = solve_cg mm b in
+              let mm v = ms **- (ms *** v) in
+              let t = irm_cg mm b in
               (mm, ms *** t)
             end
           else
             begin
-              let mm = ms **** transpose ms in
-              let t = solve_cg mm (ms *** b) in
+              let mm v = ms *** (ms **- v) in
+              let t = irm_cg mm (ms *** b) in
               (mm, t)
             end
         in
         let alpha = ref one in
         let cancel = ref (-1) in
         Array.iteri (fun i k ->
-            if !alpha *. s.(i) >. r.(k) then (alpha := r.(k) /. s.(i); cancel := k)) sel;
+            if !alpha *. s.(i) >. r.(k) then
+              begin
+                alpha := r.(k) /. s.(i);
+                cancel := k
+              end) sel;
         let alpha = !alpha in
         let cancel = !cancel in
         last_cancel := cancel;
-        zih_log "lin step step: %d alpha: %a, cancel: %d, det: %a, sel: %a" step print alpha cancel print (det mm) print_int_list (Array.to_list sel);
+        zih_log "lin step step: %d alpha: %a, cancel: %d, sel: %a"
+          step print alpha cancel print_int_list (Array.to_list sel);
         let r = Array.copy r in
         Array.iteri (fun i k ->
             if k = cancel then r.(k) <- zero
