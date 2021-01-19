@@ -602,14 +602,14 @@ module Make(R:S) = struct
           let nr = lin_step () in
           let nnv = m **- nr in
           let nnv2 = norm2 nnv in
-          let keep = nnv2 <=. nv2 in
+          let keep = nnv2 <. nv2 in
           zih_log "linstep norm %a, keep %b" print nnv2 keep;
           if keep then
             begin
               Array.blit nr 0 r 0 nb;
               (nnv,nnv2)
             end
-          else (nv, nv2)
+          else (nv,nv2)
         ) else (nv,nv2)
       in
       if nv2 >=. v2 then
