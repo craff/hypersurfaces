@@ -606,7 +606,7 @@ module Make(R:S) = struct
           if keep then
             begin
               Array.blit nr 0 r 0 nb;
-              Array.blit nr 0 pcoef 0 nb; (nnv,nnv2)
+              (nnv,nnv2)
             end
           else (nv, nv2)
         ) else (nv,nv2)
