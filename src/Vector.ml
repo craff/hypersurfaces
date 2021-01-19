@@ -535,10 +535,10 @@ module Make(R:S) = struct
       let stop_cond = { default_stop_cond with max_steps = 50 } in
       let f beta = snd (find_alpha beta) in
       let beta =
-        if p2 >. zero then
+        if pv >. zero then
           begin
             let beta0 = zero in
-            let beta1 = if pv >. zero then -. vw /. pv else of_int 100 in
+            let beta1 = -. vw /. pv in
             tricho ~stop_cond f beta0 beta1
           end
         else
@@ -586,21 +586,22 @@ module Make(R:S) = struct
               end) sel;
         let alpha = !alpha in
         let cancel = !cancel in
+        if cancel = -1 then exit_zih step true;
         last_cancel := cancel;
         zih_log "lin step step: %d alpha: %a, cancel: %d, sel: %a"
           step print alpha cancel print_int_list (Array.to_list sel);
         let r = Array.copy r in
         Array.iteri (fun i k ->
-            if k = cancel then r.(k) <- zero
+            if k = cancel then (r.(k) <- zero; pcoef.(k) <- zero)
             else r.(k) <- r.(k) -. alpha *. s.(i)) sel;
         set_one r;
-        (r, cancel = -1)
+        r
       in
       let nv,nv2 =
         if step mod dim = dim - 1 then (
-          let (nr,stop) = lin_step () in
+          let nr = lin_step () in
           let nnv = m **- nr in
-          let nnv2 = if stop then zero else norm2 nnv in
+          let nnv2 = norm2 nnv in
           let keep = nnv2 <=. nv2 in
           zih_log "linstep norm %a, keep %b" print nnv2 keep;
           if keep then
