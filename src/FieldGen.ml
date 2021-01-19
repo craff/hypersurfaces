@@ -143,8 +143,7 @@ module Make(R:SMin) = struct
           let beta1 = beta3 -. g *. (beta3 -. beta0) in
           let f1 = f beta1 in
           if f1 <. f2 then fn beta0 beta1 f1 beta2
-          else if f2 <. f1 then gn beta1 beta2 f2 beta3
-          else beta2
+          else gn beta1 beta2 f2 beta3
         end
     and gn beta0 beta1 f1 beta3 =
       if !steps >= stop_cond.max_steps
@@ -155,8 +154,7 @@ module Make(R:SMin) = struct
           let beta2 = beta0 +. g *. (beta3 -. beta0) in
           let f2 = f beta2 in
           if f1 <. f2 then fn beta0 beta1 f1 beta2
-          else if f2 <. f1 then gn beta1 beta2 f2 beta3
-          else beta1
+          else gn beta1 beta2 f2 beta3
         end
     in
     let beta1 = beta3 -. g *. (beta3 -. beta0) in
