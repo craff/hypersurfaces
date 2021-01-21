@@ -4,23 +4,28 @@ open FieldGen
 module Make(R:S) (V:Vector.V with type t = R.t) = struct
   open R
   open V
-  (** (m(α) c x^α where α = (α₁,̣...,αₙ) with Σαᵢ = d the degree and m(α) is
-      the multinimial coeficient d! / Π αᵢ! is represented by
-      [(α, c)]. The sum of the monomial is a list ordered by the
-      reverse of ocaml polymorphic comparison.
+  (** in polynomial, ((α₁,̣...,αₙ),c) : (int array * 'a) represent
+      the monomial (m(α) c x^α where α = (α₁,̣...,αₙ) with Σαᵢ = d
+      the degree of the monomial and m(α) is
+      the multinomial coeficient d! / Π αᵢ!.
+
+      Polynomials are represented a list ordered by the
+      reverse of ocaml polymorphic comparison on the tuple of integers.
 
       The multinomial corresponds to Bernstein bases, giving a Bezier like
-      representation of polynomial over a simplex *)
+      representation of polynomial over the unit simplex *)
 
   type t = R.t
   type v = V.v
   type m = V.m
   type 'a p         = (int array * 'a) list
+  (** we have polynomial with coeeficient in the field *)
   type polynomial   = R.t p
+  (** and polynomial with vector coefficient, for the gradient *)
   type polynomial_v = v   p
 
   (** polynomial addition *)
-  let (++) (p1:polynomial) (p2:polynomial) =
+  let (++) p1 p2 =
     let rec fn p1 p2 =
       match (p1,p2) with
       | ([], p)          | (p, [])                        -> p
@@ -29,16 +34,7 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
       | ((_ ,_      )::_ , (_ ,_ as c2)::p2)              -> c2            ::fn p1 p2
     in fn p1 p2
 
-  (** polynomial addition *)
-  let v_add (p1:polynomial_v) (p2:polynomial_v) =
-    let rec fn p1 p2 =
-      match (p1,p2) with
-      | ([], p)          | (p, [])                        -> p
-      | ((l1,x1     )::p1, (l2,x2     )::p2) when l1 = l2 -> (l1, x1 +++ x2)::fn p1 p2
-      | ((l1,_ as c1)::p1, (l2,_      )::_ ) when l1 > l2 -> c1            ::fn p1 p2
-      | ((_ ,_      )::_ , (_ ,_ as c2)::p2)              -> c2            ::fn p1 p2
-    in fn p1 p2
-
+  (** polynomial subtraction *)
   let (--) (p1:polynomial) (p2:polynomial) =
     let rec fn p1 p2 =
       match (p1,p2) with
@@ -48,9 +44,11 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
         | (_               , (l2,x2)::p2)              -> (l2,   ~-. x2)::fn p1 p2
     in fn p1 p2
 
+  (** multiplication by a constant *)
   let mul_cst x (p:polynomial) =
     List.map (fun (l,y) -> (l,y*.x)) p
 
+  (** division by a constant *)
   let div_cst (p:polynomial) x = mul_cst (one /. x) p
 
   (** dimension aka number of variable, check coherence of all monomials
@@ -106,43 +104,17 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
     in
     fn d l
 
-  (** monome product *)
+  (** monomial product *)
   let m_prod (l1,a1) (l2,a2) =
     let n1 = Array.length l1 and n2 = Array.length l2 in
     let (l1, l2) = if n1 > n2 then (l1, l2) else (l2, l1) in
     let l  = Array.mapi (fun i x -> if i < n2 then x + l2.(i) else x) l1 in
     (l, a1 *. a2 *. multinomial l1 *. multinomial l2 /. multinomial l)
 
-  (** polynomial multplication *)
+  (** polynomial mulitplication *)
   let ( ** ) p1 p2 =
     List.fold_left (fun acc m1 ->
         List.fold_left (fun acc m2 -> acc ++ [m_prod m1 m2]) acc p2) [] p1
-
-  (** monome product *)
-  let mcv_prod x (l1,a1) (l2,a2) =
-    let n1 = Array.length l1 and n2 = Array.length l2 in
-    let (l1, l2) = if n1 > n2 then (l1, l2) else (l2, l1) in
-    let l  = Array.mapi (fun i x -> if i < n2 then x + l2.(i) else x) l1 in
-    let c = x *. a1 *. multinomial l1 *. multinomial l2 /. multinomial l in
-    (l, Array.map (fun x -> c *. x) a2)
-
-  (** polynomial multplication *)
-  let cv_prod x p1 p2 =
-    List.fold_left (fun acc m1 ->
-        List.fold_left (fun acc m2 -> v_add acc [mcv_prod x m1 m2]) acc p2) [] p1
-
-  (** monome product *)
-  let mvv_prod (l1,a1) (l2,a2) =
-    let n1 = Array.length l1 and n2 = Array.length l2 in
-    let (l1, l2) = if n1 > n2 then (l1, l2) else (l2, l1) in
-    let l  = Array.mapi (fun i x -> if i < n2 then x + l2.(i) else x) l1 in
-    let c = multinomial l1 *. multinomial l2 /. multinomial l in
-    (l, c *. (a1 *.* a2))
-
-  (** polynomial multplication *)
-  let vv_prod p1 p2 =
-    List.fold_left (fun acc m1 ->
-        List.fold_left (fun acc m2 -> acc ++ [mvv_prod m1 m2]) acc p2) [] p1
 
   (** power of a polynomial *)
   let pow p n =
@@ -263,6 +235,7 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
         in
         if cmp p1 zero < 0 then fn p1 x p2 y else fn p2 y p1 x
       end
+
   (** first version, limited to dimension 26 ! *)
   let print_polynome26 ch p =
     let first = ref true in
@@ -369,10 +342,6 @@ module type B = sig
   val ( -- ) : polynomial -> polynomial -> polynomial
   val ( ** ) : polynomial -> polynomial -> polynomial
   val pow : polynomial -> int -> polynomial
-
-  val v_add : polynomial_v -> polynomial_v -> polynomial_v
-  val cv_prod : t -> polynomial -> polynomial_v -> polynomial_v
-  val vv_prod : polynomial_v -> polynomial_v -> polynomial
 
   val subst : polynomial -> polynomial list -> polynomial
   val homogeneisation : polynomial -> polynomial * bool
