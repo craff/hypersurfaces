@@ -740,8 +740,11 @@ module Make(R:Field.SPlus) = struct
       if not (Hashtbl.mem simplices ks) then
         begin
           Hashtbl.add simplices ks (s,l);
-          List.iter (fun (i,j) -> add_edge edges i j s) dirs
+          List.iter (fun (i,j) -> add_edge edges i j s) dirs;
+          true
         end
+      else
+        false
     in
 
     let edges = Hashtbl.create 1024 in
@@ -825,8 +828,8 @@ module Make(R:Field.SPlus) = struct
               printf "new: %a, " print_simplex s2;
               List.iter (fun v -> printf "%a " print_vector v) l2;
               print_newline();*)
-              add_simplex dirs edges simplices s1 l1;
-              add_simplex dirs edges simplices s2 l2;
+              assert (add_simplex dirs edges simplices s1 l1);
+              assert (add_simplex dirs edges simplices s2 l2)
             in
             List.iter fn l;
           end
@@ -856,10 +859,13 @@ module Make(R:Field.SPlus) = struct
             let s = Array.of_list (List.map (fun i -> s.(i)) keep) in
             let l = List.map (fun v ->
                         Array.of_list (List.map (fun i -> v.(i)) keep)) l in
-(*            printf "keep: %a, " print_simplex s;
-            List.iter (fun v -> printf "%a " print_vector v) l;
-            print_newline();*)
-            add_simplex new_dirs new_edges new_simplices s l
+            let is_new = add_simplex new_dirs new_edges new_simplices s l in
+            if is_new then
+              begin
+                printf "keep: %a, " print_simplex s;
+                List.iter (fun v -> printf "%a " print_vector v) l;
+                print_newline();
+              end
           end
       in
 

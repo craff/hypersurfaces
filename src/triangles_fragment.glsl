@@ -1,3 +1,5 @@
+precision highp float;
+precision highp int;
 uniform vec3 lightPos1, lightPos2,lightPos3;
 uniform float specular, shininess;
 

@@ -1,3 +1,5 @@
+precision highp float;
+precision highp int;
 uniform mat4 ModelView, Camera, Projection;
 uniform vec4 lightDiffuse, lightAmbient, color;
 uniform vec3 lightPos1, lightPos2, lightPos3;

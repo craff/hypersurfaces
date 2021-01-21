@@ -73,49 +73,4 @@ module Make(R:Field.SPlus) = struct
     in
     gn [] q0 (dim-2)
 
-  let delauney_dim dim m =
-    let open V in
-    let m = Array.of_list m in
-    assert (Array.length m > dim);
-    let base = Array.map to_vec m in
-    (*printf "delauney_dim: %d %a\n%!" dim print_matrix base;*)
-    reorder (dim+1) base;
-    let base = Array.sub base 0 (dim+1) in
-    let mc = Array.map (fun x -> pcoord (to_vec x) base, x) m in
-    let mc = Array.map (fun (v,x) -> (normalise v, x)) mc in
-    let mcp = Array.map fst mc in
-    (*let test = Array.map (fun (v,x) -> norm2 (base **- v --- to_vec x)) mc in
-    printf "mc: %a %a\n%!" print_matrix mcp print_vector test;*)
-    let faces = quick_hull (Array.to_list mcp) in
-    let mc = Array.to_list mc in
-    (*printf "%d\n%!" (List.length faces);
-    printf "result: %a\n%!" (fun ch l -> List.iter (fun m -> print_matrix ch m) l) faces;*)
-    let faces = List.map (Array.map (fun x ->
-                              try List.assoc x mc with Not_found -> assert false)) faces in
-    (*printf "result: %a\n%!" (fun ch l -> List.iter (fun m -> print_simplex ch m) l) faces;*)
-    faces
-
-  module Test = struct
-    let a = List.map (fun x -> mk (Array.map of_int x) true)
-        [
-          [|0;0;1|];
-          [|1;1;1|];
-          [|0;1;1|];
-          [|1;0;1|];
-        ]
-
-    let _ = delauney_dim 2 a
-
-    let a = List.map (fun x -> mk (Array.map of_float x) true)
-        [
-          [|0.;0.;1.|];
-          [|0.5;0.5;1.|];
-          [|0.;1.;1.|];
-          [|1.;0.;1.|];
-        ]
-
-    let _ = delauney_dim 2 a
-
-  end
-
 end
