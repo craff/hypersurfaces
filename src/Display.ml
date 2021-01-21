@@ -1,3 +1,4 @@
+open Format
 open Gles3
 open Gles3.Type
 open Args
@@ -119,6 +120,21 @@ let projection () = Matrix.perspective 45.0 !window_ratio 0.1 100.0
 let _ =
   Egl.initialize ~width:!window_width ~height:!window_height "test_gles"
 
+let _ =
+  let p = get_shader_precision gl_vertex_shader gl_high_float in
+  eprintf "Vertex shader float in -2^%d, 2^%d, precision high float: %d bits\n%!"
+    p.min p.max p.precision;
+  let p = get_shader_precision gl_vertex_shader gl_high_int in
+  eprintf "Vertex shader float in -2^%d, 2^%d, precision high int: %d bits\n%!"
+    p.min p.max p.precision;
+  let p = get_shader_precision gl_fragment_shader gl_high_float in
+  eprintf "Fragment shader float in -2^%d, 2^%d, precision high float: %d bits\n%!"
+    p.min p.max p.precision;
+  let p = get_shader_precision gl_fragment_shader gl_high_int in
+  eprintf "Fragment shader float in -2^%d, 2^%d, precision high int: %d bits\n%!"
+    p.min p.max p.precision
+
+
 (* Shader programs for lines *)
 let lines_prg : unit Shaders.program =
   let open Shaders in
@@ -166,11 +182,16 @@ let triangles_prg : unit Shaders.program =
 (* We set the uniform parameters of the shader. *)
 let triangles_prg = Shaders.float1_cst_uniform triangles_prg  "specular"     0.1
 let triangles_prg = Shaders.float1_cst_uniform triangles_prg  "shininess"    10.0
-let triangles_prg = Shaders.float3v_cst_uniform triangles_prg "lightPos1"     [|3.;1.;-1.0|]
-let triangles_prg = Shaders.float3v_cst_uniform triangles_prg "lightPos2"     [|-3.;1.;-1.0|]
-let triangles_prg = Shaders.float3v_cst_uniform triangles_prg "lightPos3"     [|0.;-1.;-1.0|]
-let triangles_prg = Shaders.float4v_cst_uniform triangles_prg "lightDiffuse" [|0.4;0.4;0.4;1.0|]
-let triangles_prg = Shaders.float4v_cst_uniform triangles_prg "lightAmbient" [|0.2;0.2;0.2;1.0|]
+let triangles_prg = Shaders.float3v_cst_uniform triangles_prg "lightPos1"
+                      [|0.3;0.3;-0.2|]
+let triangles_prg = Shaders.float3v_cst_uniform triangles_prg "lightPos2"
+                      [|-0.3;0.3;-0.2|]
+let triangles_prg = Shaders.float3v_cst_uniform triangles_prg "lightPos3"
+                      [|0.0;-0.3;-0.2|]
+let triangles_prg = Shaders.float4v_cst_uniform triangles_prg "lightDiffuse"
+                      [|0.4;0.4;0.4;1.0|]
+let triangles_prg = Shaders.float4v_cst_uniform triangles_prg "lightAmbient"
+                      [|0.2;0.2;0.2;1.0|]
 
 (* We abstract away the "Projection" parameter. *)
 let triangles_prg = Shaders.float_mat4_uniform triangles_prg "Projection"
@@ -262,6 +283,8 @@ module Make(R:Field.SPlus) = struct
 
   let epsilon = 1e-6
 
+  let zeroest x y = if abs_float x > abs_float y then y else x
+
   let split_segment f acc x1 x2 =
     let l = [Array.map R.to_float x1;Array.map R.to_float x2] in
     let (lp, ln) = List.partition (fun x -> x.(3) > 0.) l in
@@ -270,18 +293,27 @@ module Make(R:Field.SPlus) = struct
     | [x1;x2],[],[] | [],[],[x1;x2] ->
        f acc x1 x2
     | [x1],[x2],[]  | [],[x2],[x1] ->
-       let epsilon = if lp = [] then -. epsilon else epsilon in
-       let lambda1 = epsilon /. x1.(3) in
+       let delta = if lp = [] then
+                     zeroest (-. epsilon) (0.5 *. x1.(3))
+                   else
+                     zeroest epsilon (0.5 *. x1.(3))
+       in
+       let lambda1 = delta /. x1.(3) in
        let mu1 = 1. -. lambda1 in
        let y1 = VF.comb lambda1 x1 mu1 x2 in
+       assert(mu1 >= 0. && mu1 <= 1. && lambda1 >= 0. && lambda1 <= 1.);
        f acc x1 y1
     | [x1], _, [x2] ->
-       let lambda1 = (epsilon -. x2.(3)) /. (x1.(3) -. x2.(3)) in
+       let delta = zeroest epsilon (0.5 *. x1.(3)) in
+       let lambda1 = (delta -. x2.(3)) /. (x1.(3) -. x2.(3)) in
        let mu1 = 1. -. lambda1 in
-       let lambda2 = (~-. epsilon -. x2.(3)) /. (x1.(3) -. x2.(3)) in
-       let mu2 = 1. -. lambda2 in
        let y1 = VF.comb lambda1 x1 mu1 x2 in
+       assert(mu1 >= 0. && mu1 <= 1. && lambda1 >= 0. && lambda1 <= 1.);
+       let delta = zeroest (-.epsilon) (0.5 *. x2.(3)) in
+       let lambda2 = (delta -. x2.(3)) /. (x1.(3) -. x2.(3)) in
+       let mu2 = 1. -. lambda2 in
        let y2 = VF.comb lambda2 x1 mu2 x2 in
+       assert(mu2 >= 0. && mu2 <= 1. && lambda2 >= 0. && lambda2 <= 1.);
        f (f acc x1 y1) x2 y2
     | _ -> acc
 
@@ -293,51 +325,82 @@ module Make(R:Field.SPlus) = struct
     | [x1;x2;x3],[],[] | [],[],[x1;x2;x3] ->
        f acc x1 x2 x3
     | [x1;x2],[x3],[] | [],[x3],[x1;x2] ->
-       let epsilon = if lp = [] then -. epsilon else epsilon in
-       let lambda1 = epsilon /. x1.(3) in
+       let delta = if lp = [] then zeroest (-.epsilon) (0.5 *. x1.(3))
+                   else zeroest epsilon (0.5 *. x1.(3))
+       in
+       let lambda1 = delta /. x1.(3) in
        let mu1 = 1. -. lambda1 in
-       let lambda2 = epsilon /. x2.(3) in
-       let mu2 = 1. -. lambda2 in
        let y1 = VF.comb lambda1 x1 mu1 x3 in
+       assert(mu1 >= 0. && mu1 <= 1. && lambda1 >= 0. && lambda1 <= 1.);
+       let delta = if lp = [] then zeroest (-.epsilon) (0.5 *. x2.(3))
+                   else zeroest epsilon (0.5 *. x2.(3))
+       in
+       let lambda2 = delta /. x2.(3) in
+       let mu2 = 1. -. lambda2 in
        let y2 = VF.comb lambda2 x2 mu2 x3 in
+       assert(mu2 >= 0. && mu2 <= 1. && lambda2 >= 0. && lambda2 <= 1.);
        f (f acc x1 x2 y1) x2 y1 y2
     | [x1],[x2;x3],[] | [],[x2;x3],[x1] ->
-       let epsilon = if lp = [] then -. epsilon else epsilon in
-       let lambda2 = epsilon /. x1.(3) in
+       let delta = if lp = [] then zeroest (-.epsilon) (0.5 *. x1.(3))
+                   else zeroest epsilon (0.5 *. x1.(3))
+       in
+       let lambda2 = delta /. x1.(3) in
        let mu2 = 1. -. lambda2 in
-       let lambda3 = epsilon /. x1.(3) in
-       let mu3 = 1. -. lambda3 in
        let y2 = VF.comb lambda2 x1 mu2 x2 in
+       assert(mu2 >= 0. && mu2 <= 1. && lambda2 >= 0. && lambda2 <= 1.);
+       let lambda3 = delta /. x1.(3) in
+       let mu3 = 1. -. lambda3 in
        let y3 = VF.comb lambda3 x1 mu3 x3 in
+       assert(mu3 >= 0. && mu3 <= 1. && lambda3 >= 0. && lambda3 <= 1.);
        f acc x1 y2 y3
     | [x1],[x3],[x2] ->
-       let lambda1 = epsilon /. x1.(3) in
+       let delta = zeroest epsilon (0.5 *. x1.(3)) in
+       let lambda1 = delta /. x1.(3) in
        let mu1 = 1. -. lambda1 in
-       let lambda2 = -. epsilon /. x2.(3) in
-       let mu2 = 1. -. lambda2 in
-       let lambda13 = (epsilon -. x2.(3)) /. (x1.(3) -. x2.(3)) in
-       let mu13 = 1. -. lambda13 in
-       let lambda23 = (-. epsilon -. x2.(3)) /. (x1.(3) -. x2.(3)) in
-       let mu23 = 1. -. lambda23 in
        let y1 = VF.comb lambda1 x1 mu1 x3 in
+       assert(mu1 >= 0. && mu1 <= 1. && lambda1 >= 0. && lambda1 <= 1.);
+       let delta = zeroest (-.epsilon) (0.5 *. x2.(3)) in
+       let lambda2 = delta /. x2.(3) in
+       let mu2 = 1. -. lambda2 in
        let y2 = VF.comb lambda2 x2 mu2 x3 in
+       assert(mu2 >= 0. && mu2 <= 1. && lambda2 >= 0. && lambda2 <= 1.);
+       let delta = zeroest (epsilon) (0.5 *. x1.(3)) in
+       let lambda13 = (delta -. x2.(3)) /. (x1.(3) -. x2.(3)) in
+       let mu13 = 1. -. lambda13 in
        let y13 = VF.comb lambda13 x1 mu13 x2 in
+       assert(mu13 >= 0. && mu13 <= 1. && lambda13 >= 0. && lambda13 <= 1.);
+       let delta = zeroest (-.epsilon) (0.5 *. x2.(3)) in
+       let lambda23 = (delta -. x2.(3)) /. (x1.(3) -. x2.(3)) in
+       let mu23 = 1. -. lambda23 in
        let y23 = VF.comb lambda23 x1 mu23 x2 in
+       assert(mu23 >= 0. && mu23 <= 1. && lambda23 >= 0. && lambda23 <= 1.);
        f (f acc x1 y1 y13) x2 y2 y23
     | [x1;x2], _, [x3] | [x3], _, [x1;x2] ->
-       let epsilon = if List.length lp = 1 then -. epsilon else epsilon in
-       let lambda1 = (epsilon -. x3.(3)) /. (x1.(3) -. x3.(3)) in
-       let mu1 = 1. -. lambda1 in
-       let lambda13 = (-. epsilon -. x3.(3)) /. (x1.(3) -. x3.(3)) in
-       let mu13 = 1. -. lambda13 in
-       let lambda2 = (epsilon -. x3.(3)) /. (x2.(3) -. x3.(3)) in
-       let mu2 = 1. -. lambda2 in
-       let lambda23 = (-. epsilon -. x3.(3)) /. (x2.(3) -. x3.(3)) in
-       let mu23 = 1. -. lambda23 in
+       let eps = if List.length lp = 2 then epsilon else -. epsilon in
+       let delta = zeroest eps (0.5 *. x1.(3)) in
+       (**  mu1 * x3 + (1 - mu1) * x1 = delta (si List.length lp = 2) *)
+       let mu1 = (delta -. x1.(3)) /. (x3.(3) -. x1.(3)) in
+       let lambda1 = 1. -. mu1 in
        let y1 = VF.comb lambda1 x1 mu1 x3 in
+       assert(mu1 >= 0. && mu1 <= 1. && lambda1 >= 0. && lambda1 <= 1.);
+       let delta = zeroest eps (0.5 *. x2.(3)) in
+       (**  mu2 * x3 + (1 - mu2) * x2 = delta (si List.length lp = 2) *)
+       let mu2 = (delta -. x2.(3)) /. (x3.(3) -. x2.(3)) in
+       let lambda2 = 1. -. mu2 in
        let y2 = VF.comb lambda2 x2 mu2 x3 in
+       assert(mu2 >= 0. && mu2 <= 1. && lambda2 >= 0. && lambda2 <= 1.);
+       let delta = zeroest (-.eps) (0.5 *. x3.(3)) in
+       (**  mu13 * x3 + (1 - mu13) * x1 = delta (si List.length lp = 2) *)
+       let mu13 = (delta -. x1.(3)) /. (x3.(3) -. x1.(3)) in
+       let lambda13 = 1. -. mu13 in
        let y13 = VF.comb lambda13 x1 mu13 x3 in
+       assert(mu13 >= 0. && mu13 <= 1. && lambda13 >= 0. && lambda13 <= 1.);
+       let delta = zeroest (-.eps) (0.5 *. x3.(3)) in
+       (**  mu23 * x3 + (1 - mu23) * x2 = delta (si List.length lp = 2) *)
+       let mu23 = (delta -. x2.(3)) /. (x3.(3) -. x2.(3)) in
+       let lambda23 = 1. -. mu23 in
        let y23 = VF.comb lambda23 x2 mu23 x3 in
+       assert(mu23 >= 0. && mu23 <= 1. && lambda23 >= 0. && lambda23 <= 1.);
        f (f (f acc x1 x2 y1) x2 y1 y2) x3 y13 y23
     | _ -> acc
 

@@ -859,13 +859,14 @@ module Make(R:Field.SPlus) = struct
             let s = Array.of_list (List.map (fun i -> s.(i)) keep) in
             let l = List.map (fun v ->
                         Array.of_list (List.map (fun i -> v.(i)) keep)) l in
-            let is_new = add_simplex new_dirs new_edges new_simplices s l in
-            if is_new then
+            let _ = add_simplex new_dirs new_edges new_simplices s l in
+            (*            if is_new then
               begin
                 printf "keep: %a, " print_simplex s;
                 List.iter (fun v -> printf "%a " print_vector v) l;
                 print_newline();
-              end
+              end*)
+            ()
           end
       in
 
