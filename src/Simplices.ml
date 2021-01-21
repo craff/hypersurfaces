@@ -18,13 +18,13 @@ module Make(R:Field.SPlus) = struct
 
   type simplex = vertex array
   (** A simplex is represented by the coordinates of all its vertices.
-      The boolen is a sign to share vertices with opposite sign.
+      The boolean is a sign to share vertices with opposite sign.
       Sign matters if we want barycentrics coefficients to identify
       point "inside the simplex". The projective line has therefore
       two simplex with coordinates
-      (0, 1) (1, 0) -> les points positifs
-      (0, 1) (-1, 0) -> les points avec deux signes différents.
-      Remarque: la derniere coordonnées sera toujours positive.
+      (0, 1) (1, 0) -> positive points
+      (0, 1) (-1, 0) -> point with opposite signs
+      Convention: last coordinate always positive.
   *)
 
   let vec s i = to_vec s.(i)
@@ -33,7 +33,7 @@ module Make(R:Field.SPlus) = struct
     let e = s.(i) in
     if e.p then Array.map (~-.) e.v else e.v
 
-  let to_matrix s : V.matrix =  Array.init (Array.length s) (fun i -> vec s i)
+  let to_matrix s : V.matrix = Array.map to_vec s
 
   let print_simplex ch s =
     let pr ch v =
@@ -86,7 +86,7 @@ module Make(R:Field.SPlus) = struct
     let mcp = Array.map fst mc in
     (*let test = Array.map (fun (v,x) -> norm2 (base **- v --- to_vec x)) mc in
     printf "mc: %a %a\n%!" print_matrix mcp print_vector test;*)
-    let faces = delauney (Array.to_list mcp) in
+    let faces = quick_hull (Array.to_list mcp) in
     let mc = Array.to_list mc in
     (*printf "%d\n%!" (List.length faces);
     printf "result: %a\n%!" (fun ch l -> List.iter (fun m -> print_matrix ch m) l) faces;*)

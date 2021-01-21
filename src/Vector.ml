@@ -3,6 +3,7 @@ open FieldGen
 
 (** log for zero in convex hull test *)
 let Debug.{ tst = zih_tst; log = zih_log } = Debug.new_debug "hull" 'h'
+let Debug.{ tst = tri_tst; log = tri_log } = Debug.new_debug "triangulation" 'z'
 
 (** Functor with linear algebra code for the given field *)
 module Make(R:S) = struct
@@ -327,36 +328,52 @@ module Make(R:S) = struct
       no progress. Still it gives less good solution as Gauss Pivot *)
   let irm_cg ?(epsilon=zero) m b =
     let d = Array.length b in
+    (** initial solution *)
     let x = zero_v d in
+    (** initial residual and its norm *)
     let r = b --- m x in
     let r2 = r *.* r in
+    (** previous solution and residual norm *)
     let prev = ref (x,r2) in
+    (** step counter *)
     let i = ref 0 in
     try
+      (** exit if residual small enough, by default epsilon=0!*)
       if r2 <=. epsilon then raise Exit;
+      (** compute initial beta vector *)
       let q = r2 /. (r *.* m r) in
       let p = q **. r in
       let beta = m p in
       while true do
+        (** translate solution *)
         addq x p;
+        (** adjust or recompute residual *)
         if !i mod d <> 0 then subq r beta else subs r b (m x);
         let nr2 = r *.* r in
-(*        if !Args.debug then
-           Printf.printf "step: %d, x: %a => %a\n%!" !i print_vector x print nr2;*)
+        (** update previous if progress *)
         let (_,pr2) = !prev in
         if nr2 <. pr2 then prev := (x,nr2);
+        (** exit if nr2 smaller than epsilon or more than 2d steps,
+            normally should converge in d steps, allows for 2d steps
+            because of numerical errors *)
         if nr2 <=. epsilon || !i >= 2*d then raise Exit;
+        (** solve the 2x2 system for optimizin descent in the
+            combined directions *)
         let alpha = m r in
         let a11 = r *.* alpha in
         let a12 = p *.* alpha in
         let a22 = p *.* beta  in
         (* (a11 a12      * (a22 -a12 = (det 0
            a12 a22) inv    -a12 a11)   0 det) *)
-        let d = a11 *. a22 -. a12 *. a12 in
-        if d = zero then raise Exit;
-        let a1 = nr2 *. a22 /. d in
-        let a2 = nr2 *. (-. a12 /. d) in
+        let det = a11 *. a22 -. a12 *. a12 in
+        (** exit if det is zero, only append near the solution *)
+        if det = zero then raise Exit;
+        (** solution of the 2x2 system *)
+        let a1 = nr2 *. a22 /. det in
+        let a2 = nr2 *. (-. a12 /. det) in
+        (** next descent direction *)
         combq a2 p a1 r;
+        (** update beta for next step *)
         combq a2 beta a1 alpha;
         incr i
       done;
@@ -384,8 +401,8 @@ module Make(R:S) = struct
     irm_cg (fun x -> m **- (m *** x)) (m *** a)
 
   (** function comparing the result of two solver for testing purpose *)
-  let solve_both_gen f1 f2 mul m a =
-    let nan = one /. zero in
+  let solve_both_gen ?(tolerance=of_float 1e-6) f1 f2 mul m a =
+    let nan = zero /. zero in
     let dim = Array.length a in
     let nf = ref false in
     let s1 = try f1 m a with Not_found -> nf := true; Array.make dim nan in
@@ -393,7 +410,7 @@ module Make(R:S) = struct
     let d = norm2 (s1 --- s2) in
     let r1 = norm2 (mul m s1 --- a) in
     let r2 = norm2 (mul m s2 --- a) in
-    if d >. of_float 1e-6 || r1 >. of_float 1e-6 || r2 >. of_float 1e-6 then
+    if d >. tolerance || r1 >. tolerance || r2 >. tolerance then
       begin
         printf "BAD SOLVE %a %a %a %a (%a %a|%a = %a)\n%!"
           print d print r1 print r2 print (det m)
@@ -446,6 +463,9 @@ module Make(R:S) = struct
       in convex hull test *)
 
 
+  (** transform r, so that its coefficients sum up to one,
+      will be used only with non nul vector with non negative
+      coefficients *)
   let set_one r =
     let nb = Array.length r in
     let s = ref zero in
@@ -456,6 +476,7 @@ module Make(R:S) = struct
       r.(j) <- r.(j) /. !s;
     done
 
+  (** structure to store statistics about zero in hull test *)
   type zih_steps = {
       mutable nb_call : int;
       mutable nb_abort : int;
@@ -463,6 +484,7 @@ module Make(R:S) = struct
       mutable sum : int
     }
 
+  (** initial stats and reset*)
   let zih_steps = { nb_call = 0; nb_abort = 0; max = 0; sum = 0 }
   let reset_zih () =
     zih_steps.nb_call <- 0;
@@ -470,12 +492,15 @@ module Make(R:S) = struct
     zih_steps.max <- 0;
     zih_steps.sum <- 0
 
+  (** print the statistics and reset *)
   let print_zih_summary () =
     printf "zih: average steps: %g, max steps: %d, nb_abort: %d\n%!"
       Stdlib.(float zih_steps.sum /. float zih_steps.nb_call)
       zih_steps.max zih_steps.nb_abort;
     reset_zih ()
 
+  (** exception and function to exit the procedure. the function updates
+      the statistics *)
   exception ExitZih of bool
 
   let exit_zih ?(abort=false) step r =
@@ -485,97 +510,143 @@ module Make(R:S) = struct
     zih_steps.sum <- zih_steps.sum + step;
     raise (ExitZih r)
 
-  let zih ?r0 m = try
-    let m = List.map normalise m in
-    let m = List.sort_uniq compare m in
-    let m = Array.of_list m in
-    zih_log "zih: %a" print_matrix m;
-    let nb  = Array.length m in
-    let dim = Array.length m.(0) in
-    let r = match r0 with
-      | Some r -> Array.copy r
-      | None -> Array.make nb (one /. of_int nb)
-    in
-    let pcoef = Array.make nb zero in
-    let last_cancel = ref (-1) in
-    let rec fn step v v2 =
-      let dir_i = ref (-1) in
-      let dir_s = ref zero in
-      for i = 0 to nb - 1 do
-        let s = m.(i) *.* v in
-        if s <=. !dir_s then
-          begin
-            dir_s := s;
-            dir_i := i
-          end
-      done;
-      let i = !dir_i in
-      if i < 0 then (zih_log "false"; exit_zih step false);
-      let p = m **- pcoef in
-      let p2 = norm2 p in
-      let pv = p *.* v in
-      let pw = p *.* m.(i) in
-      let vw = !dir_s in
-      let sigma = ref zero in
-      for j = 0 to nb-1 do
-        sigma := !sigma +. pcoef.(j)
-      done;
-      let sigma = !sigma in
-      let find_alpha beta =
-        let w2 = beta *. beta *. p2 +. of_int 2 *. beta *. pw +. one in
-        let vw = beta *. pv +. vw in
-        let sigma = beta *. sigma +. one in
-        let alpha = (v2 *. sigma -. vw) /. (w2 -. vw *. sigma) in
-        let f =
-          let d = one +. alpha *. sigma in
-          (v2 +. of_int 2 *. alpha *. vw +. alpha *. alpha *. w2) /. (d*.d)
+  (** main zero in hull test function, can provide an initial position *)
+  let zih ?r0 m0 = try
+      (** normalise and transform the list m0 into a matrix *)
+      let nb = List.length m0 in
+      let m = Array.make nb [||] in
+      List.iteri (fun i v -> m.(i) <- normalise v) m0;
+      zih_log "zih: %a" print_matrix m;
+      let dim = Array.length m.(0) in
+      (** initial position *)
+      let r = match r0 with
+        | Some r -> Array.copy r
+        | None -> Array.make nb (one /. of_int nb)
+      in
+      (** in what follows: [v = m **- r] and [v2 = norm2 r] and we are trying to
+       have [v2 = 0] with [r]'s coef non negative and summing to one *)
+      (** previous descent direction *)
+      let pr = Array.make nb zero in
+      (** there appears to be very rare cycle slowing down convergence where
+          the value cancelled by a linear step become again positive in the
+          next dim conjugate steps, and is recancelled again, preventing other
+          indices to be cancelled. So we remember the last indice cancelled
+          by a linear step to avoid that cycle. *)
+      let last_cancel = ref (-1) in
+
+      (** first kind of steps *)
+      let conjugate_step step v v2 =
+        let dir_i = ref (-1) in
+        let dir_s = ref zero in
+        (** we will update [r] with [r = set_one (r + alpha(delta_i + beta pr))]
+           where
+
+           - [pr] is the previous descent direction
+                  i.e previous [delta_i + beta pr]
+           - [delta_i =] vector with one in position such that
+                  [m.(i) *.* v <= 0] and minimum
+
+           alpha and beta, will be positive, this will increase all coefficient
+           of r keeping r non negative and summing to one thanks to the use of
+           set_one.
+          *)
+        for i = 0 to nb - 1 do
+          let s = m.(i) *.* v in
+          if s <=. !dir_s && i <> !last_cancel then
+            begin
+              dir_s := s;
+              dir_i := i
+            end
+        done;
+        let i = !dir_i in
+        if i < 0 then (zih_log "false"; exit_zih step false);
+        (** value of interest, see the article *)
+        let p = m **- pr in
+        let p2 = norm2 p in
+        let pv = p *.* v in
+        let w = m.(i) in
+        let pw = p *.* w in
+        let vw = !dir_s in
+        let sigma = ref zero in
+        for j = 0 to nb-1 do
+          sigma := !sigma +. pr.(j)
+        done;
+        let sigma = !sigma in
+        (** function computing [alpha] and [f]: the new [norm v2] from [beta] *)
+        let find_alpha beta =
+          let w2 = beta *. beta *. p2 +. of_int 2 *. beta *. pw +. one in
+          let vw = beta *. pv +. vw in
+          let sigma = beta *. sigma +. one in
+          let alpha = (v2 *. sigma -. vw) /. (w2 -. vw *. sigma) in
+          let f =
+            let d = one +. alpha *. sigma in
+            (v2 +. of_int 2 *. alpha *. vw +. alpha *. alpha *. w2) /. (d*.d)
+          in
+          (alpha, f)
         in
-        (alpha, f)
+        (** computation of best beta by trichotomie *)
+        let stop_cond = { default_stop_cond with max_steps = 50 } in
+        let f beta = snd (find_alpha beta) in
+        let beta =
+          if pv >. zero then
+            begin
+              let beta0 = zero in
+              let beta1 = -. vw /. pv in
+              tricho ~stop_cond f beta0 beta1
+            end
+          else
+            zero
+        in
+        (** final alpha from best beta *)
+        let (alpha, fa) = find_alpha beta in
+        (** updating [r], [pr], and computing new [v] and new [v2] ([nv] and
+           [nv2]) *)
+        for j = 0 to nb - 1 do
+          pr.(j) <- pr.(j) *. beta;
+        done;
+        pr.(i) <- pr.(i) +. one;
+        Array.iteri (fun j c -> r.(j) <- r.(j) +. c *. alpha) pr;
+        set_one r;
+        let nv = m **- r in
+        let nv2 = norm2 nv in
+        (** [nv2] should be equal (very near with rounding) to [fa], checking
+           in log *)
+        zih_log "cg step: %d, index: %d, beta: %a, alpha: %a, norm: %a = %a"
+          step i print beta print alpha print fa print nv2;
+        (nv, nv2)
       in
-      let stop_cond = { default_stop_cond with max_steps = 50 } in
-      let f beta = snd (find_alpha beta) in
-      let beta =
-        if pv >. zero then
-          begin
-            let beta0 = zero in
-            let beta1 = -. vw /. pv in
-            tricho ~stop_cond f beta0 beta1
-          end
-        else
-          zero
-      in
-      let (alpha, fa) = find_alpha beta in
-      for j = 0 to nb - 1 do
-        pcoef.(j) <- pcoef.(j) *. beta;
-      done;
-      pcoef.(i) <- pcoef.(i) +. one;
-      Array.iteri (fun j c -> r.(j) <- r.(j) +. c *. alpha) pcoef;
-      set_one r;
-      let nv = m **- r in
-      let nv2 = norm2 nv in
-      zih_log "step: %d, index: %d, beta: %a, alpha: %a, norm: %a = %a" step i print beta print alpha print fa print nv2;
-      let lin_step () =
+
+      (** second kind of steps *)
+      let linear_step step v _v2 =
+        (** we select indices with [r.(i) > 0] *)
         let sel = ref [] in
         for i = 0 to nb - 1 do
-          if r.(i) >. zero && !last_cancel <> i then sel := i :: !sel;
+          if r.(i) >. zero then sel := i :: !sel;
         done;
         let sel = Array.of_list !sel in
+        (** matrix, adding one to have the linear constraint that coefficient
+           sum to zero *)
         let ms = Array.map (fun k -> Array.append m.(k) [|one|]) sel in
         let b = Array.append v [|zero|] in
-        let (mm,s) =
+        (** computing vector s such that [m **- s] is nearest to v
+            and sum to zero. We will move [r] is direction [-s] *)
+        let s =
+          (** the system to solve depend upon the size of the selection *)
           if Array.length sel > dim then
             begin
               let mm v = ms **- (ms *** v) in
               let t = irm_cg mm b in
-              (mm, ms *** t)
+              ms *** t
             end
           else
             begin
               let mm v = ms *** (ms **- v) in
               let t = irm_cg mm (ms *** b) in
-              (mm, t)
+              t
             end
         in
+        (** we update [r = r - alpha s], computing [alpha <= 1] maximum
+            to keep r positive. *)
         let alpha = ref one in
         let cancel = ref (-1) in
         Array.iteri (fun i k ->
@@ -586,52 +657,83 @@ module Make(R:S) = struct
               end) sel;
         let alpha = !alpha in
         let cancel = !cancel in
-        if cancel = -1 then exit_zih step true;
-        last_cancel := cancel;
-        zih_log "lin step step: %d alpha: %a, cancel: %d, sel: %a"
-          step print alpha cancel print_int_list (Array.to_list sel);
+        (** if cancel = -1, then alpha = 1 and if [Array.length sel > dim],
+            then new v = m **- r will be nul, so we can stop *)
         let r = Array.copy r in
         Array.iteri (fun i k ->
-            if k = cancel then (r.(k) <- zero; pcoef.(k) <- zero)
+            if k = cancel then (r.(k) <- zero)
             else r.(k) <- r.(k) -. alpha *. s.(i)) sel;
-        set_one r;
-        r
+        let nv = m **- r in
+        let nv2 = norm2 nv in
+        zih_log "lin step: %d, alpha: %a, cancel: %d, sel: %a, norm = %a"
+          step print alpha cancel print_int_list (Array.to_list sel) print nv2;
+        (r, cancel, nv, nv2)
       in
-      let nv,nv2 =
-        if step mod dim = dim - 1 then (
-          let nr = lin_step () in
-          let nnv = m **- nr in
-          let nnv2 = norm2 nnv in
-          let keep = nnv2 <. nv2 in
-          zih_log "linstep norm %a, keep %b" print nnv2 keep;
-          if keep then
-            begin
-              Array.blit nr 0 r 0 nb;
-              (nnv,nnv2)
-            end
-          else (nv,nv2)
-        ) else (nv,nv2)
+
+      let rec fn step v v2 =
+        zih_log "starts";
+        let (v,v2) =
+          (** one linear step for dim conjugate steps. *)
+          if step mod (dim + 1) = 0 then
+            let (nr, cancel, nv, nv2) = linear_step step v v2 in
+            if (nv2 <. v2) then
+              begin
+                (** pr is set to zero for the cancelled index to force avoid
+                    this indice to be updated by the next conjugate step due to
+                    the previous descent direction. This appears to be better
+                    than resetting pr to zero completely. *)
+                if cancel <> -1 then pr.(cancel) <- zero;
+                last_cancel := cancel;
+                Array.blit nr 0 r 0 nb;
+                (nv,nv2)
+              end
+            else
+              begin
+                last_cancel := -1;
+                (** linear steps are not always descent steps, so we do not
+                   stop if the are rejected *)
+                zih_log "reject linear step %a >= %a" print nv2 print v2;
+                (v,v2)
+              end
+          else
+            let (nv,nv2) = conjugate_step step v v2 in
+            if (nv2 <. v2) then
+              (nv,nv2)
+            else
+              begin
+                (** conjugate steps are always descent step, so failure
+                    to descent while [m.(i) *.* v] is not always > 0
+                    means [v] ~ 0 up to numerical errors *)
+                zih_log "no progress %a >= %a, stops" print nv2 print v2;
+                exit_zih step true;
+              end;
+        in
+        (** it too many steps, we stop assuming zero in hull, currently do not
+           appends on examples. *)
+        if step > 20 * dim * nb then
+          begin
+            zih_log "too long %d, stops" step;
+            exit_zih ~abort:true step true;
+          end;
+        fn (step+1) v v2
       in
-      if nv2 >=. v2 then
-        begin
-          zih_log "no progress %a >= %a" print nv2 print v2;
-          exit_zih step true;
-        end;
-      if step > 100 * nb then
-        begin
-          zih_log "too long %d" step;
-          exit_zih ~abort:true step true;
-        end;
-      fn (step+1) nv nv2
-    in
-    let v = m **- r in
-    let v2 = norm2 v in
-    fn 0 v v2
+      (** initial call *)
+      let v = m **- r in
+      let v2 = norm2 v in
+      fn 0 v v2
     with ExitZih b -> b
 
-  type point = R.t array * int
-  type faces = point array list
+  (** beginning of the code for quick hull *)
 
+  let _ = Debug.set_debugs "z"
+  (** points are vector with a unique uid *)
+  type point = R.t array * int
+
+  (** faces are list of face *)
+  type face = point array
+  type faces = face list
+
+  (** some printing for debugging *)
   let print_point ch (a,i) =
     fprintf ch "%d:%a" i print_vector a
 
@@ -648,24 +750,17 @@ module Make(R:S) = struct
   let print_faces ch faces =
     List.iteri (fun i face -> fprintf ch "%d) %a" i print_face face) faces
 
-  let pdet (m:point array) = det (Array.map fst m)
+  (** visibility implemented by determinant *)
+  let visibility (x:point) (f:point array) =
+    (*printf "vis: %d %a\n%!" (Array.length f) print_face f;*)
+    let m = Array.map (fun (p, _) -> (p --- fst x)) f in
+    unsafe_det m
 
-  let eqv v w =
-    let r = ref true in
-    Array.iteri (fun i x -> r := !r && x =. w.(i)) v;
-    !r
-
-  let visibility (x:point) (d:point array) =
-    (*printf "vis: %d %a\n%!" (Array.length d) print_face d;*)
-    try
-      let c = center (Array.map fst d) in
-      let v = norm2 (c --- fst x) -. norm2 (c --- fst d.(0))  in
-      (*printf "vis: %a %a\n%!" print v print_vector c;*)
-      v
-    with Not_found -> -. inf
-
+  (** visible, if visibility is negative *)
   let visible x f = visibility x f <. zero
 
+  (** swap m.(k) and m.(i) with i the indices >= k such
+      that f m.(i) is maximum *)
   let search_best m f k =
     let nb  = Array.length m in
     let best_i = ref k in
@@ -676,6 +771,7 @@ module Make(R:S) = struct
     done;
     if !best_i <> k then swap m k !best_i
 
+  (** reorder first dim points of m to ensure they are far appart *)
   let reorder dim m =
     search_best m (fun x -> x.(0)) 0;
 
@@ -683,14 +779,26 @@ module Make(R:S) = struct
       search_best m (distance m i) i
     done
 
-  let delauney m =
+  (** quick hull of points in m. We do triangulation
+      of points on the unit sphere only + center. so if points have
+      dim coordinates, faces have dim coordinates. Also we know
+      all points are visible *)
+  let quick_hull m =
     let m = Array.of_list m in
     let nb  = Array.length m in
     let dim = Array.length m.(0) in
+    (** reorder matrix m to have dim first points far appart *)
     reorder dim m;
+    let center = (Array.make dim zero, -1) in
     let m = Array.mapi (fun i x -> (x, i)) m in
+    (** key and hash tables to store faces and edges
+        faces have exactly dim points and edges dim - 1 points.
+        The work edges is good when faces are triangles, a bit
+        abusive for higher dimensions *)
     let faces = Hashtbl.create 128 in
     let edges = Hashtbl.create 128 in
+
+    (** keys are the uid of the points in increasing order *)
     let face_key face =
       let k = Array.map snd face in
       Array.sort compare k;
@@ -704,39 +812,51 @@ module Make(R:S) = struct
       Array.sort compare k;
       k
     in
-    let add_edge ml i =
-      let key = edge_key ml i in
+
+    (** edges are associated to the two faces they belong.
+        edge e is associated to (f,i) and (g,j) is e if the
+        edge of face f with its i^th point removed and the
+        edge of face g with its j^th point removed *)
+    let add_edge face i =
+      let key = edge_key face i in
       let l = try Hashtbl.find edges key with Not_found -> [] in
-      Hashtbl.replace edges key ((ml,i)::l)
+      Hashtbl.replace edges key ((face,i)::l)
     in
-    let get_face face =
-      let key = face_key face in
-      try snd (Hashtbl.find faces key) with Not_found -> assert false
-    in
-    let set_face face points =
-      let key = face_key face in
-      Hashtbl.replace faces key (face, points)
-    in
-    let rm_edge ml i =
-      let key = edge_key ml i in
+    let rm_edge face i =
+      let key = edge_key face i in
       let l = try Hashtbl.find edges key with Not_found -> [] in
-      let l = List.filter ((<>) (ml,i)) l in
+      let l = List.filter ((<>) (face,i)) l in
       if l = [] then Hashtbl.remove edges key else
         Hashtbl.replace edges key l
     in
-    let get_edge ml i =
-      let key = edge_key ml i in
+    (** get_edge is only called for the edges of a face just removed
+        hence associated with exactly one face, or not in the table *)
+    let get_edge face i =
+      let key = edge_key face i in
       let l =  Hashtbl.find edges key in
       match l with
         [x] -> x
       | _ -> assert false
     in
+    (** faces are associated to a list of points visible from the face
+        and not yet added to the triangulation *)
+    let set_face face points =
+      let key = face_key face in
+      Hashtbl.replace faces key (face, points)
+    in
+    let get_face face =
+      let key = face_key face in
+      try snd (Hashtbl.find faces key) with Not_found -> assert false
+    in
+    (** add face, initially with no points and add all its edges.
+        this is used when the face is just created *)
     let add_face face =
       set_face face [];
       for i = 0 to dim - 1 do
         add_edge face i
       done
     in
+    (** remove a face and all its edges *)
     let rm_face face =
       let key = face_key face in
       Hashtbl.remove faces key;
@@ -744,6 +864,15 @@ module Make(R:S) = struct
         rm_edge face i
       done
     in
+
+    (** add the faces which were just created and
+        distribute the points on the face which has it
+        most visible.
+        The new faces, replace old faces and the points
+        were visible from the old faces and should be visible from
+        at least one new face hence the assert false below.
+        Here there are no interior point, otherwise the assertion
+        would be incorrect. *)
     let distribute points faces =
       List.iter add_face faces;
       let rec gn points =
@@ -765,16 +894,10 @@ module Make(R:S) = struct
       in
       gn points;
     in
-    let border_tbl = Hashtbl.create 128 in
-    let set_border () =
-      Hashtbl.clear border_tbl;
-      Hashtbl.iter (fun key l ->
-          if List.length l = 1 then Hashtbl.add border_tbl key ()) edges;
-    in
-    let is_border face i =
-      Hashtbl.mem border_tbl (edge_key face i)
-    in
-    let rec add_one border points face x =
+
+    (** test if point x erases face, this function is recursive
+        and keep in points the points attached to the removed faces.*)
+    let rec add_one points face x =
       if visible x face then
         begin
           points := List.rev_append (get_face face) !points;
@@ -782,58 +905,80 @@ module Make(R:S) = struct
           for i = 0 to dim - 1 do
             try
               let (face,_) = get_edge face i in
-              add_one border points face x
+              add_one points face x
             with
-              Not_found ->
-               if is_border face i then
-                 begin
-                   let a = Array.init dim (fun j -> if i = j then x else face.(j)) in
-                   if not (visible face.(i) a) then
-                     if List.for_all (fun b -> face_key b <> face_key a) !border
-                               then border := a :: !border
-                 end
+              Not_found -> ()
           done;
-        end
-      else
-        begin
-          for i = 0 to dim - 1 do
-            let a = Array.init dim (fun j -> if i = j then x else face.(j)) in
-            if not (visible face.(i) a) then
-              if List.for_all (fun b -> face_key b <> face_key a) !border
-                   then border := a :: !border
-          done
         end
     in
 
+    (** after the previous function, a hole remain, which is computed because
+        the border of the hole are edges associated to exactly one face.
+        Then, new faces are created with the new point. A swap is necessary
+        for correct orientation. This is checkeck by assertion. *)
+    let new_faces x =
+      let res = ref [] in
+      Hashtbl.iter (fun _ l ->
+          match l with
+          | [face, i] ->
+             let nf = Array.init dim (fun j -> if i = j then x else face.(j)) in
+             swap nf 0 1;
+             assert (not (visible x face));
+             assert (not (visible face.(i) nf));
+             res := nf :: !res
+          | _ -> ()) edges;
+      !res
+    in
+
+    (** main loop: add the first point still not added, until all points
+        are added *)
     let rec loop () =
       try
+        (** FIXME: avoid scanning all faces *)
         Hashtbl.iter (fun _ (face, points) ->
           match points with
           | [] -> ()
           | x::points ->
-             zih_log "Addind point %a to %a"
+             tri_log "Addind point %a to %a"
                print_point x print_face face;
              set_face face points;
              let points = ref [] in
-             let border = ref [] in
-             set_border ();
-             add_one border points face x;
-             assert (!border <> []);
-             distribute !points !border;
+             add_one points face x;
+             let new_faces = new_faces x in
+             assert (new_faces <> []);
+             distribute !points new_faces;
              raise Exit) faces
       with Exit -> loop ()
     in
 
+    (** initial triangulation: just one simplex with dim+1 face. *)
     let face = Array.sub m 0 dim in
+    (** fix orientation *)
+    if visible center face then swap m 0 1;
+    assert (not (visible center face));
+    (** the faces using the center *)
+    let other_faces =
+      List.init dim (fun i ->
+          let f = Array.mapi (fun j p ->
+                      if i = j then center else p) face in
+          (** swap needed for correct orientation *)
+          swap f 0 1;
+          assert (not (visible face.(i) f));
+          f)
+    in
+    let init_faces = face :: other_faces in
     let points = Array.to_list (Array.sub m dim (nb - dim)) in
-    add_face face;
-    set_face face points;
+    tri_log "start: face: %a, points: %a" print_face face print_points points;
+    (** create the faces and associates the remaining points *)
+    distribute points init_faces;
     loop ();
 
+    (** collect the resulting faces, only those not using the center *)
     let res = ref [] in
     Hashtbl.iter (fun _ (face,points) ->
         assert (points = []);
-        res := Array.map fst face :: !res) faces;
+        if Array.for_all (fun (_,uid) -> uid >= 0) face
+        then res := Array.map fst face :: !res) faces;
     !res
 
 
@@ -906,6 +1051,6 @@ module type V = sig
   type point = t array * int
   type faces = point array list
   val reorder : int -> m -> unit
-  val delauney : v list -> m list
+  val quick_hull : v list -> m list
   val visibility : point -> point array -> t
 end
