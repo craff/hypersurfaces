@@ -58,6 +58,7 @@ module Make(R:Field.SPlus) = struct
     ; c : R.t array
     ; mutable f : float
     ; mutable k : status
+    ; mutable codim : int
     ; suid : int array }
 
   let simplex_key s =
@@ -85,7 +86,6 @@ module Make(R:Field.SPlus) = struct
     fprintf ch "%d" i;
     List.iter (fun (j,b) -> fprintf ch ", %s%d" (if b then "+" else "-") j) l
 
-
   let h = one /. of_int 2
 
   let triangulation ?(expected=Nothing) p0 =
@@ -106,6 +106,7 @@ module Make(R:Field.SPlus) = struct
     let by_edge = Hashtbl.create 1001 in
     let by_vertex = Hashtbl.create 1001 in
     let by_face = Hashtbl.create 1001 in
+    let to_do = Array.make dim [] in
     let add_v s =
       for i = 0 to dim-1 do
         let key = s.s.(i).uid in
@@ -174,8 +175,6 @@ module Make(R:Field.SPlus) = struct
     in
     let add_s s = add s; add_v s; add_e s; add_f s in
 
-    let order s1 s2 = Stdlib.compare s2.f s1.f in
-
     let mk ?(f=Stdlib.(1.0 /. float_of_int n)) s =
       let m = to_matrix s in
       decomp_log "before center";
@@ -186,30 +185,19 @@ module Make(R:Field.SPlus) = struct
       let l = List.map plane p in
       decomp_log "after plane";
       let dp = List.map (fun p -> lazy (tgradient p)) p in
-      let s = { s; m; p; k = Unknown; c; l; dp; f; suid = simplex_key s } in
+      let s = { s; m; p; k = Unknown; c; l; dp; f
+              ; codim = 0; suid = simplex_key s } in
       decomp_log "make %a" print_simplex s.s;
       add_s s;
       s
     in
 
-    let to_do = List.map (fun s -> mk s) ls in
-    let to_do = ref (List.sort order to_do) in
+    to_do.(0) <- List.map (fun s -> mk s) ls;
     decomp_log "init simplicies done";
-    let add_to_do l = to_do := List.merge order (List.sort order l) !to_do in
+    let add_to_do l =
+      to_do.(0) <- l @ to_do.(0)
+    in
     let total = ref 0.0 in
-
-    let recheck s =
-      match s.k with
-      | Unknown -> true
-      | NonZero -> true
-      | NonDege -> false
-      | Removed -> assert false
-    in
-
-    let re_add acc s =
-      if recheck s then acc else
-        Stdlib.(s.k <- Unknown; total := !total -. s.f; s::acc)
-    in
 
     let constant_sign p =
       let ap = ref true in
@@ -250,7 +238,7 @@ module Make(R:Field.SPlus) = struct
           !res) dps
     in
 
-    let all_gradients vs {s; m; l=l0} =
+    let all_gradients codim vs {s; m; l=l0} =
       let l = ref [] in
       Array.iteri (fun i x -> if x then l := i :: !l) vs;
       let l = !l in
@@ -270,13 +258,13 @@ module Make(R:Field.SPlus) = struct
            let l =
              try Hashtbl.find by_edge k with Not_found -> assert false in
            let test (_,_,s') =
-               try
-                 Array.iteri (fun i b ->
-                     if b && Array.for_all (fun v -> v.uid <> s.(i).uid) s'.s
-                     then raise Exit) vs;
-                 true
-               with
-                 Exit -> false
+             try
+               Array.iteri (fun i b ->
+                   if b && Array.for_all (fun v -> v.uid <> s.(i).uid) s'.s
+                   then raise Not_found) vs;
+               true
+             with
+               Not_found -> false
            in
            let l = List.filter test l in
            let l = List.map (fun (i',j',s') ->
@@ -305,30 +293,30 @@ module Make(R:Field.SPlus) = struct
 
     let open struct exception Zih end in
 
-    let decision_face vs s =
+    let decision_face codim vs s =
       let p = sub s.p vs in
       let dp = sub (List.map Lazy.force s.dp) vs in
       if not (List.exists constant_sign' p) then
-      let gd = all_gradients vs s in
+        let gd = all_gradients codim vs s in
 
-      let rec fn points dps gds =
-        match (dps, gds) with
-        | [dp], [gd] ->
-           let new_points = dp @ gd in
-           if zih (new_points @ points) then raise Zih
-        | dp::dps, gd::gds ->
-           let new_points = dp @ gd in
-           let opp_new = List.map opp new_points in
-           fn (new_points @ points) dps gds;
-           fn (opp_new @ points) dps gds
-        | _ -> assert false
-      in
-      fn [] dp gd
+        let rec fn points dps gds =
+          match (dps, gds) with
+          | [dp], [gd] ->
+             let new_points = dp @ gd in
+             if zih (new_points @ points) then raise Zih
+          | dp::dps, gd::gds ->
+             let new_points = dp @ gd in
+             let opp_new = List.map opp new_points in
+             fn (new_points @ points) dps gds;
+             fn (opp_new @ points) dps gds
+          | _ -> assert false
+        in
+        fn [] dp gd
     in
 
-    let iter_facets gn dim =
+    let iter_facets gn codim dim =
       let vs = Array.make dim false in
-      let rec fn i =
+      let rec fn codim i =
         if i >= dim then
           begin
             if Array.exists (fun b -> b) vs then
@@ -336,20 +324,25 @@ module Make(R:Field.SPlus) = struct
           end
         else
           begin
-            vs.(i) <- false;
-            fn (i+1);
-            vs.(i) <- true;
-            fn (i+1)
+            match codim with
+              None    ->
+               vs.(i) <- false; fn codim (i+1);
+               vs.(i) <- true; fn codim (i+1)
+            | Some cd ->
+               if cd > 0 then
+                 (vs.(i) <- false; fn (Some (cd-1)) (i+1));
+               if cd < dim - i then
+                 (vs.(i) <- true; fn codim (i+1))
           end
       in
-      fn 0
+      fn codim 0
     in
 
-    let decision s =
+    let decision codim s =
       if List.exists (Array.for_all (fun x -> x =. zero)) s.l then Unknown else
       if List.exists constant_sign s.p then NonZero else
-      let fn vs = decision_face vs s in
-      try iter_facets fn dim; NonDege with Zih -> Unknown
+      let fn vs = decision_face codim vs s in
+      try iter_facets fn (Some codim) dim; NonDege with Zih -> Unknown
     in
 
     let visible_v s x =
@@ -433,9 +426,9 @@ module Make(R:Field.SPlus) = struct
           print_matrix m' print (det m');
         false);
       assert (s.k = Unknown);
+      total := Stdlib.(!total -. float s.codim *. s.f);
       rm_s s;
       decomp_log "adding center %a" print_vector (to_vec x);
-      to_do := List.filter (fun s' -> s'.suid <> s.suid) !to_do;
       let rec rml acc k = function
         | [] -> (None, List.rev acc)
         | (_,_,k' as c)::l -> if k = k' then (Some c, List.rev_append acc l)
@@ -473,9 +466,8 @@ module Make(R:Field.SPlus) = struct
                   let good = (sg = sg') = (s.s.(i0).p = s'.s.(j0).p) in
                   let acc = ref acc in
                   let l   = ref l   in
-                  if s'.k <> Unknown then total := Stdlib.(!total -. s'.f);
+                  total := Stdlib.(!total -. float s'.codim *. s'.f);
                   rm_s s';
-                  to_do := List.filter (fun s -> s'.suid <> s.suid) !to_do;
                   Array.iteri (fun k _ ->
                       if k <> j then
                         begin
@@ -521,13 +513,7 @@ module Make(R:Field.SPlus) = struct
             let s' = Array.mapi (fun j y -> if i = j then x else y) s.s in
             if not sg then s'.(i) <- ch_sg x;
             decomp_log "before mk";
-            let r = mk ~f:area s' in (*
-               let k = face_key s i in
-               let l = try Hashtbl.find by_face k with Not_found -> [] in
-               (match l with
-                | [(_,s')] -> assert (snd (visible s' x))
-                | _ -> assert false);
-               assert false;*)
+            let r = mk ~f:area s' in
             decomp_log "after mk";
             r
           ) hole
@@ -537,85 +523,72 @@ module Make(R:Field.SPlus) = struct
         (ok := false; eprintf "len = %d for key %a\n%!"
                         (List.length l) print_face_key k)) by_face;
       assert !ok;
-      let add_local acc s =
-        List.fold_left (fun acc (i,j) ->
-            let (_,key) = edge_key s.s.(i) s.s.(j) in
-            let l = try Hashtbl.find by_edge key with Not_found -> assert false in
-            List.fold_left (fun acc (_,_,s) -> re_add acc s) acc l) acc dirs
-      in
-      add_to_do (List.fold_left add_local added added);
-      decomp_log "readd local done"
-    in
-(*
-    let _do_triangle x =
-      let in_triangle s =
-        let m = s.m in
-        let c = pcoord x m in
-        Array.for_all (fun x -> x *. c.(0) >= zero) c
-      in
-      try
-        Hashtbl.iter (fun _ l ->
-            List.iter (fun (_,s) ->
-                if in_triangle s then
-                  begin
-                    let save = !debug in
-                    debug := true;
-                    let b = decision s in
-                    debug := save;
-                    printf "found %b\n%!" (b <> Unknown);
-                    raise Exit
-                  end) l) by_face
-      with
-        Exit -> ()
-    in
- *)
-    let rec test () =
-      match !to_do with
-      | []   -> true
-      | s::ls ->
-         decomp_log "before decision";
-         let d = decision s in
-         decomp_log "after decision %b" (d <> Unknown);
-         if d = Unknown then
-           begin
-             let x = center s in
-             ajoute s x;
-             false
-           end
-         else
-           begin
-             to_do := ls;
-             s.k <- d; total := Stdlib.(!total +. s.f);
-             test ()
-           end
+      add_to_do added;
     in
 
-    while not (test ()) do
-(*      if dim = 3 then
-        begin
-          if !show then
-            begin
-              init ();
-              clear_graph ();
-              let l = Hashtbl.fold (fun _ s acc -> s :: acc) all [] in
-              display 100.0 (0.,0.) l (fun s -> s.m) None;
-            end;
-          if !debug then ignore (input_line stdin);
-        end;
- *)
-      let x = match !to_do with
-        | [] -> assert false
+    let rec test codim =
+      let order s1 s2 = Stdlib.compare s2.f s1.f in
+      let ls = List.sort order to_do.(codim) in
+      to_do.(codim) <- [];
+      let rec fn ls =
+        match ls with
+        | []   -> true
+        | s::ls when s.k = Removed -> fn ls
+        | s::ls ->
+           assert (s.codim = codim);
+           decomp_log "before decision";
+           let d = decision codim s in
+           decomp_log "after decision %b" (d <> Unknown);
+           if d = Unknown then
+             begin
+               to_do.(codim) <- ls;
+               let x = center s in
+               ajoute s x;
+               false
+             end
+           else
+             begin
+               total := Stdlib.(!total +. s.f);
+               s.codim <- s.codim + 1;
+               if s.codim < dim then to_do.(s.codim) <- s :: to_do.(s.codim)
+               else s.k <- d;
+               fn ls
+             end
+      in fn ls
+    in
+
+    let print_total codim =
+      let x = match to_do.(codim) with
+        | [] -> 0.0
         | s::_ -> s.f
       in
       let time1 = Unix.gettimeofday () in
       let dt = Stdlib.(time1 -. time0) in
       let (hd,tail) = if Debug.has_debug () then "", "\n" else "\r", "     " in
-      eprintf "%sto do:%.3f%% %06d worst:%.2e, time: %.1fs%s%!"
-        hd Stdlib.(!total *. 100.0) (List.length !to_do) x dt tail;
+      eprintf "%sto do:%.3f%% %06d codim: %d/%d, worst:%.2e, time: %.1fs%s%!"
+        hd Stdlib.(!total *. 100.0 /. float dim)
+        (List.length to_do.(codim)) codim (dim-1) x dt tail;
+    in
 
+    while not (Array.for_all (fun l -> l = []) to_do) do
+      let codim =
+        let res = ref 0 in
+        try
+          for i = 0 to dim - 1 do
+            res := i; if to_do.(i) <> [] then raise Exit
+          done;
+          assert false;
+        with
+          Exit -> !res
+      in
+      print_total codim;
+      while not (test codim) do
+        assert (to_do.(0) <> []);
+        print_total codim;
+      done;
     done;
 
-    eprintf "\r%f%% %d\n%!" Stdlib.(!total *. 100.0) (List.length !to_do);
+    eprintf "\r                                                         \r%!";
 
     (*check ();*)
 
@@ -661,56 +634,11 @@ module Make(R:Field.SPlus) = struct
             then incr res else decr res;
             Hashtbl.add tbl key (ref 1, face)
         in
-        iter_facets gn dim
+        iter_facets gn None dim
       in
       List.iter fn faces;
-      (*match !dim0 with
-      | Some dim ->
-         (*Hashtbl.iter (fun (_,l) (c,f) ->
-             printf "%d %d => %d %a\n%!" dim (dim - (1 + List.length l)) !c
-                       print_simplex f
-           )
-         tbl;*)
-         Hashtbl.iter (fun (_,l) (c,_) ->
-             if List.length l = dim - 1 then assert (!c = 1);
-             if List.length l = dim - 2 then assert (!c = 2))
-           tbl;
-      | None -> ()*);
       !res
     in
-
-    (*
-    let newton x =
-      let f x = Array.of_list (List.map (fun p -> eval p x) p0) in
-      let df x = Array.of_list (List.map (fun dp -> eval_grad dp x) dp0) in
-      let rec loop x fx nfx =
-        let m = df x in
-        let dx = solve_cg (m **** transpose m) fx in
-        let x' = x --- of_float 0.0001 **. (m **- dx) in
-        let fx' = f x' in
-        let nfx' = norm2 fx' in
-        if nfx' <. nfx then loop x' fx' nfx' else x
-      in
-      let fx = f x in
-      let nfx = norm2 fx in
-      loop x fx nfx
-    in
-
-    let newtons faces =
-      let tbl = Hashtbl.create 1024 in
-      let fn x =
-        try
-          let y:vertex = Hashtbl.find tbl x.uid in
-          if y.p <> x.p then ch_sg y else y
-        with
-          Not_found ->
-          let y = Simp.mk (newton x.v) x.p in
-          Hashtbl.add tbl x.uid y;
-          y
-      in
-      List.map (Array.map fn) faces
-    in
-     *)
 
     let rm_edge edges i j s ks =
       let (_,k) = edge_key s.(i) s.(j) in
