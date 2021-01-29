@@ -78,6 +78,9 @@ module Parse(R:Field.SPlus) = struct
     | Sum  -> "S"
     | Pow  -> "W"
 
+  let%parser fname =
+    "cos" => { name = "cos"; eval = R.cos }
+
   (* for printing, we provide a function to convert priorities to string *)
   let poly vars =
     let%parser [@print_param string_of_prio] rec poly p =
@@ -106,6 +109,7 @@ module Parse(R:Field.SPlus) = struct
       ; (p=Prod) (x::poly Prod) '/' (y::float)     => Pro(Cst R.(one /. y),x)
       ; (p=Sum)  (x::poly Sum ) '+' (y::poly Prod) => P.Sum(x,y)
       ; (p=Sum)  (x::poly Sum ) '-' (y::poly Prod) => Sub(x,y)
+      ; (f::fname) '(' (x::poly Sum) ')'           => Fun(f,x)
 
     and args =
         () => []
@@ -113,11 +117,20 @@ module Parse(R:Field.SPlus) = struct
     in
     poly
 
+  let rec mul_cons n m l =
+    if n <= 0 then l else mul_cons (n-1) m (m::l)
+
+  let%parser rec expected_aux =
+    (n::INT) => [n]
+  ; (n::INT) ',' (l::expected_aux) => n::l
+  ; (n::INT) '*' (m::INT) => mul_cons n m []
+  ; (n::INT) '*' (m::INT) ',' (l::expected_aux) => mul_cons n m l
+
   let%parser expected =
     ()  => H.Nothing
-  ; n::INT => H.Int n
+  ; (n::INT) => H.Int n
   ; '(' ')' => H.Int 0
-  ; '(' (n::INT) (l:: ~* (',' (n::INT) => n))  ')' => H.List (n::l)
+  ; '(' (l::expected_aux) ')' => H.List l
 
   let%parser cmd =
       "let" (name::ident) ((vars,()) >: params) '=' (p::poly vars Sum) ';' =>

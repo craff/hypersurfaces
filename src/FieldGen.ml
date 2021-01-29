@@ -29,6 +29,7 @@ module type SMin = sig
   val print : formatter -> t -> unit
   (** true is computation are exact, for rational for instance *)
   val exact : bool
+  val cos : t -> t
 end
 
 (** Complete field signature, with a few extra functions *)

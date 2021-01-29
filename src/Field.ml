@@ -36,6 +36,7 @@ module FloatMin =
     let of_string = float_of_string
     let print ch = fprintf ch "%g"
     let exact = false
+    let cos = cos
   end
 
 module Float = struct
@@ -73,6 +74,10 @@ module GmpMin = struct
   let of_string x = of_string x mode
   let print ch x = fprintf ch "%s" (to_string x)
   let exact = false
+  let cos x =
+    let r = Mpfr.init () in
+    ignore (Mpfr.cos r (_mpfr x) mode);
+    _mpfrf r
 end
 
 module Gmp = struct
@@ -120,6 +125,7 @@ module QMin =
     let of_string = of_string
     let print ch x = fprintf ch "%s" (to_string x)
     let exact = true
+    let cos _ = failwith "cos not available"
   end
 
 module Q = struct

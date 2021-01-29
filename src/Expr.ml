@@ -1,7 +1,10 @@
+open Format
 
 module Make(R:Field.SPlus) = struct
 
   open R
+
+  type func = { name : string; eval : R.t -> R.t }
 
   type poly_rec =
     { name : string
@@ -21,8 +24,22 @@ module Make(R:Field.SPlus) = struct
     | Sub of polynomial * polynomial
     | Pro of polynomial * polynomial
     | App of poly_rec * polynomial list
+    | Fun of func * polynomial
 
   let polys : (string, poly_rec) Hashtbl.t = Hashtbl.create 101
+
+  let eval_cst p =
+    let rec fn = function
+      | Cst x -> x
+      | Var _ -> failwith "Illegal polynomial"
+      | Sum(p,q) -> fn p +. fn q
+      | Sub(p,q) -> fn p -. fn q
+      | Pro(p,q) -> fn p *. fn q
+      | App(f,p) -> let p = List.map fn p in
+                    B.eval f.bern (Array.of_list p)
+      | Pow(p,n) -> pow (fn p) n
+      | Fun(f,p) -> f.eval (fn p)
+    in fn p
 
   let to_bernstein d vars p =
     let open B in
@@ -36,6 +53,7 @@ module Make(R:Field.SPlus) = struct
       | App(p,qs) ->
          let env = List.combine p.vars (List.map (fn env) qs) in
          fn env p.poly
+      | Fun _ as p -> cst d (eval_cst p)
     in
     let env = List.mapi (fun i v -> (v,[(var_power i d 1, R.one)])) vars in
     fn env p
