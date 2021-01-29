@@ -156,14 +156,9 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
   let partial (p:polynomial) i =
     filter_map (fun (l,c) -> (decr l i, c)) p
 
-  (** gradient *)
-  let gradient (p:polynomial) =
-    Array.init (dim p) (fun i -> partial p i)
-
   (** gradient as a polynomial with vector as coefficients *)
-  let tgradient (p:polynomial) =
-    (* collect all monomials *)
-    let ps = gradient p in
+  let gradient (p:polynomial) =
+    let ps =  Array.init (dim p) (fun i -> partial p i) in
     let dim = Array.length ps in
     let res = ref [] in
     try
@@ -347,7 +342,7 @@ module type B = sig
   val homogeneisation : polynomial -> polynomial * bool
   val transform : polynomial -> m -> m -> polynomial
 
-  val tgradient : polynomial -> polynomial_v
+  val gradient : polynomial -> polynomial_v
   val plane : 'a p -> 'a array
 
   val digho : polynomial -> t -> t -> v -> t -> v -> v

@@ -98,7 +98,7 @@ module Make(R:Field.SPlus) = struct
     let dirs = all_dirs dim in
     let ls = quadrants dim in
     let s0 = to_matrix (List.hd ls) in
-    let dp0 = List.map tgradient p0 in
+    let dp0 = List.map gradient p0 in
     let n = List.length ls in
     let all = Hashtbl.create 1001 in
     let add s = Hashtbl.replace all s.suid s in
@@ -184,7 +184,7 @@ module Make(R:Field.SPlus) = struct
       decomp_log "after transform";
       let l = List.map plane p in
       decomp_log "after plane";
-      let dp = List.map (fun p -> lazy (tgradient p)) p in
+      let dp = List.map (fun p -> lazy (gradient p)) p in
       let s = { s; m; p; k = Unknown; c; l; dp; f
               ; codim = 0; suid = simplex_key s } in
       decomp_log "make %a" print_simplex s.s;
