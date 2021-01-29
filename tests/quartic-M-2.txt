@@ -22,11 +22,11 @@ let s1 = zeros s1;
 
 let q0(x,y,z) = pt1(x,y,z)*pt2(x,y,z)*pt3(x,y,z)*pt4(x,y,z) + 0.05;
 
-let ps = zeros q0 s1 (0,0,0,0,0,0,0,0,0,0);
+let ps = zeros q0 s1 (10*0);
 display ps ps__t;
 
 let q1(x,y,z) = 0.5* s1(x,y,z)^2 + q0(x,y,z);
-let ds = zeros q1 (2,2,2,2,2,2,2,2,2,2);
+let ds = zeros q1 (10*2);
 
 display ds;
 display ds ds__t;
