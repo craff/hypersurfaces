@@ -433,6 +433,14 @@ module Make(R:Field.SPlus) = struct
     let center s =
       let c0 = normalise s.c in
       if !Args.rmax = 0.0 then Simp.mk c0 true else
+        (* If f = Sum p_i^2
+              f'/2 = Sum p'_i p_i.
+              f maximum if f' is normal to the sphere
+              note f'(x).x = Sum d p_i^2 = f
+              f'_t(x) = f'(x)||x||^2 - (f'(x).x)x
+              f'_t(x+h) = (f'(x+h)||x+h||^2 - (f'(x+h).(x+h))(x+h)
+              f''_t(x)(h) = f''(x)h||x||^2 + 2 f'(x) (x.h) - (f''(x)hx)x - (f'(x).h)x - (f'(x).x)h
+                          = M(x).h *)
       let cos2 c =
         let s = c0 *.* c in
         s *. s
@@ -445,44 +453,49 @@ module Make(R:Field.SPlus) = struct
       let sin c = sqrt (sin2 c) in
       let rmax = sin (to_vec s.s.(0)) *. of_float !Args.rmax in
       assert (rmax >. zero);
-      let force sgn c dc ndc =
-        let rc = sin c in
-        assert (rc <=. rmax);
-        assert (snd (visible_v s c));
-        (sgn *. (rmax -. rc) /. ndc) **. dc
+      let force sgn dc =
+        sgn **. dc
+      in
+      let eval_grad c = List.fold_left (fun acc dp ->
+                            let x = eval_grad dp c in
+                            let z = x --- (x *.* c) **. c in
+                            acc +++ z) (zero_v dim) dp0
       in
       let eval c = List.fold_left (fun acc p ->
-                        let x = eval p c in acc +. x *. x) zero p0
+                        let x = eval p c in acc +. x) zero p0
       in
-      let eval_grad c = List.fold_left (fun acc p ->
-                        let x = eval_grad p c in acc +++  x) (zero_v dim) dp0
-      in
-      let rec loop steps sgn fc c dc ndc qc lambda =
+      let rec loop steps sgn c fc dc lambda =
         (* printf "objectif: %a lambda: %a rc: %a r: %a r-rc: %a\n %a => %a\n %a\n%!"
           print objectif print lambda print rc print r print (r -. rc) print_vector c print fc
           print_vector s.l;*)
-        if lambda <. of_float 1e-8 || steps > 1000 then (c,fc,qc,steps) else
-          let force = force sgn c dc ndc in
+        if lambda <. of_float 1e-15 || steps > 10000 then (c,fc,steps) else
+          let force = force sgn dc in
           (*printf "force: %a (%a)\n%!" print_vector force print (norm force);*)
           let c' = normalise (comb one c lambda force) in
           let fc' = eval c' in
           let dc' = eval_grad c' in
-          let ndc' = norm2 dc' in
-          let qc' = fc' /. ndc' *. (rmax -. sin c') in
-          let (b1,b2) = visible_v s c' in
-          if qc' <=. qc || sin c' >= rmax || not b1 || not b2 then
-            loop (steps + 1) sgn fc c dc ndc qc (lambda /. of_int 2)
+          let progress = (sgn =. one && fc' >. fc) ||
+                           (sgn =. (-.one) && fc' <. fc)
+          in
+          if not progress || sin c' >= (of_float 1.1 *. rmax) then
+            loop (steps + 1) sgn c fc dc (lambda /. of_int 2)
           else
-            loop (steps + 1) sgn fc' c' dc' ndc' qc' (min one (of_int 2 *. lambda))
+            loop (steps + 1) sgn c' fc' dc' (min one (of_int 2 *. lambda))
 
       in
       let fc0 = eval c0 in
       let dc0 = eval_grad c0 in
-      let ndc0 = norm2 dc0 in
-      let qc0 = fc0 /. ndc0 *. (rmax -. sin c0) in
-      let (c1,_,qc1,_) = loop 0 one fc0 c0 dc0 ndc0 qc0 one in
-      let (c2,_,qc2,_) = loop 0 (-.one) fc0 c0 dc0 ndc0 qc0 one in
-      let c = if abs qc1 >. abs qc2 then c1 else c2 in
+      let (c1,fc1,_) = loop 0 one c0 fc0 dc0 one in
+      let (c2,fc2,_) = loop 0 (-.one) c0 fc0 dc0 one in
+      let (b11,b12) = visible_v s c1 in
+      let (b21,b22) = visible_v s c2 in
+
+      (*printf "fc0=%a fc1=%a fc2=%a " print fc0 print fc1 print fc2;*)
+      let c = if abs fc1 >. abs fc2 && sin c1 <. rmax && b11 && b12 then c1
+              else if sin c2 <. rmax && b21 && b22 then c2
+              else c0
+      in
+      (*printf "keep %s\n%!" (if c == c0 then "c0" else if c == c1 then "c1" else "c2");*)
       let (c,b) = if c.(dim-1) <. zero then (opp c, false) else (c, true) in
       Simp.mk c b
     in
