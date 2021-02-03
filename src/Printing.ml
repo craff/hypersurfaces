@@ -7,6 +7,10 @@ let print_array fn ch v =
       fn ch x) v;
   fprintf ch ")"
 
+let print_int_array ch l =
+  let f ch = fprintf ch "%d" in
+  print_array f ch l
+
 let print_list fn ch v =
   fprintf ch "(";
   List.iteri (fun i x ->

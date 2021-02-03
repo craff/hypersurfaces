@@ -106,6 +106,17 @@ let rm_object = fun obj ->
   objects := List.filter (fun (_,o) -> o.uid <> obj.uid) !objects;
   Mutex.unlock draw_mutex
 
+let hide_all_objects () =
+  let restore = ref (fun () -> ()) in
+  List.iter (fun (_,o) ->
+      if o.visible then
+        begin
+          o.visible <- false;
+          let old = !restore in
+          restore := (fun () -> o.visible <- true; old ())
+        end) !objects;
+  !restore
+
 (* Initialise the main window. *)
 module Init() = struct
 let window_width  : int ref   = ref 400 (* Window width.  *)

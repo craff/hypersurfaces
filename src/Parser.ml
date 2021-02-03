@@ -6,7 +6,7 @@ module Parse(R:Field.SPlus) = struct
   module P = Expr.Make(R)
   module B = R.B
   module H = HyperSurfaces.Make(R)
-  module D = Display.Make(R)
+  module D = H.D
 
   open P
 

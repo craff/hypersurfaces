@@ -7,10 +7,14 @@ let blank = Regexp.blank_regexp "\\([ \t\n\r]\\|[#][^\n]*\\)*"
 let _ =
   let files = Args.files in
   Debug.set_debugs !Args.debug_string;
-  List.iter (fun fn ->
-      printf "reading %S\n%!" fn;
-      let f () = Grammar.parse_file Parser.main blank fn in
-      Pos.handle_exception ~error:(fun e ->
-          Printexc.print_backtrace stderr;
-          raise e) f ()
-    ) files
+  let parse fn =
+    printf "reading %S\n%!" fn;
+    Grammar.parse_file Parser.main blank fn
+  in
+  List.iter
+    (Pos.handle_exception ~error:(fun e ->
+         Printexc.print_backtrace stderr;
+         raise e) parse)
+    files;
+  if not !Args.batch then
+    while true do Unix.sleep 3600 done

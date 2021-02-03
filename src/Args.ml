@@ -2,6 +2,8 @@ let batch = ref false
 let cont  = ref false
 let show  = ref false
 let rmax  = ref (1. /. 3.) (* should depend upon the dim ?*)
+let subd  = ref 0
+let prog  = ref false
 let quick_test = ref true
 let debug_string = ref ""
 
@@ -24,9 +26,15 @@ let spec =
   ; ( "--debug"
     , Arg.Set_string debug_string
     , "output debug information")
+  ; ( "--progress"
+    , Arg.Set prog
+    , "show building of triangulation")
   ; ( "--rmax"
     , Arg.Set_float rmax
     , "maximum distance to center when optimizing vertex position")
+  ; ( "--subd"
+    , Arg.Set_int subd
+    , "number of subdivision to test a simplex")
   ; ( "--qt"
     , Arg.Set quick_test
     , "enable test of scalar product of gradients before quick hull")

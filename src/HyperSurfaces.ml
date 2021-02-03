@@ -15,6 +15,7 @@ module Make(R:Field.SPlus) = struct
   open V
   open Simp
   open B
+  module D = Display.Make(R)
 
   (* type for the expected topologie *)
   type expected = Nothing (* expect anything *)
@@ -89,6 +90,10 @@ module Make(R:Field.SPlus) = struct
   let h = one /. of_int 2
 
   let triangulation ?(expected=Nothing) p0 =
+    let restore_objects =
+      if !Args.prog then Display.hide_all_objects ()
+      else (fun () -> ())
+    in
     let time0 = Unix.gettimeofday () in
     let dims = List.map dim p0 in
     let deg = List.map degree p0 in
@@ -212,17 +217,22 @@ module Make(R:Field.SPlus) = struct
       (!an || !ap) && !nz <= sdim
     in
 
-    let constant_sign' p =
+    let constant_sign2 (l, p) =
       let ap = ref true in
       let an = ref true in
       let nz = ref 0    in
-      List.iter (fun c ->
-          let t = cmp c zero in
-          if t < 0 then ap := false;
-          if t > 0 then an := false;
-          if t = 0 then incr nz;
-        ) p;
+      let fn (_,c) =
+        let t = cmp c zero in
+        if t < 0 then ap := false;
+        if t > 0 then an := false;
+        if t = 0 then incr nz;
+      in
+      List.iter fn p; List.iter fn l;
       (!an || !ap) && !nz <= sdim
+    in
+
+    let is_vertex m =
+      Array.fold_left (fun n m -> if m > 0 then n+1 else n) 0 m = 1
     in
 
     let sub dps is =
@@ -233,7 +243,22 @@ module Make(R:Field.SPlus) = struct
                 for i = 0 to dim-1 do
                   if m.(i) <> 0 && not is.(i) then raise Exit;
                 done;
-                res := v :: !res
+                if is_vertex m || v <>. zero then
+                  res := (m,v) :: !res
+              with Exit -> ()) dp;
+          !res) dps
+    in
+
+    let sub_v dps is =
+      List.map (fun dp ->
+          let res = ref [] in
+          List.iter (fun (m,v) ->
+              try
+                for i = 0 to dim-1 do
+                  if m.(i) <> 0 && not is.(i) then raise Exit;
+                done;
+                let n = norm2 v in
+                if is_vertex m || n <>. zero then res := (m,v) :: !res
               with Exit -> ()) dp;
           !res) dps
     in
@@ -294,24 +319,71 @@ module Make(R:Field.SPlus) = struct
     let open struct exception Zih end in
 
     let decision_face codim vs s =
+      (*printf "decision for %a (codim %d)\n%!" print_matrix (to_matrix s.s) codim;*)
       let p = sub s.p vs in
-      let dp = sub (List.map Lazy.force s.dp) vs in
-      if not (List.exists constant_sign' p) then
-        let gd = all_gradients codim vs s in
+      let l = List.map first_deg p in
+      let dp = sub_v (List.map Lazy.force s.dp) vs in
+      let gd = all_gradients codim vs s in
 
-        let rec fn points dps gds =
-          match (dps, gds) with
-          | [dp], [gd] ->
-             let new_points = dp @ gd in
-             if zih (new_points @ points) then raise Zih
-          | dp::dps, gd::gds ->
-             let new_points = dp @ gd in
-             let opp_new = List.map opp new_points in
-             fn (new_points @ points) dps gds;
-             fn (opp_new @ points) dps gds
-          | _ -> assert false
-        in
-        fn [] dp gd
+      let rec hn subd s l p dp =
+        let lp = List.combine l p in
+        let cst = List.exists constant_sign2 lp in
+        (*printf "cst: %b, subd: %d\n%!" cst subd;*)
+        if not cst then
+          begin
+            let rec fn points dps gds =
+              match (dps, gds) with
+              | [dp], [gd] ->
+                 let dp = List.map snd dp in
+                 let new_points = dp @ gd in
+                 zih (new_points @ points)
+              | dp::dps, gd::gds ->
+                 let dp = List.map snd dp in
+                 let new_points = dp @ gd in
+                 let opp_new = List.map opp new_points in
+                 fn (new_points @ points) dps gds ||
+                   fn (opp_new @ points) dps gds
+              | _ -> assert false
+            in
+            let res = fn [] dp gd in
+            match res with
+            | false -> (*printf "OK\n%!";*) ()
+            | true when subd <= 0 -> (*printf "Zih\n%!";*) raise Zih
+            | true ->
+               begin
+                 let best = ref (zero, (-1,-1)) in
+                 for i = 1 to Array.length vs - 1 do
+                   if vs.(i) then
+                     for j = 0 to i-1 do
+                       if vs.(j) then
+                         let c = norm2 (s.(i) --- s.(j)) in
+                         if c >. fst !best then best := (c,(j,i))
+                     done
+                 done;
+                 let (i,j) = snd !best in
+                 if i >= 0 && j >= 0 (*&& !tw >. of_float 1.5 /. of_int (1 + !nbg)*)
+                 then
+                   begin
+                     assert (i <> j);
+                     (*printf "split %d %d\n%!" i j;*)
+                     let l1,l2 =
+                       List.split (List.map (fun p -> subdivise p i j) l) in
+                     let p1,p2 =
+                       List.split (List.map (fun p -> subdivise p i j) p) in
+                     let dp1,dp2 =
+                       List.split (List.map (fun p -> subdivise_v p i j) dp) in
+                     let s1 = Array.mapi (fun k x ->
+                                  if k = j then (x +++ s.(i)) //. of_int 2 else x) s in
+                     let s2 = Array.mapi (fun k x ->
+                                  if k = i then (x +++ s.(j)) //. of_int 2 else x) s in
+                     hn (subd-1) s1 l1 p1 dp1; hn (subd-1) s2 l2 p2 dp2
+                   end
+                 else
+                   raise Zih
+               end
+          end
+      in
+      hn !Args.subd (to_matrix s.s) l p dp
     in
 
     let iter_facets gn codim dim =
@@ -339,10 +411,13 @@ module Make(R:Field.SPlus) = struct
     in
 
     let decision codim s =
-      if List.exists (Array.for_all (fun x -> x =. zero)) s.l then Unknown else
-      if List.exists constant_sign s.p then NonZero else
-      let fn vs = decision_face codim vs s in
-      try iter_facets fn (Some codim) dim; NonDege with Zih -> Unknown
+      try
+        if List.exists (Array.for_all (fun x -> x =. zero)) s.l then Unknown else
+        if List.exists constant_sign s.p then NonZero else
+        let fn vs = decision_face codim vs s in
+        try iter_facets fn (Some codim) dim; NonDege with Zih -> Unknown
+      with e -> eprintf "got except: %s\n%!" (Printexc.to_string e);
+                assert false
     in
 
     let visible_v s x =
@@ -453,13 +528,14 @@ module Make(R:Field.SPlus) = struct
            | [(j,s')] ->
               decomp_log "next simplex tested is %a" print_simplex s'.s;
               let (sg',v') = visible s' x in
-              let i0 = if i = 0 then 1 else 0 in
-              let j0 = ref 0 in
-              while s'.s.(!j0).uid <> s.s.(i0).uid && !j0 < dim do incr j0 done;
-              let j0 = !j0 in
-              assert (j0 < dim);
+              assert(s'.k <> Removed);
               if v' then
                 begin
+                  let i0 = if i = 0 then 1 else 0 in
+                  let j0 = ref 0 in
+                  while s'.s.(!j0).uid <> s.s.(i0).uid && !j0 < dim do incr j0 done;
+                  let j0 = !j0 in
+                  assert (j0 < dim);
                   assert (dim > 2);
                   decomp_log "to remove";
                   assert (s.s.(i0).uid = s'.s.(j0).uid);
@@ -526,35 +602,28 @@ module Make(R:Field.SPlus) = struct
       add_to_do added;
     in
 
-    let rec test codim =
+    let test codim =
       let order s1 s2 = Stdlib.compare s2.f s1.f in
-      let ls = List.sort order to_do.(codim) in
+      let ls = List.filter (fun s -> s.k <> Removed) to_do.(codim) in
+      let ls = List.sort order ls in
       to_do.(codim) <- [];
-      let rec fn ls =
-        match ls with
-        | []   -> true
-        | s::ls when s.k = Removed -> fn ls
-        | s::ls ->
-           assert (s.codim = codim);
-           decomp_log "before decision";
-           let d = decision codim s in
-           decomp_log "after decision %b" (d <> Unknown);
-           if d = Unknown then
-             begin
-               to_do.(codim) <- ls;
-               let x = center s in
-               ajoute s x;
-               false
-             end
-           else
-             begin
-               total := Stdlib.(!total +. s.f);
-               s.codim <- s.codim + 1;
-               if s.codim < dim then to_do.(s.codim) <- s :: to_do.(s.codim)
-               else s.k <- d;
-               fn ls
-             end
-      in fn ls
+      let gn s = decision codim s in
+      let ds = List.map gn ls in
+      List.iter2 (fun s d ->
+          if (s.k <> Removed) then
+            if d = Unknown then
+              begin
+                assert (s.k = Unknown);
+                let x = center s in
+                ajoute s x;
+              end
+            else
+              begin
+                total := Stdlib.(!total +. s.f);
+                s.codim <- s.codim + 1;
+                if s.codim < dim then to_do.(s.codim) <- s :: to_do.(s.codim)
+                else s.k <- d;
+              end) ls ds;
     in
 
     let print_total codim =
@@ -570,6 +639,24 @@ module Make(R:Field.SPlus) = struct
         (List.length to_do.(codim)) codim (dim-1) x dt tail;
     in
 
+    let tmp_object = ref None in
+
+    let display_current () =
+      let edges = Hashtbl.fold (fun _ l acc ->
+                      match l with
+                      | [] -> assert false
+                      | (i,j,s)::_ -> let s = to_matrix s.s in [|s.(i); s.(j)|]::acc)
+                    by_edge []
+      in
+      (match !tmp_object with
+       | None -> ()
+       | Some o -> Display.rm_object o);
+      let o = D.mk_lines_from_polyhedron "tmp_build" edges in
+      o.visible <- true;
+      tmp_object := Some o;
+      (*Display.wait ();*)
+    in
+
     while not (Array.for_all (fun l -> l = []) to_do) do
       let codim =
         let res = ref 0 in
@@ -582,12 +669,11 @@ module Make(R:Field.SPlus) = struct
           Exit -> !res
       in
       print_total codim;
-      while not (test codim) do
-        assert (to_do.(0) <> []);
-        print_total codim;
-      done;
+      if !Args.prog then display_current ();
+      test codim;
     done;
 
+    if !Args.prog then display_current ();
     eprintf "\r                                                         \r%!";
 
     (*check ();*)
@@ -851,6 +937,7 @@ module Make(R:Field.SPlus) = struct
                   by_edge []
     in
 
+    restore_objects ();
     (List.map to_matrix all, edges)
 
 end

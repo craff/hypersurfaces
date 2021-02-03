@@ -23,6 +23,7 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
   type polynomial   = R.t p
   (** and polynomial with vector coefficient, for the gradient *)
   type polynomial_v = v   p
+  type polynomial_m = m   p
 
   (** polynomial addition *)
   let (++) p1 p2 =
@@ -78,11 +79,71 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
       if d1 <= d2 then one else of_int d1 *. an (d1 - 1) d2
     in
     let d = degree p in
+    let cmp x y = compare y x in
     if List.for_all (fun m -> monomial_degree m = d) p then (p,false) else
-      (List.map (fun (l,c as m) ->
+      (List.sort cmp (List.map (fun (l,c as m) ->
           let d0 = monomial_degree m in
           let d' = d - d0 in
-          (Array.append l [|d'|], c *. an d' 1 /. an d d0)) p, true)
+          (Array.append l [|d'|], c *. an d' 1 /. an d d0)) p), true)
+
+  let subdivise_gen zero avg p i j =
+    let dim = dim p in
+    assert (i<>j);
+    let (i,j) = if i < j then (i,j) else (j,i) in
+    let l = Hashtbl.create 128 in
+    List.iter (fun (m,c) ->
+        let other = ref [] in
+        Array.iteri (fun k n -> if k <> i && k <> j
+                                then other := (k,n)::!other) m;
+        let other = !other in
+        let d = m.(i) + m.(j) in
+        let (_,a) =
+          try
+            Hashtbl.find l other
+          with Not_found ->
+            let a = Array.make (d+1) zero in
+            Hashtbl.add l other (d,a);
+            (d,a)
+        in
+        a.(m.(i)) <- c) p;
+    let divide a =
+      let s = Array.length a in
+      let a1 = Array.make s zero in
+      let a2 = Array.make s zero in
+      for i = 0 to s-1 do
+        a1.(i) <- a.(0);
+        a2.(s-i-1) <- a.(s-i-1);
+        for j = 0 to s - i - 2 do
+          a.(j) <- avg a.(j) a.(j+1)
+        done;
+      done;
+      (a1,a2)
+    in
+    let p1 = ref [] in
+    let p2 = ref [] in
+    Hashtbl.iter (fun other (d,a) ->
+        let (a1, a2) = divide a in
+        for k = 0 to Array.length a - 1 do
+          let m = Array.make dim 0 in
+          m.(i) <- k;
+          m.(j) <- d-k;
+          List.iter (fun (l,e) -> m.(l) <- e) other;
+          p1 := (m, a2.(k)) :: !p1;
+          p2 := (m, a1.(k)) :: !p2
+        done) l;
+    let cmp x y = compare y x in
+    (List.sort cmp !p1, List.sort cmp !p2)
+
+  let subdivise p i j =
+    subdivise_gen zero (fun x y -> (x +. y) /. of_int 2) p i j
+
+  let subdivise_v p i j =
+    let dim = match p with
+      | (_,v)::_ -> Array.length v
+      | _ -> assert false
+    in
+    let zero = zero_v dim in
+    subdivise_gen zero (fun x y -> (x +++ y) //. of_int 2) p i j
 
   (** opposite *)
   let ( ~--) : polynomial -> polynomial = List.map (fun (l,c) -> (l,-.c))
@@ -158,8 +219,8 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
 
   (** gradient as a polynomial with vector as coefficients *)
   let gradient (p:polynomial) =
-    let ps =  Array.init (dim p) (fun i -> partial p i) in
-    let dim = Array.length ps in
+    let dim = dim p in
+    let ps =  Array.init dim (fun i -> partial p i) in
     let res = ref [] in
     try
       while true do
@@ -182,9 +243,52 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
       assert false
     with Exit -> List.rev !res
 
+  (** gradient as a polynomial with vector as coefficients *)
+  let hessian (p:polynomial) =
+    let dim = dim p in
+    let pss =  Array.init dim
+                (fun i -> Array.init dim
+                            (fun j -> partial (partial p i) j))
+    in
+    let res = ref [] in
+    try
+      while true do
+        let l = Array.fold_left (fun l ps ->
+                    Array.fold_left (fun l p ->
+                        match (l, p) with
+                        | None,  (l,_)::_ -> Some l
+                        | Some l,(l',_)::_ when compare l l' < 0 -> Some l'
+                        | _ -> l) l ps) None pss
+        in
+        match l with
+        | None -> raise Exit
+        | Some l ->
+           let c = Array.init dim (fun i ->
+                       (Array.init dim (fun j ->
+                            match pss.(i).(j) with
+                            | (l',c) :: p when l = l' -> pss.(i).(j) <- p; c
+                            | _ -> zero)))
+           in
+           res := (l,c) :: !res
+      done;
+      assert false
+    with Exit -> List.rev !res
+
   let integrate_simplex ?(filter=fun _ -> true) p =
     (* missing constante vol(s) / binomial deg (deg + dim - 1) *)
     List.fold_left (fun acc (l,x) -> if filter l then x +. acc else acc) zero p
+
+  let first_deg p =
+    let count l = Array.fold_left (fun b n ->
+                      if n = 0 then b else
+                        if n > 0 && b then raise Exit else true)
+                    false l
+    in
+    filter_map
+      (fun (l,c) ->
+        assert (count l);
+        let l = Array.map (fun x -> if x <> 0 then 1 else 0) l in
+        (l,c)) p
 
   let plane p =
     let count l = Array.fold_left (fun b n ->
@@ -209,6 +313,15 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
           Array.iteri (fun i e -> z := !z *. R.pow x.(i) e) l;
           !z)) **. c
         ) (zero_v (dim p)) p
+
+  let eval_hess p x =
+    let dim = dim p in
+    List.fold_left (fun acc (l,c) ->
+        acc ++++ (multinomial l *. (
+          let z = ref one in
+          Array.iteri (fun i e -> z := !z *. R.pow x.(i) e) l;
+          !z)) ***. c
+        ) (zero_m dim dim) p
 
   let digho (p:polynomial) epsilon p1 x p2 y =
     let e2 = epsilon *. epsilon in
@@ -321,6 +434,7 @@ module type B = sig
   type 'a p = (int array * 'a) list
   type polynomial = t p
   type polynomial_v = v p
+  type polynomial_m = m p
 
   val print_polynome : formatter -> polynomial -> unit
   val print_gradient : formatter -> polynomial_v -> unit
@@ -341,9 +455,13 @@ module type B = sig
   val subst : polynomial -> polynomial list -> polynomial
   val homogeneisation : polynomial -> polynomial * bool
   val transform : polynomial -> m -> m -> polynomial
+  val subdivise : polynomial -> int -> int -> polynomial * polynomial
+  val subdivise_v : polynomial_v -> int -> int -> polynomial_v * polynomial_v
 
   val gradient : polynomial -> polynomial_v
+  val hessian  : polynomial -> polynomial_m
   val plane : 'a p -> 'a array
+  val first_deg : 'a p -> 'a p
 
   val digho : polynomial -> t -> t -> v -> t -> v -> v
 end

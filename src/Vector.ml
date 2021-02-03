@@ -55,7 +55,24 @@ module Make(R:S) = struct
   (** subtraction that allocates a new vector *)
   let ( --- ) v1 v2 =
     let v = Array.make (Array.length v1) zero in
-    subs v v1 v2; v[@@inlined always]
+    subs v v1 v2; v [@@inlined always]
+
+  (** set v0 to v1 + v2 *)
+  let addms m0 m1 m2 =
+    let d1 = Array.length m1 in
+    let d2 = Array.length m1.(0) in
+    for i = 0 to d1 - 1 do
+      for j = 0 to d2 - 1 do
+      m0.(i).(j) <- m1.(i).(j) +. m2.(i).(j)
+      done;
+    done;
+    [@@inlined always]
+
+  (** addition that allocates a new matrix *)
+  let ( ++++ ) m1 m2 =
+    let m = Array.init (Array.length m1)
+              (fun _ -> Array.make (Array.length m1.(0)) zero) in
+    addms m m1 m2; m [@@inlined always]
 
   (** vector product in dimension 3 only *)
   let vp v1 v2 =
@@ -99,6 +116,7 @@ module Make(R:S) = struct
 
   (** allocation of the null vector of dimension d *)
   let zero_v d = Array.make d zero
+  let zero_m d1 d2 = Array.init d1 (fun _ -> Array.make d2 zero)
 
   (** set v to x v *)
   let smulq x v =
@@ -117,6 +135,24 @@ module Make(R:S) = struct
     let n = Array.length v in
     let r = Array.make n zero in
     smuls r x v;
+    r
+
+  (** set v0 to x v1 *)
+  let smulms m0 x m1 =
+    let d1 = Array.length m1 in
+    let d2 = Array.length m1.(0) in
+    for i = 0 to d1 - 1 do
+      for j = 0 to d2 - 1 do
+        m0.(i).(j) <- x*.m1.(i).(j)
+      done
+    done [@@inlined always]
+
+  (** alocates a new vector with x v *)
+  let ( ***. ) x v =
+    let n1 = Array.length v in
+    let n2 = Array.length v.(0) in
+    let r = zero_m n1 n2 in
+    smulms r x v;
     r
 
   (** division by a scalar *)
@@ -146,10 +182,16 @@ module Make(R:S) = struct
     !r [@@inlined always]
 
   (** return the normalisation of v *)
-  let normalise v = (one /. norm v) **. v [@@inlined always]
+  let normalise v =
+    let n = norm v in
+    if n =. zero then v else
+    (one /. n) **. v [@@inlined always]
 
   (** normalise v in place *)
-  let normaliseq v = smulq (one /. norm v) v [@@inlined always]
+  let normaliseq v =
+    let n = norm v in
+    assert (n <>. zero);
+    smulq (one /. norm v) v [@@inlined always]
 
   (** normalisation for absolute norm *)
   let abs_normalise v = (one /. abs_norm v) **. v [@@inlined always]
@@ -511,8 +553,9 @@ module Make(R:S) = struct
     raise (ExitZih r)
 
   (** main zero in hull test function, can provide an initial position *)
-  let zih ?r0 m0 = try
+  let rec zih ?r0 m0 = try
       (** normalise and transform the list m0 into a matrix *)
+      let m0 = List.sort_uniq compare m0 in
       let nb = List.length m0 in
       let m = Array.make nb [||] in
       List.iteri (fun i v -> m.(i) <- normalise v) m0;
@@ -725,23 +768,19 @@ module Make(R:S) = struct
 
   module Test = struct
     let a =
-      List.map (Array.map of_int)
-        [
-          [|-1;0;0|];
-           [|0;-1;0|];
-           [|0;0;-1|];
-           ]
+      [ Array.map of_int [|-1;0;0|]
+      ; Array.map of_int [|0;-1;0|]
+      ; Array.map of_int [|0;0;-1|]
+      ]
 
     let _ = assert (exact || not (zih a))
 
     let a =
-      List.map (Array.map of_int)
-        [
-          [|1;0;0|];
-          [|-1;1;1|];
-           [|0;-1;0|];
-           [|0;0;-1|];
-           ]
+      [ Array.map of_int [|1;0;0|]
+      ; Array.map of_int [|0;-1;0|]
+      ; Array.map of_int [|0;0;-1|]
+      ; Array.map of_int [|-1;1;1|]
+      ]
 
     let _ = assert (exact || zih a)
 
@@ -756,6 +795,7 @@ module type V = sig
   type m = matrix
 
   val zero_v : int -> v
+  val zero_m : int -> int -> m
   val print_vector : formatter -> vector -> unit
   val print_matrix : formatter -> matrix -> unit
 
@@ -773,6 +813,9 @@ module type V = sig
   val ( --- ) : v -> v -> v
   val ( +++ ) : v -> v -> v
   val comb : t -> v -> t -> v -> v
+
+  val ( ++++ ) : m -> m -> m
+  val ( ***. ) : t -> m -> m
 
   val det : m -> t
   val ( **** ) : m -> m -> m
