@@ -1,9 +1,10 @@
 let batch = ref false
 let cont  = ref false
 let show  = ref false
-let rmax  = ref (1. /. 3.) (* should depend upon the dim ?*)
-let subd  = ref 0
+let rmax  = ref 0.99
+let subd  = ref 15
 let prog  = ref false
+let progw  = ref false
 let quick_test = ref true
 let debug_string = ref ""
 
@@ -29,6 +30,9 @@ let spec =
   ; ( "--progress"
     , Arg.Set prog
     , "show building of triangulation")
+  ; ( "--progress-wait"
+    , Arg.(Tuple [Set prog; Set progw])
+    , "show building of triangulation and stop at each step")
   ; ( "--rmax"
     , Arg.Set_float rmax
     , "maximum distance to center when optimizing vertex position")

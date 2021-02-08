@@ -74,6 +74,23 @@ module Make(R:S) = struct
               (fun _ -> Array.make (Array.length m1.(0)) zero) in
     addms m m1 m2; m [@@inlined always]
 
+  (** set v0 to v1 + v2 *)
+  let subms m0 m1 m2 =
+    let d1 = Array.length m1 in
+    let d2 = Array.length m1.(0) in
+    for i = 0 to d1 - 1 do
+      for j = 0 to d2 - 1 do
+      m0.(i).(j) <- m1.(i).(j) -. m2.(i).(j)
+      done;
+    done;
+    [@@inlined always]
+
+  (** addition that allocates a new matrix *)
+  let ( ---- ) m1 m2 =
+    let m = Array.init (Array.length m1)
+              (fun _ -> Array.make (Array.length m1.(0)) zero) in
+    subms m m1 m2; m [@@inlined always]
+
   (** vector product in dimension 3 only *)
   let vp v1 v2 =
     assert (Array.length v1 = 3);
@@ -553,7 +570,7 @@ module Make(R:S) = struct
     raise (ExitZih r)
 
   (** main zero in hull test function, can provide an initial position *)
-  let rec zih ?r0 m0 = try
+  let zih ?r0 m0 = try
       (** normalise and transform the list m0 into a matrix *)
       let m0 = List.sort_uniq compare m0 in
       let nb = List.length m0 in
@@ -813,8 +830,11 @@ module type V = sig
   val ( --- ) : v -> v -> v
   val ( +++ ) : v -> v -> v
   val comb : t -> v -> t -> v -> v
+  val combq : t -> v -> t -> v -> unit
+  val combqo : v -> t -> v -> unit
 
   val ( ++++ ) : m -> m -> m
+  val ( ---- ) : m -> m -> m
   val ( ***. ) : t -> m -> m
 
   val det : m -> t

@@ -27,5 +27,7 @@ let s(x,y,z) =
  1.3157202821301346438e-07 * 2.4494897427831778813e+00 * x^5 * y +
  -6.9990934950083418985e-08 * x^6;
 
-let s = zeros s 11;
+let s0(x,y,z) = s((x+z)*0.5,y,(x-z)*0.5);
+
+let s = zeros s0 11;
 display s; display s s__t;

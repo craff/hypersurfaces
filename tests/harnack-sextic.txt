@@ -19,4 +19,4 @@ display c c__t;
 let s6(x,y) = c(x,y)*pt1(x,y)*pt2(x,y)*pt3(x,y) + 0.00002 * (x^2+y^2+1)*(x^2+y^2-
 1.1^2)^2;
 let s6 = zeros s6 (0,0,0,0,0,0,0,0,0,0,0);
-display s6 s6__t;
+display s6; display s6 s6__t;

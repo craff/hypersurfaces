@@ -8,6 +8,10 @@ let table_log = Debug.new_debug "table" 't'
 let table_tst = table_log.tst
 let table_log fmt = table_log.log fmt
 
+let crit_log = Debug.new_debug "critical" 'c'
+let crit_tst = crit_log.tst
+let crit_log fmt = crit_log.log fmt
+
 module Make(R:Field.SPlus) = struct
   open R
   module Simp = Simplices.Make(R)
@@ -104,6 +108,10 @@ module Make(R:Field.SPlus) = struct
     let ls = quadrants dim in
     let s0 = to_matrix (List.hd ls) in
     let dp0 = List.map gradient p0 in
+    let hp0 = List.map hessian p0 in
+    let allp = List.init (List.length p0) (fun i ->
+                  (List.nth deg i, List.nth p0 i, List.nth dp0 i, List.nth hp0 i))
+    in
     let n = List.length ls in
     let all = Hashtbl.create 1001 in
     let add s = Hashtbl.replace all s.suid s in
@@ -263,7 +271,7 @@ module Make(R:Field.SPlus) = struct
           !res) dps
     in
 
-    let all_gradients codim vs {s; m; l=l0} =
+    let all_gradients vs {s; m; l=l0} =
       let l = ref [] in
       Array.iteri (fun i x -> if x then l := i :: !l) vs;
       let l = !l in
@@ -318,12 +326,12 @@ module Make(R:Field.SPlus) = struct
 
     let open struct exception Zih end in
 
-    let decision_face codim vs s =
+    let decision_face vs s =
       (*printf "decision for %a (codim %d)\n%!" print_matrix (to_matrix s.s) codim;*)
       let p = sub s.p vs in
       let l = List.map first_deg p in
       let dp = sub_v (List.map Lazy.force s.dp) vs in
-      let gd = all_gradients codim vs s in
+      let gd = all_gradients vs s in
 
       let rec hn subd s l p dp =
         let lp = List.combine l p in
@@ -414,7 +422,7 @@ module Make(R:Field.SPlus) = struct
       try
         if List.exists (Array.for_all (fun x -> x =. zero)) s.l then Unknown else
         if List.exists constant_sign s.p then NonZero else
-        let fn vs = decision_face codim vs s in
+        let fn vs = decision_face vs s in
         try iter_facets fn (Some codim) dim; NonDege with Zih -> Unknown
       with e -> eprintf "got except: %s\n%!" (Printexc.to_string e);
                 assert false
@@ -433,69 +441,105 @@ module Make(R:Field.SPlus) = struct
     let center s =
       let c0 = normalise s.c in
       if !Args.rmax = 0.0 then Simp.mk c0 true else
-        (* If f = Sum p_i^2
-              f'/2 = Sum p'_i p_i.
-              f maximum if f' is normal to the sphere
-              note f'(x).x = Sum d p_i^2 = f
-              f'_t(x) = f'(x)||x||^2 - (f'(x).x)x
-              f'_t(x+h) = (f'(x+h)||x+h||^2 - (f'(x+h).(x+h))(x+h)
-              f''_t(x)(h) = f''(x)h||x||^2 + 2 f'(x) (x.h) - (f''(x)hx)x - (f'(x).h)x - (f'(x).x)h
-                          = M(x).h *)
       let cos2 c =
         let s = c0 *.* c in
         s *. s
       in
-      let _cos c = sqrt (cos2 c) in
       let sin2 c =
         let x = one -. cos2 c  in
         if x <. zero then zero else x
       in
-      let sin c = sqrt (sin2 c) in
-      let rmax = sin (to_vec s.s.(0)) *. of_float !Args.rmax in
-      assert (rmax >. zero);
-      let force sgn dc =
-        sgn **. dc
+      let rmax = of_float !Args.rmax in
+      let rmax2 = sin2 (to_vec s.s.(0)) *. rmax *. rmax in
+      assert (rmax2 >. zero);
+      let eval_descent (deg,p,dp,hp) c =
+        let r = eval_tgrad p dp c in
+        let h = eval_thess p dp hp c in
+        let dx = h **- r in
+        if norm2 dx >. zero then
+          (-. (r*.*r) /. norm2 dx) **. dx
+        else dx
       in
-      let eval_grad c = List.fold_left (fun acc dp ->
-                            let x = eval_grad dp c in
-                            let z = x --- (x *.* c) **. c in
-                            acc +++ z) (zero_v dim) dp0
+      let eval_newton (deg,p,dp,hp) c =
+        try
+          let r = eval_tgrad p dp c in
+          let h = eval_thess p dp hp c in
+          solve h (-. one **. r)
+        with Not_found -> zero_v dim
       in
-      let eval c = List.fold_left (fun acc p ->
-                        let x = eval p c in acc +. x) zero p0
+      let eval (deg,p,dp,hp) c =
+        norm2 (eval_tgrad p dp c)
       in
-      let rec loop steps sgn c fc dc lambda =
-        (* printf "objectif: %a lambda: %a rc: %a r: %a r-rc: %a\n %a => %a\n %a\n%!"
-          print objectif print lambda print rc print r print (r -. rc) print_vector c print fc
-          print_vector s.l;*)
-        if lambda <. of_float 1e-15 || steps > 10000 then (c,fc,steps) else
-          let force = force sgn dc in
-          (*printf "force: %a (%a)\n%!" print_vector force print (norm force);*)
-          let c' = normalise (comb one c lambda force) in
-          let fc' = eval c' in
-          let dc' = eval_grad c' in
-          let progress = (sgn =. one && fc' >. fc) ||
-                           (sgn =. (-.one) && fc' <. fc)
+      let rec loop poly steps nbn c fc dn dd lambda =
+        assert (fc >=. zero);
+        if lambda <. epsilon2 || steps > 10000 then
+          begin
+            crit_log "loop: step %d/%d, c: %a, fc: %a, lambda: %a, rmax - sin: %a"
+              nbn steps
+              print_vector c print fc print lambda print (rmax2 -. sin2 c);
+            (c,fc,steps)
+          end
+        else
+          let c0' = comb one c lambda dn in
+          let c' = normalise c0' in
+          let fc' = eval poly c' in
+          let c0'' = comb one c lambda dd in
+          let c'' = normalise c0'' in
+          (*          let fc0'' = eval c0'' in*)
+          let fc'' = eval poly c'' in
+          let (c',fc',nbn') =
+            if fc' <. fc'' then (c',fc',nbn+1) else (c'',fc'',nbn)
           in
-          if not progress || sin c' >= (of_float 1.1 *. rmax) then
-            loop (steps + 1) sgn c fc dc (lambda /. of_int 2)
+          let progress = fc' <. fc in
+          if not progress then
+            loop poly steps nbn c fc dn dd (lambda /. of_int 2)
           else
-            loop (steps + 1) sgn c' fc' dc' (min one (of_int 2 *. lambda))
+            begin
+              let dd' = eval_descent poly c' in
+              let dn' = eval_newton  poly c' in
+              loop poly (steps + 1) nbn' c' fc' dn' dd' one
+            end
 
       in
-      let fc0 = eval c0 in
-      let dc0 = eval_grad c0 in
-      let (c1,fc1,_) = loop 0 one c0 fc0 dc0 one in
-      let (c2,fc2,_) = loop 0 (-.one) c0 fc0 dc0 one in
-      let (b11,b12) = visible_v s c1 in
-      let (b21,b22) = visible_v s c2 in
-
-      (*printf "fc0=%a fc1=%a fc2=%a " print fc0 print fc1 print fc2;*)
-      let c = if abs fc1 >. abs fc2 && sin c1 <. rmax && b11 && b12 then c1
-              else if sin c2 <. rmax && b21 && b22 then c2
-              else c0
+      let select best (dy,_,fy,_ as y) = match best with
+        | None -> Some y
+        | Some(dx,_,fx,_) as x ->
+           match compare dx dy with
+           | 1 -> x
+           | -1 -> Some y
+           | 0 -> (match compare fx fy with
+                   | 1 -> x
+                   | -1 -> Some y
+                   | 0 -> x
+                   | _ -> assert false)
+           | _ -> assert false
       in
-      (*printf "keep %s\n%!" (if c == c0 then "c0" else if c == c1 then "c1" else "c2");*)
+      let fn best poly c0 =
+        let (deg,_,_,_) = poly in
+        let fc0 = eval poly c0 in
+        let dn0 = eval_newton  poly c0 in
+        let dd0 = eval_descent poly c0 in
+        let (c1,fc1,_) = loop poly 0 0 c0 fc0 dn0 dd0 one in
+        let (b11,b12) = visible_v s c1 in
+
+        assert(fc1 >=. zero);
+        let c1_ok = sin2 c1 <. rmax2 && b11 && b12 in
+        if c1_ok then select best (deg, c1, rmax2 -. sin2 c1, fc1) else best
+      in
+      let c1 = normalise (Array.fold_left (fun acc v -> acc +++ v) (zero_v dim) (to_matrix s.s)) in
+
+      let lm = Array.map (fun v -> comb (of_float 0.5) c1 (of_float 0.5) v) (to_matrix s.s) in
+      let l = c0 :: c1 :: Array.to_list lm in
+      let best = List.fold_left (fun best poly ->
+                  List.fold_left (fun best c -> fn best poly c) best l) None allp
+      in
+      let c =
+        match best with
+        | None ->
+           crit_log "keep c0"; c0
+        | Some(_,c,_,fc) ->
+           crit_log "keep %a with fc = %a" print_vector c print fc; c
+      in
       let (c,b) = if c.(dim-1) <. zero then (opp c, false) else (c, true) in
       Simp.mk c b
     in
@@ -667,7 +711,7 @@ module Make(R:Field.SPlus) = struct
       let o = D.mk_lines_from_polyhedron "tmp_build" edges in
       o.visible <- true;
       tmp_object := Some o;
-      (*Display.wait ();*)
+      if !Args.progw then Display.wait ();
     in
 
     while not (Array.for_all (fun l -> l = []) to_do) do

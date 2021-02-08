@@ -57,7 +57,7 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
   let dim p =
     let d = match p with
       | (l,_)::_ -> Array.length l
-      | _ -> invalid_arg "null polynomial"
+      | _ -> 0
     in
     List.iter (fun (l,_) ->
         if Array.length l <> d then invalid_arg "inhomogeneous polynomial") p;
@@ -71,6 +71,7 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
 
   (** degree *)
   let monomial_degree (l,_) = Array.fold_left (+) 0 l
+  let unsafe_degree p = monomial_degree (List.hd p)
   let degree p = List.fold_left (fun d m -> max d (monomial_degree m)) 0 p
 
   (** homogenisation *)
@@ -210,12 +211,13 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
     Array.mapi (fun j n -> if i = j then if n = 0 then raise Exit else n - 1
                            else n) l
 
-  (** partial: partial derivative of p in the ith variable,
-      we do not multiply by the degree, it is not very important.
-      Recall that with Bernstein, no multiplication by the exponent,
-      but by the degree, which is the same for all monomials *)
+  (** partial: partial derivative of p in the ith variable *)
   let partial (p:polynomial) i =
-    filter_map (fun (l,c) -> (decr l i, c)) p
+    match p with
+    | [] -> []
+    | p  ->
+       let deg = unsafe_degree p in
+       filter_map (fun (l,c) -> (decr l i, of_int deg *. c)) p
 
   (** gradient as a polynomial with vector as coefficients *)
   let gradient (p:polynomial) =
@@ -298,30 +300,96 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
     in
     Array.of_list (filter_map (fun (l,c) -> assert (count l); c) p)
 
+  (** for evaluation, we memoize the last evaluation *)
+
+  (** evaluation of a polynomial *)
+  let last_eval = ref([],[||],zero)
   let eval (p:polynomial) x =
-    List.fold_left (fun acc (l,c) ->
-        acc +. c *. multinomial l *. (
-          let z = ref one in
-          Array.iteri (fun i e -> z := !z *. R.pow x.(i) e) l;
-          !z
-        )) zero p
+    let (lp,lx,r) = !last_eval in
+    if  p == lp && x == lx then r else
+      begin
+        let r = ref zero in
+        List.iter (fun (l,c) ->
+            r := !r +.
+                   c *. multinomial l *. (
+                     let z = ref one in
+                     Array.iteri (fun i e -> z := !z *. R.pow x.(i) e) l;
+                     !z)) p;
+        last_eval := (p,x,!r);
+        !r
+      end
 
-  let eval_grad p x =
-    List.fold_left (fun acc (l,c) ->
-        acc +++ (multinomial l *. (
-          let z = ref one in
-          Array.iteri (fun i e -> z := !z *. R.pow x.(i) e) l;
-          !z)) **. c
-        ) (zero_v (dim p)) p
+  (** evaluation of a polynomial gradient *)
+  let last_eval_grad = ref([],[||],[||])
+  let eval_grad dp x =
+    let (ldp,lx,r) = !last_eval_grad in
+    if dp == ldp && x == lx then r else
+      begin
+        let res = zero_v (dim dp) in
+        List.iter (fun (l,c) ->
+            let z = ref one in
+            Array.iteri (fun i e -> z := !z *. R.pow x.(i) e) l;
+            let x = multinomial l *. !z in
+            combqo res x c) dp;
+        last_eval_grad := (dp,x,res);
+        res
+      end
 
-  let eval_hess p x =
-    let dim = dim p in
-    List.fold_left (fun acc (l,c) ->
-        acc ++++ (multinomial l *. (
-          let z = ref one in
-          Array.iteri (fun i e -> z := !z *. R.pow x.(i) e) l;
-          !z)) ***. c
-        ) (zero_m dim dim) p
+  (** evaluation of a polynomial tangential gradient *)
+  let last_eval_tgrad = ref([],[],[||],[||])
+  let eval_tgrad p dp x =
+    let (lp,ldp,lx,r) = !last_eval_tgrad in
+    if p == lp && dp == ldp && x == lx then r else
+      begin
+        let deg = degree p in
+        let y = eval p x in
+        let g = eval_grad dp x in
+        let r = comb one g (-. of_int deg *. y) x in
+        last_eval_tgrad := (p,dp,x,r);
+        r
+      end
+
+  (** evaluation of a polynomial hessian matrix *)
+  let last_eval_hess = ref([],[||],[||])
+  let eval_hess hp x =
+    let (lhp,lx,r) = !last_eval_hess in
+    if hp == lhp && x == lx then r else
+      begin
+        let dim = dim hp in
+        let r = List.fold_left (fun acc (l,c) ->
+                    acc ++++ (multinomial l *. (
+                                let z = ref one in
+                                Array.iteri (fun i e -> z := !z *. R.pow x.(i) e) l;
+                                !z)) ***. c
+                  ) (zero_m dim dim) hp
+        in
+        last_eval_hess := (hp,x,r);
+        r
+      end
+
+  (** evaluation of a polynomial "tangential hessian", i.e.
+      a matrix that can be used to solve tangential gradient = 0 *)
+  let last_eval_thess = ref ([],[],[],[||],[||])
+  let eval_thess p dp hp x =
+    let (lp,ldp,lhp,lx,r) = !last_eval_thess in
+    if p == lp && dp == ldp && hp == lhp && x == lx then r else
+      begin
+        let dim = dim p in
+        let deg = degree p in
+        let y = eval p x in
+        let g = eval_grad dp x in
+        let h = eval_hess hp x in
+        let r =
+          Array.init dim (fun i ->
+              Array.init dim (fun j ->
+                  (if h <> [||] then h.(i).(j) else zero)
+                  -. of_int deg *. x.(i) *. g.(j)
+                  -. (if i = j then of_int deg *. y else zero)
+                  -. x.(i) *. x.(j)))
+        in
+        last_eval_thess := (p,dp,hp,x,r);
+        r
+      end
 
   let digho (p:polynomial) epsilon p1 x p2 y =
     let e2 = epsilon *. epsilon in
@@ -411,6 +479,17 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
               print_monomial l;
           end) p
 
+  let print_hessian ch p =
+    let first = ref true in
+    List.iter (fun (l,c) ->
+        if Array.exists (Array.exists (fun x -> x <>. zero)) c then
+          begin
+            if not !first then fprintf ch " + ";
+            first := false;
+            fprintf ch "%a %a" print_matrix c
+              print_monomial l;
+          end) p
+
   let transform p s1 s2 =
     let dim = Array.length s1 in
     assert (Array.length s1.(0) = dim);
@@ -438,6 +517,7 @@ module type B = sig
 
   val print_polynome : formatter -> polynomial -> unit
   val print_gradient : formatter -> polynomial_v -> unit
+  val print_hessian  : formatter -> polynomial_m -> unit
 
   val dim : 'a p -> int
   val degree : 'a p -> int
@@ -446,6 +526,9 @@ module type B = sig
 
   val eval : polynomial -> v -> t
   val eval_grad : polynomial_v -> v -> v
+  val eval_tgrad : polynomial -> polynomial_v -> v -> v
+  val eval_hess : polynomial_m -> v -> m
+  val eval_thess : polynomial -> polynomial_v -> polynomial_m -> v -> m
 
   val ( ++ ) : polynomial -> polynomial -> polynomial
   val ( -- ) : polynomial -> polynomial -> polynomial

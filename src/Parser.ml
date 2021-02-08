@@ -142,10 +142,12 @@ module Parse(R:Field.SPlus) = struct
            with Not_found -> Lex.give_up ~msg:("unbound variable "^name) ()
          in
          let ps = List.map p names in
-         let (ts, es) = try H.triangulation ~expected:t ps with e ->
-                            eprintf "exception: %s\n%!" (Printexc.to_string e);
-                            Printexc.print_backtrace stderr;
-                            assert false in
+         let (ts, es) =
+           try H.triangulation ~expected:t ps with e ->
+             Printexc.print_backtrace stderr;
+             eprintf "exception: %s\n%!" (Printexc.to_string e);
+             assert false
+         in
          let os =
            if ts <> [] then
              begin

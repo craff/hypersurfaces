@@ -1,5 +1,3 @@
-open Format
-
 module Make(R:Field.SPlus) = struct
 
   open R
