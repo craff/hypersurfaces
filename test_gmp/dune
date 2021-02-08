@@ -1,0 +1,6 @@
+(include_subdirs unqualified)
+
+(executable
+  (name TestGmp)
+  (modules :standard)
+  (libraries gmp))
