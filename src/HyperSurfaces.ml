@@ -923,7 +923,7 @@ module Make(R:Field.SPlus) = struct
              (List.rev !l, ls)
         in
         let nb_keep = List.length keep in
-        (*        printf "s: %a, nb_keep: %d %d\n%!" print_simplex s nb_keep dim;*)
+        (* printf "s: %a, nb_keep: %d %d\n%!" print_simplex s nb_keep dim;*)
         assert (nb_keep <= dim);
         if nb_keep = dim then
           begin
@@ -931,7 +931,7 @@ module Make(R:Field.SPlus) = struct
             let l = List.map (fun v ->
                         Array.of_list (List.map (fun i -> v.(i)) keep)) l in
             let _ = add_simplex new_dirs new_edges new_simplices s l in
-            (*            if is_new then
+            (*if is_new then
               begin
                 printf "keep: %a, " print_simplex s;
                 List.iter (fun v -> printf "%a " print_vector v) l;

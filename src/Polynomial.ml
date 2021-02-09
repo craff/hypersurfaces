@@ -87,6 +87,8 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
           let d' = d - d0 in
           (Array.append l [|d'|], c *. an d' 1 /. an d d0)) p), true)
 
+  (** general code to subdivise in two the simplex domain of a polynomial
+      along the direction i <-> j *)
   let subdivise_gen zero avg p i j =
     let dim = dim p in
     assert (i<>j);
@@ -135,9 +137,11 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
     let cmp x y = compare y x in
     (List.sort cmp !p1, List.sort cmp !p2)
 
+  (** subdivise for scalar polynomial *)
   let subdivise p i j =
     subdivise_gen zero (fun x y -> (x +. y) /. of_int 2) p i j
 
+  (** subdivise for gradient polynomial *)
   let subdivise_v p i j =
     let dim = match p with
       | (_,v)::_ -> Array.length v
@@ -276,10 +280,6 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
       assert false
     with Exit -> List.rev !res
 
-  let integrate_simplex ?(filter=fun _ -> true) p =
-    (* missing constante vol(s) / binomial deg (deg + dim - 1) *)
-    List.fold_left (fun acc (l,x) -> if filter l then x +. acc else acc) zero p
-
   let first_deg p =
     let count l = Array.fold_left (fun b n ->
                       if n = 0 then b else
@@ -356,13 +356,11 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
     if hp == lhp && x == lx then r else
       begin
         let dim = dim hp in
-        let r = List.fold_left (fun acc (l,c) ->
-                    acc ++++ (multinomial l *. (
-                                let z = ref one in
-                                Array.iteri (fun i e -> z := !z *. R.pow x.(i) e) l;
-                                !z)) ***. c
-                  ) (zero_m dim dim) hp
-        in
+        let r = zero_m dim dim in
+        List.iter (fun (l,c) ->
+            let z = ref one in
+            Array.iteri (fun i e -> z := !z *. R.pow x.(i) e) l;
+            mcombq one r (multinomial l *. !z) c) hp;
         last_eval_hess := (hp,x,r);
         r
       end

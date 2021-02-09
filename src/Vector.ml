@@ -123,6 +123,14 @@ module Make(R:S) = struct
     let v = Array.make n zero in
     combs v t v1 u v2; v [@@inlined always]
 
+  (** set m1 to t m1 + u m2*)
+  let mcombq t m1 u m2 =
+    for i = 0 to Array.length m1 - 1 do
+      for j = 0 to Array.length m2 - 1 do
+        m1.(i).(j) <- t*.m1.(i).(j) +. u*.m2.(i).(j)
+      done
+    done [@@inlined always]
+
   (** scalar product *)
   let ( *.* ) v1 v2 =
     let res = ref zero in
@@ -836,6 +844,7 @@ module type V = sig
   val ( ++++ ) : m -> m -> m
   val ( ---- ) : m -> m -> m
   val ( ***. ) : t -> m -> m
+  val mcombq : t -> m -> t -> m -> unit
 
   val det : m -> t
   val ( **** ) : m -> m -> m
