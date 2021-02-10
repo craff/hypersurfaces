@@ -1,0 +1,246 @@
+\section{Δ-linear approximation of a polynomial}
+
+\begin{defi}
+Let $p$ be an homogeneous polynomial of degree $d$ on
+$ℝ^{n+1}$. Let $(Δᵢ)_{i∈I}$ be a simplicial partition of $\PNR$.
+We define $\overline{p} : ℝ^{n+1} → ℝ$, the \emph{$Δ$-linear approximation of $p$},
+the piecewice linear function
+that is linear on all $Δ^σᵢ$ for $i ∈ I$, $σ ∈ \{+,-\}$, and equal to $p$
+on all points in $\vertices{Δ}$.
+
+For $i ∈ I$, $σ ∈ \{+,-\}$, we define $∇ᵢ^σp = ∇\overline{p}(x)$
+for any $x ∈ Δ^σᵢ$, as the gradient is constant over $Δ^σᵢ$ for a linear function.
+\end{defi}
+
+Remark: if $d$ is even (resp. odd), $\overline{p}$ is even (resp. odd).
+
+\begin{defi}
+Let $p$ be an homogeneous polynomial of degree $d$ on
+$ℝ^{n+1}$. Let $(Δᵢ)_{i∈I}$ be an $ε$-fat simplicial partition of $\PNR$.
+Let $\overline{p}$ be the $Δ$-linear approximation of $p$.
+We define the condition $Π_ε(x)$ to be true if and only if $p$ and
+$\overline{p}$ are both positive or both negative on $\ball{x}{ε}$.
+\end{defi}
+
+\begin{prop}\label{adaptedeq}
+Let $p$ be an homogeneous polynomial of degree $d$ on
+$ℝ^{n+1}$. Let $(Δᵢ)_{i∈I}$ be an $ε$-fat simplicial partition of $\PNR$.
+Let $\overline{p}$ be the $Δ$-linear approximation of $p$.
+
+The following conditions are equivalent:
+\begin{enumerate}
+\item $∀x ∈  ℝ^{n+1}∖\{0\}, Π_ε(x) \hbox{ or } 0 ∉ \cone{\{∇p(x)\} ∪ \{∇ᵢ^σp, (i,σ) ∈ I_ε(x)\}}$
+\item $∀x ∈  ℝ^{n+1}∖\{0\}, Π_ε(x) \hbox{ or } 0 ∉ \hull{\{∇p(x)\} ∪ \{∇ᵢ^σp, (i,σ) ∈ I_ε(x)\}}$
+\item $∀x ∈  \SNR, Π_ε(x) \hbox{ or } 0 ∉ \cone{\{∇p(x)\} ∪ \{∇ᵢ^σp, (i,σ) ∈ I_ε(x)\}}$
+\item $∀x ∈  \SNR, Π_ε(x) \hbox{ or } 0 ∉ \hull{\{∇p(x)\} ∪ \{∇ᵢ^σp, (i,σ) ∈ I_ε(x)\}}$
+\item\label{hb} $∀x ∈  ℝ^{n+1}∖\{0\}, Π_ε(x) \hbox{ or } ∃δ ∈ ℝ^{n+1}∖\{0\},
+  \left\{\begin{array}{l} δ.∇p(x) > 0 \hbox{ and}\cr
+    ∀(i,σ) ∈ I_ε(x), δ.∇ᵢ^σp > 0
+  \end{array}\right.$
+\end{enumerate}
+\end{prop}
+
+\begin{proof}
+  The equivalences (1) ↔ (2) and (3) ↔ (4) are a general property of convex hull
+  and convex cone: for any set $X ⊂ ℝ^{n+1}$, $0 ∈ \hull{X} ↔ 0 ∈ \cone{X}$.
+  %Left to right is because $\hull{X} ⊆ \cone{X}$. For right to left, if $0 ∈
+  %\cone{X}$, if means we write $0 = λᵢ x₁ + \dots + λₙ xₙ$ with $λᵢ > 0$ and
+  %$xᵢ ∈ X$ for $1 < i < n$. Hence, taking $μᵢ = \frac{λᵢ}{λᵢ + \dots + λₙ}$, we
+  %have $0 = μᵢ x₁ + \dots + μₙ xₙ$ with $μ₁ + \dots + μₙ = 1$ and $μᵢ > 0$, $xᵢ
+  %∈ X$ for $1 < i < n$.
+
+
+  The equivalence (1)  ↔ (3) comes from the fact that $p$ is homogeneous hence
+  $\nabla(p)(λx) = λ^{d-1}\nabla(p)(x)$ for $λ > 0$ and from proposition $\ref{Ihomo}$.
+
+  The equivalence (2) ↔ (5) is a form of Han-Banach theorem ensuring the
+  existence of a supporting hyper-plane. The vector $δ$ is a normal vector of
+  this supporting hyperplane \cite{Zal02}.
+\end{proof}
+
+\begin{defi}
+Let $p$ be an homogeneous polynomial of degree $d$ on
+$ℝ^{n+1}$. Let $(Δᵢ)_{i∈I}$ be an $ε$-fat simplicial partition of $\PNR$.
+
+We say that the partition is \emph{adapted} to $p$ if it satisfies the condition
+of proposition \ref{adaptedeq}.
+\end{defi}
+
+\begin{prop}
+  Let $p$ be an homogeneous polynomial of degree $d$ on
+$ℝ^{n+1}$.
+  Let $(Δᵢ)_{i∈I}$ be an $ε$-fat simplicial partition of $\PNR$ adapted to $p$.
+  We can find a $C^∞$ function $δ$ in $ℝ^{n+1} ∖ \{0\} → ℝ^{n+1}∖\{0\} $
+  and $μ > 0$ such that:
+  $$∀x ∈  ℝ^{n+1}∖\{0\}, Π_ε(x) \hbox{ or } \left\{
+  \begin{array}{l}δ(x).∇p(x) > μ\|x\|^{d-1} \hbox{ and } \cr ∀(i,σ) ∈
+  I_ε(x), δ(x).∇ᵢ^σp > μ.\end{array}\right.
+  $$
+\end{prop}
+
+\begin{proof}
+From proposition \ref{adaptedeq}.\ref{hb}, for any $x ∈ ℝ^{n+1}∖\{0\}$, if
+$Π_ε(x)$ is not satisfied, we find $δ₀(x)
+∈ ℝ^{n+1}$ such that $δ₀(x).∇p(x) > 0$ and $∀(i,σ) ∈ I_ε(x), δ₀(x).∇ᵢ^σp > 0$.
+We can also assume that $d₀(λ x) = d₀(x)$ for $λ > 0$ for the same reason as in
+the proof of $(1) ↔ (3)$ above.
+
+We start with the following lemma: for each $x ∈
+ℝ^{n+1}∖\{0\}$, we find $0 < η(x) < ε$ such that
+$∀y ∈ \ball{x}{2η(x)}$, $d₀(x).∇p(y) > 0$ and $∀(i,σ) ∈ I_ε(y),
+d₀(x).∇ᵢ^σp > 0$.
+
+First, $(i,σ) ∈ I_ε(y) ↔ \ball{y}{ε} ∩ Δᵢ^σ ≠ ∅$ is a closed condition and the
+contrary is an open condition. Hence, for $x ∈ℝ^{n+1}∖\{0\}$, we find $η > 0$
+small enough to have $y ∈
+\ball{x}{2η}$ gives $(i,σ) ∉ I_ε(x)$ implies $(i,σ) ∉ I_ε(y)$, which means that
+for $y ∈ \ball{x}{2η}$, we have $I_ε(y) ⊆ I_ε(x)$ and therefore,
+
+$$∀y ∈ \ball{x}{2η(x)}, ∀(i,σ) ∈ I_ε(y), d₀(x).∇ᵢ^σp > 0.$$
+
+Second, $∇p(x)$ is continuous, thus for  $x ∈ℝ^{n+1}∖\{0\}$, we find $η > 0$
+small enough to have $y ∈ \ball{x}{2η}$
+implies $d₀(x).∇p(y) > 0$. Grouping both results yields the wanted real $η(x)$
+such that
+
+$$∀x ∈ℝ^{n+1}∖\{0\}, ∀y ∈ \ball{x}{2η(x)},
+\left\{\begin{array}{l} d₀(x).∇p(y) > 0 \hbox{ and}\cr
+∀(i,σ) ∈ I_ε(y), d₀(x).∇ᵢ^σp > 0
+\end{array}\right.
+$$
+
+
+Now, for $x ∈ \SNR$, the balls $\ball{x}{η(x)}$ cover $\SNR$, so we can
+find a finite family $(xⱼ)_{j∈J}$ such that the balls $\ball{x}{η(xⱼ)}$ cover
+$\SNR$. We also take $η = min_{j ∈ J} η(xⱼ)$.
+
+Nest, for each $xⱼ ∈ \SNR$, $j ∈ J$, we choose a measurable set
+$Dⱼ ⊂ \ball{x}{η(xⱼ)}$ such that $\SNR$ is a disjoin union of all
+$Dⱼ$. And we define $d₁ : \SNR → ℝ^{n+1}∖\{0\}$ with $d₁(x) = d₀(xⱼ)$ if $x ∈ Dⱼ$.
+
+We choose $s : ℝ^{n+1} → ℝ$, a $C^∞$ function with support in
+$\ball{0}{1}$ and $∫_{ℝ^{n+1}} s(t) dt = 1$ for the standard measure $dt$
+on $ℝ^{n+1}$.
+
+We define
+
+$$ d : \SNR → ℝ^{n+1}∖\{0\} \hbox{ with } d(x) = ∫_{ℝ^{n+1}} d₁(x - η t)
+s(t) dt$$
+
+Similarly to a convolution product, we have $d(x) = ∫_{ℝ^{n+1}} η^{n +1} d₁(u)
+s(\frac{x - u}{η}) du$ and therefore $d$ is $C^∞$ on $\SNR$.
+
+Moreover, if we take $x ∈ \SNR$, we can write
+$$ d(x) = Σ_{j∈J} d₁(xⱼ) ∫_{x - η t ∈ Dⱼ} s(t) dt$$
+
+Let us define $λⱼ(x) = ∫_{x - η t ∈ Dⱼ} s(t) dt$. As $Dⱼ ⊂ \ball{xⱼ}{η(xⱼ)}$,
+if $λⱼ(x) > 0$, we have $d(x - η t,xⱼ) ≤ η(xⱼ)$ otherwise $x  - η t ∉ Dⱼ$
+and $d(x, x - η t) < η ≤ η(xⱼ)$ otherwise $s(t) = 0$. Therefore,
+if $λⱼ(x) > 0$, we have $d(x,xⱼ) < 2η(xⱼ)$.
+which implies $d₁(xⱼ).∇p(x) > 0$ and $∀(i,σ) ∈ I_ε(x), d₁(xⱼ).∇ᵢ^σp > 0$.
+
+Moreover, the coefficient $λⱼ$ are positive. Therefore, $d(x) = Σ_{j∈J}
+λⱼ(x) d₁(xⱼ)$ implies $d(x).∇p(x) > 0$ and $∀(i,σ) ∈ I_ε(x), d(x).∇ᵢ^σp >
+0$.  Thus, we have:
+$$∀x ∈ \SNR, d(x).∇p(x) > 0 \hbox{ and }∀(i,σ) ∈
+  I_ε(x), d(x).∇ᵢ^σp > 0.$$
+
+  As $\SNR$ is compact, we can find $μ > 0$ such that
+$$∀x ∈ \SNR, d(x).∇p(x) > μ \hbox{ and }∀(i,σ) ∈
+  I_ε(x), d(x).∇ᵢ^σp > μ.$$
+
+
+  To extend this to $ℝ^{n+1}∖\{0\}$, we just have to set $d(λx) = d(x)$ for $λ >
+  0$ and as $p$ is homogeneous of degree $d$, we have:
+
+
+  $$∀x ∈  ℝ^{n+1} ∖ \{0\}, d(x).∇p(x) > μ\|x\|^{d-1} \hbox{ and }∀(i,σ) ∈
+  I_ε(x), d(x).∇ᵢ^σp > μ.$$
+\end{proof}
+
+\begin{prop}
+  Let $p$ be an homogeneous polynomial of degree $d$ on
+$ℝ^{n+1}$.
+  Let $(Δᵢ)_{i∈I}$ be an $ε$-fat simplicial partition of $\PNR$ adapted to $p$.
+  the function  $p$ and $\overline{p}$ have homeomorphic zero locus on
+  $ℝ^{n+1}∖\{0\}$.
+\end{prop}
+
+\begin{proof}
+  The function $\overline{p}$ as a gradient defined in any direction $d$ which
+  may be defined as
+  $$
+  \nabla \overline{p}(x). d = \lim_{h → 0⁺} \frac{\overline{p}(x + hd) - \overline{p}(x)}{h}
+  $$
+  This is true because for $h > 0$ and small enough, $x + hd$ and $x$ belong to
+  at least one common cone $Δᵢ^σ$ with $(i, σ) ∈ I(x)$.
+  If they belong to more than one cone, the
+  gradient $∇ᵢ^σ . d$ coincide and are the limit.
+  This tells us moreover that we have
+  $$\nabla \overline{p}(x). d = ∇ᵢ^σp . d \hbox{ for some }
+  (i, σ) ∈ I(x).$$
+
+  Next, we Consider the differential equation $x'(t) = d(x(t))$.
+  This differential equation has
+  unique solutions in the neighbourhood of $x$ because $d$ is $C^∞$.
+
+  Now consider a closed and connnected region $Ω$ of $ℝ^{n+1} ∖ \{0\}$
+  where $p(x) ≤ 0$ and $\overline{p}(x) ≥ 0$, and a maximal solution
+  $x : L → Ω$ with $0$ in the interior of the interval $L$ and $x(0)$ in
+  the interior of $Ω$.
+
+  We define $\|p\| = max_{x ∈ \SNR} |p(x)|$ and  $\|\overline{p}\| = max_{x ∈
+    \SNR} |\overline{p}(x)|$.
+
+  From the definition of this region,
+  no $x ∈ Ω$ satisfies the condition $Π_ε(x)$. Hence we have
+  $d(x). ∇p(x) > 0$, so the solution is increasing in $p$.
+  Similarly, $∀(i,σ) ∈ I_ε(x), d(x). ∇ᵢ^σ > 0$, hence the solution is also
+  increasing in $\overline{p}$.
+
+  Therefore, for $t < 0$, we have $|p(x(0))| < |p(x(t))| < \|p\| \|x(t)\|ᵈ$.
+  for $t > 0$, we have  $|\overline{p}(x(0))| < |\overline{p}(x(t))| <
+  \|\overline{p}\| \|x(t)\|$.
+  Let use take $R = min(\frac{\overline{p}(x(0))}{\|\overline{p}\|},
+  \left(\frac{p(x(0))}{\|p\|}\right)^{\frac{1}{d}})$,
+  we have $\|x(t)\| > R$.
+
+  Next, consider $f(t) = p(x(t))$, $f'(t) = ∇p(x(t)).d(x(t)) > μ R^{d-1} $
+  Hence $-p(x(0)) > ∫_J⁺ f'(t) dt > t μ R^{d-1}$. Therefore the interval $J$ has
+  an upper bound $b > 0$.
+
+  Similarely, we considering $g(t) = \overline{p}(x(t))$, we find that
+  $J$ as a lower bound $a < 0$.
+
+
+
+
+  %% Thus, our maximal solution may only
+  %% start at $0$, infinity or a border of $Ω$ where $\overline{p} = 0$ and may only end
+  %% at $0$, infinity or a border of $Ω$ where $p = 0$.
+
+  %% First, we rule out zero, as $p(x(t))$ is increasing and $p(x(t)) ≤ 0$ on the
+  %% whole region, the solution can not start at $x = 0$, because $p(0) = 0$.  as
+  %% $\overline{p}(x(t)) ≥ 0$ and $\overline{p}(x(t))$ is increasing the solution can
+  %% not end at $0$.
+
+  %% If a the solution starts at infinity, $\overline{p}(x(t))$ is increasing
+  %% and $\overline{p}(x(t)) ≥ 0$, Hence when $x(t)$ converges to the beginning of
+  %% the interval $I$, we have $\overline{p}(x(t))$ which converges to a finite
+  %% limite. And if $x(t)$ approaches infinity ...
+
+  %% $p(x(t))$ must have a finite limit at the begginning
+  %% of the solution which implies that $∇p(x(t)).x'(t)$ should converge toward $0$
+  %% when $t$ converges to the beginning of $I$. This is not possible
+
+  %% over $ℝ^{n+1} \setminus \{0\}$, it has maximal solution. We consider maximal solution
+  %% $x : [0, a[ \to ℝ^{n+1} \setminus \{0\}$ starting with $p(x(0)) = 0$, with
+  %%     $x_0 \in ℝ^{n+1} \setminus \{0\}$.
+
+  %%     We have $p(x(t))' = \nabla p(x(t)) . d(x(t)) > 0$, which means that
+  %%     $p(x(t))$ is increasing.
+
+  %%     We have $\overline{p(x(t))} = \nabla \overline{p}(x(t)). d(x(t)) > 0$
+  %%     hence $\overline{p(x(t))}$ is decreasing. If $x(t)$ would approach
+  %%     infinity, the it would do so with a derivate approaching the plane
+\end{proof}
