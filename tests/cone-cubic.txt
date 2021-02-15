@@ -1,0 +1,39 @@
+
+let c0(x,y,z,t) = x^2 + y^2 - z^2;
+
+let p0(x,y,z,t) = z - t;
+
+let c1 = zeros c0 p0;
+
+display c1 c1__t;
+
+let a = 0.27;
+let b = 0.002;
+let c = 1e-4;
+
+let p1(x,y,z,t) = z - t + a * (x+0.8*t);
+let p2(x,y,z,t) = z - t - a * (x+0.8*t);
+let p3(x,y,z,t) = x + 2*z - 1.5*t;
+let cp1 = zeros c0 p1;
+let cp2 = zeros c0 p2;
+let cp3 = zeros c0 p3;
+display cp1 cp2 cp3;
+
+let q(x,y,z,t) = p1(x,y,z,t)*p2(x,y,z,t) + b*t^2;
+
+display q q__t;
+
+let cq = zeros c0 q;
+
+display cq cq__t;
+
+let cubic(x,y,z,t) = q(x,y,z,t)*p3(x,y,z,t) - c*t^3;
+
+#let cubic = zeros cubic;
+
+#display cubic cubic__t;
+
+let cc = zeros c0 cubic 5;
+
+display cc;
+display cc cc__t;
