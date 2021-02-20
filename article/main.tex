@@ -1,73 +1,21 @@
 \documentclass{article}
 
-\usepackage{hyperref}
-\usepackage{enumerate}
-\usepackage{enumitem}
-\usepackage{amssymb,amsmath,amsthm} %must be before unicode-math
-\usepackage[mathletters]{ucs}
-\DeclareUnicodeCharacter{8348}{_t}
-\DeclareUnicodeCharacter{8342}{_k}
-\DeclareUnicodeCharacter{8339}{_x}
-\DeclareUnicodeCharacter{8345}{_n}
-\DeclareUnicodeCharacter{7522}{_i}
-\DeclareUnicodeCharacter{11388}{_j}
-\DeclareUnicodeCharacter{7523}{_r}
-\DeclareUnicodeCharacter{7580}{^c}
-\DeclareUnicodeCharacter{7496}{^d}
-\DeclareUnicodeCharacter{7511}{^t}
-
-\usepackage[utf8x]{inputenc}
-\usepackage{graphicx}
-\usepackage{stmaryrd}
-\usepackage[autosize]{dot2texi}
-\usepackage{multicol}
-\setlength{\multicolsep}{0pt}
-\usepackage{tikz}
-\usetikzlibrary{shapes,arrows,tikzmark,decorations.pathreplacing,calc}
-\usepackage{adjustbox}
-
-% Title portion. Note the short title for running heads
-\title{Solving smooth system of algebraic equations}
-\author{Christophe Raffalli}
-
-\newcommand{\interior}[1]{%
-  #1^{\mathrm{o}}%
-}
-\newcommand{\cardinal}[1]{%
-  \#({#1})%
-}
-\newcommand{\hull}[1]{%
-  \mathcal H({#1})%
-}
-\newcommand{\cone}[1]{%
-  \mathcal C({#1})%
-}
-\newcommand{\vertices}[1]{%
-  \mathcal V({#1})%
-}
-\newcommand{\ball}[2]{%
-  \mathcal B_{#2}({#1})%
-}
-
-\newcommand{\PNR}{{\cal P}^n(ℝ)}
-\newcommand{\SNR}{{\cal S}^n(ℝ)}
-
-\newtheorem{theo}{Theorem}
-\newtheorem{nota}[theo]{Notation}
-\newtheorem{defi}[theo]{Definition}
-\newtheorem{prop}[theo]{Proposition}
-\newtheorem{exam}[theo]{Example}
+\input{header.tex}
 
 % Document starts
 \begin{document}
 
-
 \maketitle
+
+\tableofcontents
 
 \input{intro}
 \input{conventions}
 \input{partition}
 \input{approximation}
+\input{codim}
+\input{implem}
+\input{further}
 \appendix
 \input{zih}
 
@@ -75,3 +23,6 @@
 \bibliographystyle{plain}
 
 \end{document}
+
+%<!-- Local IspellDict: british -->
+%<!-- Local IspellPersDict: ~/.ispell-british -->

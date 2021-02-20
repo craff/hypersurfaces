@@ -37,64 +37,18 @@ In this examples, we have
 
 \begin{defi} Let $(Δᵢ)_{i∈I}$ be a simplicial partition of $\PNR$. For $x ∈
   ℝ^{n+1} ∖\{0\}$ we define
-  $I^Δ(x) = \{(i,σ) ∈ I × \{-,+\}, x ∈ Δᵢ^σ\}$ and
-  $I^Δ_ε(x) = \{(i,σ) ∈ I × \{-,+\}, Δᵢ^σ ∩ \ball{x}{ε\|x\|} ≠ ∅\}$. In general we only use one
-  simplicial partition at a time and we simply write $I(x)$ and $I_ε(x)$.
+  $I^Δ(x) = \{(i,σ) ∈ I × \{-,+\}, x ∈ Δᵢ^σ\}$. In general we only use one
+  simplicial partition at a time and we simply write $I(x)$.
 \end{defi}
 
 \begin{prop}\label{Ihomo}
   Let $(Δᵢ)_{i∈I}$ be a simplicial partition of $\PNR$.
-  For $x ∈  ℝ^{n+1} ∖\{0\}$ and $λ > 0$, we have $I(λx) = I(x)$ and $I_ε(λx) = I_ε(x)$.
+  For $x ∈  ℝ^{n+1} ∖\{0\}$ and $λ > 0$, we have $I(λx) = I(x)$.
 \end{prop}
 
 \begin{proof}
   From the fact that the set $Δᵢ^σ$ are convex cones.
 \end{proof}
 
-\begin{prop}
-  Let $(Δᵢ)_{i∈I}$ be a simplicial partition of $\PNR$.
-  For any $x ∈ ℝ^{n+1} ∖\{0\}$, if $ε>0$ is small enough, then $I_ε(x) = I(x)$.
-\end{prop}
-
-\begin{proof}
-  Take $ε < \min_{(i,σ) ∉ I(x)} d(x,Δᵢ^σ)$, then we have $I_ε(x) = I(x)$.
-\end{proof}
-
-\begin{defi}
-  Let $ε$ be a positive real. A \emph{simplicial partition} $(Δᵢ)_{i∈I}$ of
-  $\PNR$ is said to be $ε$-fat if for all $x ∈ ℝ^{n+1} ∖\{0\}$ we have:
-$$ ⋂_{(i,σ) ∈ I_ε(x)} Δᵢ^σ ≠ ∅$$
-\end{defi}
-
-\begin{prop} If a simplicial partition $(Δᵢ)_{i∈I}$ is $ε$-fat for $ε > 0$
-  then it is $η$-fat if $0 < η ≤ ε$.
-\end{prop}
-
-\begin{proof} From the fact that for $x ∈ ℝ^{n+1} ∖\{0\}$, $I_η(x) ⊆ I_ε(x)$ if $η ≤ ε$.
-\end{proof}
-
-\begin{prop}
-  Any \emph{simplicial partition} $(Δᵢ)_{i∈I}$ of $\PNR$ is $ε$-fat for
-  some $ε > 0$ small enough.
-\end{prop}
-
-\begin{proof}
-  First, thanks to proposition \ref{Ihomo}, we only have to check the condition
-  for $ε$-fatness in $\SNR$.
-
-  Consider a set $J ⊂ I × \{-,+\}$ with $⋂_{(i,σ)∈J} Δⱼ^σ = ∅$ (1), we first
-  prove that there exists $ε_J > 0$ such that for all $x ∈ \SNR$, $J \not⊆
-  I_{ε_J}(x)$. For this we assume the contrary: For any $ε>0$ there exists $x_ε
-  ∈ \SNR$ such that $J ⊆ I_{ε}(x_ε)$. As $\SNR$ is compact, we can extract a
-  sequence $(εₙ,xₙ)_{n ∈ \mathbb N}$ which converges to $(0,x)$ for some $x ∈
-  \SNR$, with $J ⊆ I_{εₙ}(x_{εₙ})$ for all $n ∈ \mathbb N$. Thus, for any $(i,σ)
-  ∈ J$ and $n ∈ \mathbb N$, we have $\ball{xₙ}{εₙ} ∩ Δᵢ^σ ≠ ∅$ which implies
-  $d(xₙ,Δᵢ^σ) < εₙ$. As $Δᵢ^σ$ are closed convex cone, this implies that $x ∈
-  Δᵢ^σ$ for any $(i,σ) ∈ J$ which contradicts the hypothesis (1).
-
-  We end the proof by remarking that the simplicial partition is $ε$-fat if we
-  take $ε$ the minimum of all $ε_J$ for $J ⊂ I$ with $∩_{(i,σ)∈J} Δᵢ^σ =
-  ∅$. This is well defined as $I$ hence his power-set are finite. Indeed, if $J
-  = I_{ε}(x)$, and $∩_{(i,σ)∈J} Δᵢ^σ = ∅$, then $J \not ⊆ I_{ε_J}(x) ⊇ I_{ε}(x)
-  = J$ which is contradictory.
-\end{proof}
+%<!-- Local IspellDict: british -->
+%<!-- Local IspellPersDict: ~/.ispell-british -->
