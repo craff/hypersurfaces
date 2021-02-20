@@ -581,8 +581,8 @@ module Make(R:Field.SPlus) = struct
         | Some(dx,_,fx,_) as x ->
            assert (fx >=. zero);
            assert (fy >=. zero);
-           if List.length p0 = 1 && false then
-             match compare (dx /. (rmax2 -. fx)) (dy *. (rmax2 -. fy)) with
+           if List.length p0 = 1 then
+             match compare (dx /. (rmax2 -. fx)) (dy /. (rmax2 -. fy)) with
              | -1 -> x
              | _ -> Some y
            else
