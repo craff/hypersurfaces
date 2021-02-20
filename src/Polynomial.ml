@@ -61,11 +61,13 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
 
   (** dimension aka number of variable, check coherence of all monomials
       therefore trailing 0 must appears in the list of integer. *)
+  let unsafe_dim p =
+    match p with
+    | (l,_)::_ -> Array.length l
+    | _ -> 0
+
   let dim p =
-    let d = match p with
-      | (l,_)::_ -> Array.length l
-      | _ -> 0
-    in
+    let d = unsafe_dim p in
     List.iter (fun (l,_) ->
         if Array.length l <> d then invalid_arg "inhomogeneous polynomial") p;
     d
@@ -86,7 +88,7 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
 
   (** degree *)
   let monomial_degree (l,_) = Array.fold_left (+) 0 l
-  let unsafe_degree p = monomial_degree (List.hd p)
+  let unsafe_degree p = match p with [] -> 0 | m::_ -> monomial_degree m
   let degree p = List.fold_left (fun d m -> max d (monomial_degree m)) 0 p
 
   (** homogenisation *)
@@ -105,7 +107,7 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
   (** general code to subdivise in two the simplex domain of a polynomial
       along the direction i <-> j *)
   let subdivise_gen zero avg p i j =
-    let dim = dim p in
+    let dim = unsafe_dim p in
     assert (i<>j);
     let (i,j) = if i < j then (i,j) else (j,i) in
     let l = Hashtbl.create 128 in
@@ -158,10 +160,7 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
 
   (** subdivise for gradient polynomial *)
   let subdivise_v p i j =
-    let dim = match p with
-      | (_,v)::_ -> Array.length v
-      | _ -> assert false
-    in
+    let dim = unsafe_dim p in
     let zero = zero_v dim in
     subdivise_gen zero (fun x y -> (x +++ y) //. of_int 2) p i j
 
@@ -199,7 +198,7 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
 
   (** power of a polynomial *)
   let pow p n =
-    let d = dim p in
+    let d = unsafe_dim p in
     let rec fn n =
       if n <= 0 then cst d one
       else if n = 1 then p
@@ -212,7 +211,7 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
 
   (** substitution *)
   let subst p qs =
-    let d = dim p in
+    let d = unsafe_dim p in
     List.fold_left (fun acc (l,x) ->
         List.fold_left2 (fun acc e q ->
             acc ** pow q e) (cst d (multinomial l *. x)) (Array.to_list l) qs
@@ -240,7 +239,7 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
 
   (** gradient as a polynomial with vector as coefficients *)
   let gradient (p:polynomial) =
-    let dim = dim p in
+    let dim = unsafe_dim p in
     let ps =  Array.init dim (fun i -> partial p i) in
     let res = ref [] in
     try
@@ -266,7 +265,7 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
 
   (** gradient as a polynomial with vector as coefficients *)
   let hessian (p:polynomial) =
-    let dim = dim p in
+    let dim = unsafe_dim p in
     let pss =  Array.init dim
                 (fun i -> Array.init dim
                             (fun j -> partial (partial p i) j))
@@ -340,7 +339,7 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
     let (ldp,lx,r) = !last_eval_grad in
     if dp == ldp && x == lx then r else
       begin
-        let res = zero_v (dim dp) in
+        let res = zero_v (unsafe_dim dp) in
         List.iter (fun (l,c) ->
             let z = ref one in
             Array.iteri (fun i e -> z := !z *. R.pow x.(i) e) l;
@@ -368,7 +367,7 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
     let (lhp,lx,r) = !last_eval_hess in
     if hp == lhp && x == lx then r else
       begin
-        let dim = dim hp in
+        let dim = unsafe_dim hp in
         let r = zero_m dim dim in
         List.iter (fun (l,c) ->
             let z = ref one in
@@ -380,13 +379,13 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
 
   (** evaluation of a polynomial "tangential hessian", i.e.
       a matrix that can be used to solve tangential gradient = 0 *)
-  let last_eval_thess = ref (([]:polynomial),[],[||],[||])
-  let eval_thess p hp x =
-    let (lp,lhp,lx,r) = !last_eval_thess in
-    if p == lp && hp == lhp && x == lx then r else
+  let last_eval_thess = ref ([],[||],[||])
+  let eval_thess hp x =
+    let (lhp,lx,r) = !last_eval_thess in
+    if hp == lhp && x == lx then r else
       begin
-        let dim = dim p in
-        let deg = degree p in
+        let dim = unsafe_dim hp in
+        let deg = unsafe_degree hp + 2 in
         let h = eval_hess hp x in
         let dmg = h *** x in
         let g  = dmg //. of_int (deg - 1) in
@@ -401,7 +400,7 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
                   +. (one +. of_int (deg + 1) *. dp) *. x.(i) *. x.(j)
                   ))
         in
-        last_eval_thess := (p,hp,x,r);
+        last_eval_thess := (hp,x,r);
         r
       end
 
@@ -436,7 +435,7 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
   let mkvars vars p =
     match vars with
       | Some v -> v
-      | None -> Array.init (dim p) (fun i -> "X" ^ string_of_int i)
+      | None -> Array.init (unsafe_dim p) (fun i -> "X" ^ string_of_int i)
 
   let print_polynome ?vars ch p =
     let vars = mkvars vars p in
@@ -515,7 +514,7 @@ module type B = sig
   val eval_grad : polynomial_v -> v -> v
   val eval_tgrad : polynomial_v -> v -> v
   val eval_hess : polynomial_m -> v -> m
-  val eval_thess : polynomial -> polynomial_m -> v -> m
+  val eval_thess : polynomial_m -> v -> m
 
   val ( ++ ) : polynomial -> polynomial -> polynomial
   val ( -- ) : polynomial -> polynomial -> polynomial

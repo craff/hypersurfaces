@@ -108,29 +108,10 @@ module Make(R:Field.SPlus) = struct
     let dirs = all_dirs dim in
     let ls = quadrants dim in
     let s0 = to_matrix (List.hd ls) in
-    let allp =
-      if List.length p0 = 1 then
-        begin
-          let p0 = List.hd p0 in
-          let d0 = List.hd deg in
-          let dp0 = gradient p0 in
-          let hp0 = hessian p0 in
-          (d0,p0,dp0,hp0)
-        end
-      else
-        begin
-          let max_deg = List.fold_left max 0 deg in
-          let s2p =
-            let r = ref [] in
-            let c = cst_poly dim in
-            List.iter2 (fun d p ->
-                Poly.(r := !r ++ p ** p ** pow c (max_deg - d))) deg p0;
-            !r
-          in
-          let ds2p = gradient s2p in
-          let hs2p = hessian s2p in
-          (max_deg*2,s2p,ds2p,hs2p)
-        end
+    let dp0 = List.map gradient p0 in
+    let hp0 = List.map hessian p0 in
+    let allp = List.init (List.length p0) (fun i ->
+                  (List.nth p0 i, List.nth dp0 i, List.nth hp0 i))
     in
     let n = List.length ls in
     let all = Hashtbl.create 1001 in
@@ -499,28 +480,30 @@ module Make(R:Field.SPlus) = struct
       let radius2 = dist2 (to_vec s.s.(0)) c0 in
       let rs2 = radius2 /. of_int 100_000 in
       assert (rmax2 >. zero);
-      let eval_descent (deg,p,dp,hp) c =
+      let eval_descent (_,dp,hp) c =
+        if hp = [] then zero_v dim else
         let r = eval_tgrad dp c in
-        let h = eval_thess p hp c in
+        let h = eval_thess hp c in
         let dx = h *** r in
         let d2 = norm2 dx in
         if d2 >. zero then
           (-. (r*.*r) /. d2) **. dx
         else dx
       in
-      let eval_newton (deg,p,dp,hp) c =
+      let eval_newton (_,dp,hp) c =
         try
+          if hp = [] then zero_v dim else
           let r = eval_tgrad dp c in
-          let h = eval_thess p hp c in
+          let h = eval_thess hp c in
           solve h (-. one **. r)
         with Not_found -> zero_v dim
       in
-      let eval_fun (deg,p,dp,hp) c =
+      let eval_fun (_,dp,_) c =
         norm2 (eval_tgrad dp c)
       in
       let rec loop poly steps c fc dn dd lambda =
         assert (fc >=. zero);
-        let (_,p,_,_) = poly in
+        let (p,_,_) = poly in
         try
           let (c',f') =
             List.find (fun (c',_) -> dist2 c c' < rs2) !criticals
@@ -579,19 +562,14 @@ module Make(R:Field.SPlus) = struct
       let select best (dy,_,fy,_ as y) = match best with
         | None -> Some y
         | Some(dx,_,fx,_) as x ->
-           assert (fx >=. zero);
-           assert (fy >=. zero);
-           if List.length p0 = 1 then
-             match compare (dx /. (rmax2 -. fx)) (dy /. (rmax2 -. fy)) with
-             | -1 -> x
-             | _ -> Some y
-           else
-             match compare (dx *. (rmax2 -. fx)) (dy *. (rmax2 -. fy)) with
-             | 1 -> x
-             | _ -> Some y
+           assert (fx >. zero);
+           assert (fy >. zero);
+           match compare (dx /. fx) (dy /. fy) with
+           | -1 -> x
+           | _ -> Some y
       in
       let fn best poly c0 =
-        let (_,p,_,_) = poly in
+        let (p,_,_) = poly in
         let fc0 = eval_fun poly c0 in
         let dd = eval_descent poly c0 in
         let dn = eval_newton  poly c0 in
@@ -600,8 +578,11 @@ module Make(R:Field.SPlus) = struct
         assert(fc1 >=. zero);
         let c1_ok = sin2 c1 <. rmax2 && b11 && b12 in
         if c1_ok then
-          let p2 = eval p c1 in
-          select best (abs p2, c1, sin2 c1, fc1)
+          begin
+            let p2 = eval p c1 in
+            let r = select best (abs p2, c1, rmax2 -. sin2 c1, fc1) in
+            r
+          end
         else best
       in
       let c1 = normalise (Array.fold_left (fun acc v -> acc +++ v) (zero_v dim) (to_matrix s.s)) in
@@ -620,8 +601,8 @@ module Make(R:Field.SPlus) = struct
             done
           end
       done;
-      let best =
-        List.fold_left (fun best c -> fn best allp c) None !lm
+      let best = List.fold_left (fun best poly ->
+                  List.fold_left (fun best c -> fn best poly c) best !lm) None allp
       in
       let c =
         match best with
