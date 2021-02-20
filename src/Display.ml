@@ -5,7 +5,7 @@ open Args
 module F = Field.Float
 module VF = F.V
 
-let background_color = ref (rgba 1.0 1.0 1.0 1.0)
+let background_color = ref (rgba ~r:1.0 ~g:1.0 ~b:1.0 ~a:1.0)
 
 type gl_object =
   { vert : float_bigarray
@@ -265,7 +265,7 @@ let save_image () =
     { width; height; format = gl_rgba
       ; data = create_ubyte_bigarray (4 * width * height)}
   in
-  read_pixels 0 0 image;
+  read_pixels ~x:0 ~y:0 image;
   show_errors "read_pixels";
   let data = image.data in
   let img = Image.create_rgb width height in
