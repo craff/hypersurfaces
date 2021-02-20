@@ -5,6 +5,8 @@ open Args
 module F = Field.Float
 module VF = F.V
 
+let background_color = ref (rgba 1.0 1.0 1.0 1.0)
+
 type gl_object =
   { vert : float_bigarray
   ; norm : float_bigarray
@@ -236,6 +238,7 @@ let draw_object cam proj (_,obj) =
 (* The main drawing function. *)
 let draw : unit -> unit = fun () ->
   Thread.yield ();
+  Gles3.clear_color !background_color;
   Gles3.clear [gl_color_buffer; gl_depth_buffer];
   Mutex.lock draw_mutex;
   let cam = camera_mat () and proj = projection () in
@@ -243,6 +246,46 @@ let draw : unit -> unit = fun () ->
   Mutex.unlock draw_mutex;
   Gles3.show_errors "hypersurfaces";
   Egl.swap_buffers ()
+
+let fresh_filename () =
+  let fn r = if r = 0 then "image.png"
+              else Printf.sprintf "image_%d.png" r
+  in
+  let rec loop n =
+    let fn = fn n in
+    if Sys.file_exists fn then loop (n+1) else fn
+  in
+  loop 0
+
+let save_image () =
+  let open Gles3 in
+  let width = !window_width in
+  let height = !window_height in
+  let image =
+    { width; height; format = gl_rgba
+      ; data = create_ubyte_bigarray (4 * width * height)}
+  in
+  read_pixels 0 0 image;
+  show_errors "read_pixels";
+  let data = image.data in
+  let img = Image.create_rgb width height in
+  for i = 0 to height - 1 do
+    for j = 0 to width - 1 do
+      let r = Bigarray.Genarray.get data [|i * 4 * width + 4 * j    |] in
+      let g = Bigarray.Genarray.get data [|i * 4 * width + 4 * j + 1|] in
+      let b = Bigarray.Genarray.get data [|i * 4 * width + 4 * j + 2|] in
+      (*Printf.printf "%d %d: %d %d %d\n%!" j i r g b;*)
+      Image.write_rgb img j i r g b
+    done
+  done;
+  let filename = fresh_filename () in
+  let file = open_out filename in
+  let fn = function
+      `String s -> output_string file s; Ok ()
+    | `Close -> close_out file; Ok ()
+  in
+  ImageLib.writefile ~extension:"png" fn img;
+  printf "image saved as %S\n%!" filename
 
 let key_cb ~key ~state ~x ~y =
   let _ = x,y in
@@ -257,6 +300,7 @@ let key_cb ~key ~state ~x ~y =
   | _    , ('b'|'B') -> move_back ()
   | _    , ('c'|'C') -> toggle_curve ()
   | _    , ('h'|'H') -> home ()
+  | _    , ('s'|'S') -> save_image ()
   | _    , ('q'|'Q') -> Egl.exit_loop ()
   | 65307, _         -> Egl.exit_loop ()
   | _                -> Printf.printf "%d %d\n%!" key state
@@ -415,7 +459,7 @@ module Make(R:Field.SPlus) = struct
        f (f (f acc x1 x2 y1) x2 y1 y2) x3 y13 y23
     | _ -> acc
 
-  let mk_points_from_polyhedron ?(color=[|1.;1.;1.;1.|]) name p =
+  let mk_points_from_polyhedron ?(color=[|0.;0.;0.;1.|]) name p =
     let tbl = Hashtbl.create 1001 in
     let count = ref 0 in
     let (size, p) = List.fold_left (fun (j,acc) a ->
@@ -456,7 +500,7 @@ module Make(R:Field.SPlus) = struct
     add_object name obj;
     obj
 
-  let mk_lines_from_polyhedron ?(color=[|1.;1.;1.;1.|]) name p =
+  let mk_lines_from_polyhedron ?(color=[|0.;0.;0.;1.|]) name p =
     let tbl = Hashtbl.create 1001 in
     let count = ref 0 in
     let (size, p) = List.fold_left (fun (j,acc) a ->
@@ -500,7 +544,7 @@ module Make(R:Field.SPlus) = struct
     add_object name obj;
     obj
 
-  let mk_triangles_from_polyhedron name p =
+  let mk_triangles_from_polyhedron ?(color=[|0.2;0.2;0.6;1.0|]) name p =
     let (size, p) = List.fold_left (fun (j,acc) a ->
         if Array.length a <> 3 && Array.length a <> 4 then invalid_arg "dimension not 3";
         let f (j,acc) x1 x2 x3 =
@@ -534,7 +578,7 @@ module Make(R:Field.SPlus) = struct
         setn (9*i+6) n.(0); setn (9*i+7) n.(1); setn (9*i+8) n.(2);
       ) p;
     let obj =
-      mk_object vert norm elem [|0.2;0.2;0.6;1.0|] Matrix.idt gl_triangles
+      mk_object vert norm elem color Matrix.idt gl_triangles
     in
     add_object name obj;
     obj
