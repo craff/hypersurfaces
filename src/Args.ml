@@ -3,10 +3,11 @@ let cont  = ref false
 let show  = ref false
 let rmax  = ref 0.99
 let subd  = ref 15
+let dprec = ref 1e-14
 let prog  = ref false
 let progw  = ref false
-let quick_test = ref true
 let debug_string = ref ""
+let crit  = ref 5
 
 let spec =
   [ ( "-c"
@@ -36,15 +37,15 @@ let spec =
   ; ( "--rmax"
     , Arg.Set_float rmax
     , "maximum distance to center when optimizing vertex position")
+  ; ( "--delauney-prec"
+    , Arg.Set_float dprec
+    , "minimum visibility to compensate for numerical errors in delauney triangulation")
   ; ( "--subd"
     , Arg.Set_int subd
     , "number of subdivision to test a simplex")
-  ; ( "--qt"
-    , Arg.Set quick_test
-    , "enable test of scalar product of gradients before quick hull")
-  ; ( "--nqt"
-    , Arg.Clear quick_test
-    , "disable test scalar of product of gradients before quick hull")
+  ; ( "--nb-critical"
+    , Arg.Set_int crit
+    , "number of critical point candidates in a simplex")
   ]
 
 let files = ref []

@@ -5,7 +5,7 @@
   (public_name Hyper)
   (modules :standard)
   (preprocess (pps pacomb.ppx))
-  (libraries unix threads zarith gles3 gmp pacomb))
+  (libraries unix threads zarith gles3 gmp pacomb imagelib))
 
 (rule
   (targets lines_shader.ml)

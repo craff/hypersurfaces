@@ -25,6 +25,10 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
   type polynomial_v = v   p
   type polynomial_m = m   p
 
+  (** Bombieri's norm, a.k.a Euclidian norm in Bernstein's basis *)
+  let norm p =
+    sqrt (List.fold_left (fun acc (_,c) -> acc +. c*.c) zero p)
+
   (** polynomial addition *)
   let (++) p1 p2 =
     let rec fn p1 p2 =
@@ -52,6 +56,9 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
   (** division by a constant *)
   let div_cst (p:polynomial) x = mul_cst (one /. x) p
 
+  let normalise p =
+    let n = norm p in div_cst p n
+
   (** dimension aka number of variable, check coherence of all monomials
       therefore trailing 0 must appears in the list of integer. *)
   let dim p =
@@ -68,6 +75,14 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
 
   let var_power i dim deg =
     Array.init dim (fun j -> if i = j then deg else 0)
+
+  let cst_poly dim =
+    let r = ref [] in
+    for i = 0 to dim - 1 do
+      let x2 = var_power i dim 2 in
+      r := !r ++ [(x2, one)]
+    done;
+    !r
 
   (** degree *)
   let monomial_degree (l,_) = Array.fold_left (+) 0 l
@@ -336,16 +351,14 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
       end
 
   (** evaluation of a polynomial tangential gradient *)
-  let last_eval_tgrad = ref([],[],[||],[||])
-  let eval_tgrad p dp x =
-    let (lp,ldp,lx,r) = !last_eval_tgrad in
-    if p == lp && dp == ldp && x == lx then r else
+  let last_eval_tgrad = ref([],[||],[||])
+  let eval_tgrad dp x =
+    let (ldp,lx,r) = !last_eval_tgrad in
+    if dp == ldp && x == lx then r else
       begin
-        let deg = degree p in
-        let y = eval p x in
         let g = eval_grad dp x in
-        let r = comb one g (-. of_int deg *. y) x in
-        last_eval_tgrad := (p,dp,x,r);
+        let r = comb one g (-. (g *.* x)) x in
+        last_eval_tgrad := (dp,x,r);
         r
       end
 
@@ -367,25 +380,28 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
 
   (** evaluation of a polynomial "tangential hessian", i.e.
       a matrix that can be used to solve tangential gradient = 0 *)
-  let last_eval_thess = ref ([],[],[],[||],[||])
-  let eval_thess p dp hp x =
-    let (lp,ldp,lhp,lx,r) = !last_eval_thess in
-    if p == lp && dp == ldp && hp == lhp && x == lx then r else
+  let last_eval_thess = ref (([]:polynomial),[],[||],[||])
+  let eval_thess p hp x =
+    let (lp,lhp,lx,r) = !last_eval_thess in
+    if p == lp && hp == lhp && x == lx then r else
       begin
         let dim = dim p in
         let deg = degree p in
-        let y = eval p x in
-        let g = eval_grad dp x in
         let h = eval_hess hp x in
+        let dmg = h *** x in
+        let g  = dmg //. of_int (deg - 1) in
+        let dp = g *.* x in
         let r =
           Array.init dim (fun i ->
               Array.init dim (fun j ->
                   (if h <> [||] then h.(i).(j) else zero)
-                  -. of_int deg *. x.(i) *. g.(j)
-                  -. (if i = j then of_int deg *. y else zero)
-                  -. x.(i) *. x.(j)))
+                  -. of_int deg *. g.(i) *. x.(j)
+                  -. x.(i) *. dmg.(j)
+                  -.  (if i = j then dp else zero)
+                  +. (one +. of_int (deg + 1) *. dp) *. x.(i) *. x.(j)
+                  ))
         in
-        last_eval_thess := (p,dp,hp,x,r);
+        last_eval_thess := (p,hp,x,r);
         r
       end
 
@@ -410,52 +426,20 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
         if cmp p1 zero < 0 then fn p1 x p2 y else fn p2 y p1 x
       end
 
-  (** first version, limited to dimension 26 ! *)
-  let print_polynome26 ch p =
-    let first = ref true in
-    List.iter (fun (l,c) ->
-        if c <> zero then
-          begin
-            if not !first then fprintf ch " + ";
-            first := false;
-            fprintf ch "%a " print c;
-            Array.iteri (fun i e ->
-                if e <> 0 then
-                  if e > 1 then
-                    fprintf ch "%c^%d "
-                                   (Char.chr (Char.code 'a' + i)) e
-                  else
-                    fprintf ch "%c "
-                                   (Char.chr (Char.code 'a' + i))) l;
-          end) p
-  (** second version, limited to dimension 3, starts with 'x' ! *)
-  let print_polynome10 ch p =
-    let first = ref true in
-    List.iter (fun (l,c) ->
-        if c <> zero then
-          begin
-            if not !first then fprintf ch " + ";
-            first := false;
-            fprintf ch "%a " print c;
-            Array.iteri (fun i e ->
-                if e <> 0 then
-                  if e > 1 then
-                    fprintf ch "%c^%d "
-                                   (Char.chr (Char.code 'x' + i)) e
-                  else
-                    fprintf ch "%c"
-                                   (Char.chr (Char.code 'x' + i))) l;
-          end) p
-
-
   (** third version, unlimited ! *)
-  let print_monomial ch l =
+  let print_monomial vars ch l =
     Array.iteri (fun i e ->
         if e <> 0 then
-          if e > 1 then fprintf ch "X%d^%d " i e
-          else  fprintf ch "X%d " i) l
+          if e > 1 then fprintf ch "%s^%d " vars.(i) e
+          else  fprintf ch "%s" vars.(i)) l
 
-  let print_polynome ch p =
+  let mkvars vars p =
+    match vars with
+      | Some v -> v
+      | None -> Array.init (dim p) (fun i -> "X" ^ string_of_int i)
+
+  let print_polynome ?vars ch p =
+    let vars = mkvars vars p in
     let first = ref true in
     List.iter (fun (l,c) ->
         if c <> zero then
@@ -463,10 +447,11 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
             if not !first then fprintf ch " + ";
             first := false;
             fprintf ch "%a %a" print c
-              print_monomial l;
+              (print_monomial vars) l;
           end) p
 
-  let print_gradient ch p =
+  let print_gradient ?vars ch p =
+    let vars = mkvars vars p in
     let first = ref true in
     List.iter (fun (l,c) ->
         if Array.exists (fun x -> x <>. zero) c then
@@ -474,10 +459,11 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
             if not !first then fprintf ch " + ";
             first := false;
             fprintf ch "%a %a" print_vector c
-              print_monomial l;
+              (print_monomial vars) l;
           end) p
 
-  let print_hessian ch p =
+  let print_hessian ?vars ch p =
+    let vars = mkvars vars p in
     let first = ref true in
     List.iter (fun (l,c) ->
         if Array.exists (Array.exists (fun x -> x <>. zero)) c then
@@ -485,7 +471,7 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
             if not !first then fprintf ch " + ";
             first := false;
             fprintf ch "%a %a" print_matrix c
-              print_monomial l;
+              (print_monomial vars) l;
           end) p
 
   let transform p s1 s2 =
@@ -513,20 +499,23 @@ module type B = sig
   type polynomial_v = v p
   type polynomial_m = m p
 
-  val print_polynome : formatter -> polynomial -> unit
-  val print_gradient : formatter -> polynomial_v -> unit
-  val print_hessian  : formatter -> polynomial_m -> unit
+  val print_polynome : ?vars:string array -> formatter -> polynomial -> unit
+  val print_gradient : ?vars:string array -> formatter -> polynomial_v -> unit
+  val print_hessian  : ?vars:string array -> formatter -> polynomial_m -> unit
 
   val dim : 'a p -> int
   val degree : 'a p -> int
+  val norm : polynomial -> t
+  val normalise : polynomial -> polynomial
+
   val cst : int -> 'a -> 'a p
   val var_power : int -> int -> int -> int array
 
   val eval : polynomial -> v -> t
   val eval_grad : polynomial_v -> v -> v
-  val eval_tgrad : polynomial -> polynomial_v -> v -> v
+  val eval_tgrad : polynomial_v -> v -> v
   val eval_hess : polynomial_m -> v -> m
-  val eval_thess : polynomial -> polynomial_v -> polynomial_m -> v -> m
+  val eval_thess : polynomial -> polynomial_m -> v -> m
 
   val ( ++ ) : polynomial -> polynomial -> polynomial
   val ( -- ) : polynomial -> polynomial -> polynomial
@@ -545,4 +534,6 @@ module type B = sig
   val first_deg : 'a p -> 'a p
 
   val digho : polynomial -> t -> t -> v -> t -> v -> v
+  val cst_poly : int -> polynomial
+
 end

@@ -17,4 +17,7 @@ let _ =
          raise e) parse)
     files;
   if not !Args.batch then
-    while true do Unix.sleep 3600 done
+    while true do
+      let l = read_line () in
+      Grammar.parse_string Parser.main blank l
+    done

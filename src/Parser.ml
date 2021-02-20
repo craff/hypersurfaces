@@ -135,7 +135,8 @@ module Parse(R:Field.SPlus) = struct
   let%parser cmd =
       "let" (name::ident) ((vars,()) >: params) '=' (p::poly vars Sum) ';' =>
         (let p = P.mk name vars p in
-         printf "%a\n%!" B.print_polynome p.bern)
+         let vars = Array.of_list (vars @ ["s"]) in
+         printf "%a\n%!" (B.print_polynome ~vars) p.bern)
      ; "let" (name::ident) '=' "zeros" (names:: ~+ ident) (t::expected) ';' =>
         (let p name =
            try (Hashtbl.find polys name).bern
@@ -165,7 +166,7 @@ module Parse(R:Field.SPlus) = struct
          let e_name = name ^ "__t" in
          let _os =
            if es <> [] then
-             D.mk_lines_from_polyhedron e_name ~color:[|0.4;0.7;0.4;1.0|] es::os
+             D.mk_lines_from_polyhedron e_name ~color:[|0.0;1.0;0.0;1.0|] es::os
            else os
          in
          ())

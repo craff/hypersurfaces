@@ -16,9 +16,9 @@ module Make(R:Field.SPlus) = struct
   open R
   module Simp = Simplices.Make(R)
   module Poly = B
+  open B
   open V
   open Simp
-  open B
   module D = Display.Make(R)
 
   (* type for the expected topologie *)
@@ -101,16 +101,36 @@ module Make(R:Field.SPlus) = struct
     let time0 = Unix.gettimeofday () in
     let dims = List.map dim p0 in
     let deg = List.map degree p0 in
+    let p0 = List.map Poly.normalise p0 in
     let dim = List.hd dims in
     if not (List.for_all ((=) dim) dims) then failwith "inhomogeneous equations";
     let sdim = dim - List.length p0 in
     let dirs = all_dirs dim in
     let ls = quadrants dim in
     let s0 = to_matrix (List.hd ls) in
-    let dp0 = List.map gradient p0 in
-    let hp0 = List.map hessian p0 in
-    let allp = List.init (List.length p0) (fun i ->
-                  (List.nth deg i, List.nth p0 i, List.nth dp0 i, List.nth hp0 i))
+    let allp =
+      if List.length p0 = 1 then
+        begin
+          let p0 = List.hd p0 in
+          let d0 = List.hd deg in
+          let dp0 = gradient p0 in
+          let hp0 = hessian p0 in
+          (d0,p0,dp0,hp0)
+        end
+      else
+        begin
+          let max_deg = List.fold_left max 0 deg in
+          let s2p =
+            let r = ref [] in
+            let c = cst_poly dim in
+            List.iter2 (fun d p ->
+                Poly.(r := !r ++ p ** p ** pow c (max_deg - d))) deg p0;
+            !r
+          in
+          let ds2p = gradient s2p in
+          let hs2p = hessian s2p in
+          (max_deg*2,s2p,ds2p,hs2p)
+        end
     in
     let n = List.length ls in
     let all = Hashtbl.create 1001 in
@@ -181,10 +201,12 @@ module Make(R:Field.SPlus) = struct
       let (_,key) = edge_key s1 s2 in
       Hashtbl.find by_edge key
     in*)
+    let total_count = ref 0 in
     let rm_s s =
       decomp_log "remove %a" print_simplex s.s;
       assert (s.k <> Removed);
       s.k <- Removed; rm s; rm_v s; rm_e s; rm_f s;
+      decr total_count;
     in
     let add_s s = add s; add_v s; add_e s; add_f s in
 
@@ -202,6 +224,7 @@ module Make(R:Field.SPlus) = struct
               ; codim = 0; suid = simplex_key s } in
       decomp_log "make %a" print_simplex s.s;
       add_s s;
+      incr total_count;
       s
     in
 
@@ -430,12 +453,34 @@ module Make(R:Field.SPlus) = struct
 
     let visible_v s x =
       let d = x *.* s.c in
-      (d >=. zero, abs d >. one +. of_float 1e-15)
+      (d >. zero, abs d >. one +. of_float !Args.dprec)
     in
 
     let visible s x =
       let x = to_vec x in
       visible_v s x
+    in
+
+    let criticals = ref [] in
+
+    let max_steps = 10000 in
+
+    let max_reached_steps = ref 0 in
+    let sum_steps = ref 0 in
+    let nb_loops = ref 0 in
+
+    let update_loop_stats steps =
+      incr nb_loops;
+      sum_steps := steps + !sum_steps;
+      if steps > !max_reached_steps then max_reached_steps := steps
+    in
+
+    let print_loop_stats () =
+      printf
+        "critical points loop: %d points, %d calls, %.1f avg steps, %d max steps\n"
+        (List.length !criticals)
+        !nb_loops Stdlib.(float !sum_steps /. float !nb_loops)
+        !max_reached_steps
     in
 
     let center s =
@@ -451,94 +496,141 @@ module Make(R:Field.SPlus) = struct
       in
       let rmax = of_float !Args.rmax in
       let rmax2 = sin2 (to_vec s.s.(0)) *. rmax *. rmax in
+      let radius2 = dist2 (to_vec s.s.(0)) c0 in
+      let rs2 = radius2 /. of_int 100_000 in
       assert (rmax2 >. zero);
       let eval_descent (deg,p,dp,hp) c =
-        let r = eval_tgrad p dp c in
-        let h = eval_thess p dp hp c in
-        let dx = h **- r in
-        if norm2 dx >. zero then
-          (-. (r*.*r) /. norm2 dx) **. dx
+        let r = eval_tgrad dp c in
+        let h = eval_thess p hp c in
+        let dx = h *** r in
+        let d2 = norm2 dx in
+        if d2 >. zero then
+          (-. (r*.*r) /. d2) **. dx
         else dx
       in
       let eval_newton (deg,p,dp,hp) c =
         try
-          let r = eval_tgrad p dp c in
-          let h = eval_thess p dp hp c in
+          let r = eval_tgrad dp c in
+          let h = eval_thess p hp c in
           solve h (-. one **. r)
         with Not_found -> zero_v dim
       in
-      let eval (deg,p,dp,hp) c =
-        norm2 (eval_tgrad p dp c)
+      let eval_fun (deg,p,dp,hp) c =
+        norm2 (eval_tgrad dp c)
       in
-      let rec loop poly steps nbn c fc dn dd lambda =
+      let rec loop poly steps c fc dn dd lambda =
         assert (fc >=. zero);
-        if lambda <. epsilon2 || steps > 10000 then
+        let (_,p,_,_) = poly in
+        try
+          let (c',f') =
+            List.find (fun (c',_) -> dist2 c c' < rs2) !criticals
+          in
+          update_loop_stats steps;
+          crit_log "abort at step %d, c: %a, fc: %a, rmax - sin: %a, p: %a"
+            steps print_vector c' print f' print (rmax2 -. sin2 c')
+            print (eval p c');
+          (c',f',steps)
+        with Not_found ->
+        if lambda <. epsilon2 || fc <. epsilon2 || steps > max_steps then
           begin
-            crit_log "loop: step %d/%d, c: %a, fc: %a, lambda: %a, rmax - sin: %a"
-              nbn steps
-              print_vector c print fc print lambda print (rmax2 -. sin2 c);
+            update_loop_stats steps;
+            crit_log "%d, c: %a, fc: %a, rmax - sin: %a, p: %a"
+              steps
+              print_vector c print fc print (rmax2 -. sin2 c)
+              print (eval p c);
+            if steps < max_steps then
+              begin
+                crit_log "%d criticals" (1 + List.length !criticals);
+                criticals := (c,fc) :: !criticals;
+              end;
             (c,fc,steps)
           end
         else
-          let c0' = comb one c lambda dn in
-          let c' = normalise c0' in
-          let fc' = eval poly c' in
-          let c0'' = comb one c lambda dd in
-          let c'' = normalise c0'' in
-          (*          let fc0'' = eval c0'' in*)
-          let fc'' = eval poly c'' in
-          let (c',fc',nbn') =
-            if fc' <. fc'' then (c',fc',nbn+1) else (c'',fc'',nbn)
-          in
-          let progress = fc' <. fc in
-          if not progress then
-            loop poly steps nbn c fc dn dd (lambda /. of_int 2)
-          else
-            begin
-              let dd' = eval_descent poly c' in
-              let dn' = eval_newton  poly c' in
-              loop poly (steps + 1) nbn' c' fc' dn' dd' one
-            end
+          begin
+            let f t =
+              let d = comb t dn (one -. t) dd in
+              let c0' = comb one c lambda d in
+              let c' = normalise c0' in
+              eval_fun poly c'
+            in
+            let stop_cond = { default_stop_cond with max_steps = 60 } in
+            let t = tricho ~safe:false ~stop_cond f zero one in
+            let d = comb t dn (one -. t) dd in
+            let c0' = comb one c lambda d in
+            let c' = normalise c0' in
+            let fc' = eval_fun poly c' in
+            (*
+            crit_log "%d, c: %a, fc: %a, c': %a, fc': %a(%a), lambda: %a, beta: %a, rmax - sin: %a"
+              steps
+              print_vector c print fc print_vector c' print fc' print (fc -. fc')
+              print lambda print t print (rmax2 -. sin2 c);*)
+            if fc' <. fc then
+              begin
+                let dd = eval_descent poly c' in
+                let dn = eval_newton  poly c' in
+                loop poly (steps + 1) c' fc' dn dd (min one (lambda *. of_int 11))
+              end
+            else
+              loop poly steps c fc dn dd (lambda /. of_int 2)
+
+          end
 
       in
       let select best (dy,_,fy,_ as y) = match best with
         | None -> Some y
         | Some(dx,_,fx,_) as x ->
-           match compare dx dy with
-           | 1 -> x
-           | -1 -> Some y
-           | 0 -> (match compare fx fy with
-                   | 1 -> x
-                   | -1 -> Some y
-                   | 0 -> x
-                   | _ -> assert false)
-           | _ -> assert false
+           assert (fx >=. zero);
+           assert (fy >=. zero);
+           if List.length p0 = 1 && false then
+             match compare (dx /. (rmax2 -. fx)) (dy *. (rmax2 -. fy)) with
+             | -1 -> x
+             | _ -> Some y
+           else
+             match compare (dx *. (rmax2 -. fx)) (dy *. (rmax2 -. fy)) with
+             | 1 -> x
+             | _ -> Some y
       in
       let fn best poly c0 =
-        let (deg,_,_,_) = poly in
-        let fc0 = eval poly c0 in
-        let dn0 = eval_newton  poly c0 in
-        let dd0 = eval_descent poly c0 in
-        let (c1,fc1,_) = loop poly 0 0 c0 fc0 dn0 dd0 one in
+        let (_,p,_,_) = poly in
+        let fc0 = eval_fun poly c0 in
+        let dd = eval_descent poly c0 in
+        let dn = eval_newton  poly c0 in
+        let (c1,fc1,_) = loop poly 0 c0 fc0 dn dd one in
         let (b11,b12) = visible_v s c1 in
-
         assert(fc1 >=. zero);
         let c1_ok = sin2 c1 <. rmax2 && b11 && b12 in
-        if c1_ok then select best (deg, c1, rmax2 -. sin2 c1, fc1) else best
+        if c1_ok then
+          let p2 = eval p c1 in
+          select best (abs p2, c1, sin2 c1, fc1)
+        else best
       in
       let c1 = normalise (Array.fold_left (fun acc v -> acc +++ v) (zero_v dim) (to_matrix s.s)) in
 
-      let lm = Array.map (fun v -> comb (of_float 0.5) c1 (of_float 0.5) v) (to_matrix s.s) in
-      let l = c0 :: c1 :: Array.to_list lm in
-      let best = List.fold_left (fun best poly ->
-                  List.fold_left (fun best c -> fn best poly c) best l) None allp
+      let lm = ref (if !Args.crit > 0 then [c0;c1] else [c0]) in
+      let m = to_matrix s.s in
+      for i = 0 to Array.length m - 1 do
+        let v = m.(i) in
+        if !Args.crit > 1 then
+          lm := normalise (comb (of_float 0.5) c1 (of_float 0.5) v) :: !lm;
+        if !Args.crit > 2 then
+          begin
+            for j = i+1 to Array.length m - 1 do
+              let w = m.(j) in
+              lm := normalise (comb (of_float 0.5) w (of_float 0.5) v) :: !lm
+            done
+          end
+      done;
+      let best =
+        List.fold_left (fun best c -> fn best allp c) None !lm
       in
       let c =
         match best with
         | None ->
            crit_log "keep c0"; c0
         | Some(_,c,_,fc) ->
-           crit_log "keep %a with fc = %a" print_vector c print fc; c
+           crit_log "keep %a with fc = %a for %a" print_vector c print fc
+             print_matrix (to_matrix s.s);
+           c
       in
       let (c,b) = if c.(dim-1) <. zero then (opp c, false) else (c, true) in
       Simp.mk c b
@@ -691,9 +783,11 @@ module Make(R:Field.SPlus) = struct
       let time1 = Unix.gettimeofday () in
       let dt = Stdlib.(time1 -. time0) in
       let (hd,tail) = if Debug.has_debug () then "", "\n" else "\r", "     " in
-      eprintf "%sto do:%.3f%% %06d codim: %d/%d, worst:%.2e, time: %.1fs%s%!"
+      eprintf "%sto do:%.3f%% %06d/%06d codim: %d/%d, worst:%.2e, time: %.1fs%s%!"
         hd Stdlib.(!total *. 100.0 /. float dim)
-        (List.length to_do.(codim)) codim (dim-1) x dt tail;
+        (List.length (List.filter (fun s -> s.k <> Removed) to_do.(codim)))
+        !total_count
+        codim (dim-1) x dt tail;
     in
 
     let tmp_object = ref None in
@@ -966,6 +1060,7 @@ module Make(R:Field.SPlus) = struct
     let dt = Stdlib.(time1 -. time0) in
     printf "total: %d/%d, time: %fs, " keep total dt;
     print_zih_summary ();
+    print_loop_stats ();
     let cps = components all in
     let chr = List.map euler cps in
     printf "%d components %a\n%!" (List.length cps) print_int_list chr;

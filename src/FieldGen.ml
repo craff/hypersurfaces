@@ -64,7 +64,8 @@ module type S = sig
       we use the "golden ratio" version that ensures a minimum
       number of computation of [f] te reach a given precision
    *)
-  val tricho : ?stop_cond:stop_cond -> (t -> t) -> t -> t -> t
+  val tricho : ?safe:bool -> ?stop_cond:stop_cond -> (t -> t) -> t -> t -> t
+
   (** least float such that [one + epsilon != one] *)
   val epsilon : t
   (** square of epsilon *)
@@ -133,7 +134,7 @@ module Make(R:SMin) = struct
 
   let g = (sqrt (of_int 5) -. one) /. of_int 2
 
-  let tricho ?(stop_cond=default_stop_cond) f beta0 beta3 =
+  let tricho ?(safe=true) ?(stop_cond=default_stop_cond) f beta0 beta3 =
     let steps = ref 0 in
     let rec fn beta0 beta2 f2 beta3 =
       if !steps >= stop_cond.max_steps
@@ -162,9 +163,19 @@ module Make(R:SMin) = struct
     let f1 = f beta1 in
     let beta2 = beta0 +. g *. (beta3 -. beta0) in
     let f2 = f beta2 in
-    if f1 <. f2 then fn beta0 beta1 f1 beta2
-    else if f2 <. f1 then gn beta1 beta2 f2 beta3
-    else beta2
+    let beta =
+      if f1 <. f2 then fn beta0 beta1 f1 beta2
+      else if f2 <. f1 then gn beta1 beta2 f2 beta3
+      else beta2
+    in
+    if safe then beta else
+      begin
+        let f0 = f beta0 in
+        let f3 = f beta3 in
+        let f = f beta in
+        if f <. f0 && f <. f3 then beta
+        else if f0 <. f3 then beta0 else beta1
+      end
 
   (* precision *)
   let epsilon = if exact then zero else
