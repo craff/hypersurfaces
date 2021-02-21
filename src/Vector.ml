@@ -792,6 +792,10 @@ module Make(R:S) = struct
       fn 0 v v2
     with ExitZih b -> b
 
+  let pih ?r0 x m =
+    let m = List.map (fun v -> v --- x) m in
+    zih ?r0 m
+
   (** Quick test for zih*)
   module Test = struct
     let a =
@@ -1008,6 +1012,7 @@ module type V = sig
   val solve_cg : m -> v -> v
 
   val zih : ?r0:vector -> vector list -> bool
+  val pih : ?r0:vector -> vector -> vector list -> bool
   val print_zih_stats : formatter -> unit
 
   type solver_stats
