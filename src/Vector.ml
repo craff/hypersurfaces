@@ -561,8 +561,8 @@ module Make(R:S) = struct
     zih_steps.sum <- 0
 
   (** print the statistics and reset *)
-  let print_zih_summary () =
-    printf "zih: average steps: %g, max steps: %d, nb_abort: %d\n%!"
+  let print_zih_stats ff =
+    fprintf ff "zih: [avg: %g, max: %d, abort: %d]"
       Stdlib.(float zih_steps.sum /. float zih_steps.nb_call)
       zih_steps.max zih_steps.nb_abort;
     reset_zih ()
@@ -817,24 +817,27 @@ module Make(R:S) = struct
 
   (** solver statistics, can be shared between many solvers, hence are outside
      the functor *)
-  type solve_stats =
+  type solver_stats =
     { mutable max_reached_steps : int
     ; mutable sum_steps : int
     ; mutable nb_calls : int }
 
-  let init_solve_stats () =
+  let init_solver_stats () =
     { max_reached_steps = 0
     ; sum_steps = 0
     ; nb_calls = 0 }
 
-  let print_solve_stats stat =
-    printf
-      "critical points loop: %d calls, %.1f avg steps, %d max steps\n"
-        stat.nb_calls
+  let print_solver_stats ff stat =
+    let avg =
+      if stat.nb_calls > 0 then
         Stdlib.(float stat.sum_steps /. float stat.nb_calls)
-        stat.max_reached_steps
+      else 0.0
+    in
+    fprintf ff
+      "solver: [nb: %d, avg: %.1f, max: %d]"
+        stat.nb_calls avg stat.max_reached_steps
 
-  let reset_solve_stats stat =
+  let reset_solver_stats stat =
     stat.max_reached_steps <- 0;
     stat.sum_steps <- 0;
     stat.nb_calls <- 0
@@ -845,7 +848,7 @@ module Make(R:S) = struct
     val grad : v -> m (** its gradient, should raise Not_found if
                           null *)
     val max_steps : int (** limitation of the number of steps *)
-    val stat : solve_stats (** solver stats *)
+    val stat : solver_stats (** solver stats *)
   end
 
   (** the main functor *)
@@ -1005,20 +1008,20 @@ module type V = sig
   val solve_cg : m -> v -> v
 
   val zih : ?r0:vector -> vector list -> bool
-  val print_zih_summary : unit -> unit
+  val print_zih_stats : formatter -> unit
 
-  type solve_stats
+  type solver_stats
 
-  val init_solve_stats : unit -> solve_stats
-  val print_solve_stats : solve_stats -> unit
-  val reset_solve_stats : solve_stats -> unit
+  val init_solver_stats : unit -> solver_stats
+  val print_solver_stats : formatter -> solver_stats -> unit
+  val reset_solver_stats : solver_stats -> unit
 
   module type Fun = sig
     val dim : int
     val eval : v -> v
     val grad : v -> m
     val max_steps : int
-    val stat : solve_stats
+    val stat : solver_stats
   end
 
   module Solve(F:Fun) : sig

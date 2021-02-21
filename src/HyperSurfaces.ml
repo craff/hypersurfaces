@@ -106,7 +106,7 @@ module Make(R:Field.SPlus) = struct
     let s0 = to_matrix (List.hd ls) in
     let dp0 = List.map gradient p0 in
     let hp0 = List.map hessian p0 in
-    let solve_stat = init_solve_stats () in
+    let solver_stat = init_solver_stats () in
     let allp =
       List.init (List.length p0) (fun i ->
           let p0 = List.nth p0 i in
@@ -119,7 +119,7 @@ module Make(R:Field.SPlus) = struct
               let grad = if hp0 = [] then
                            (fun c -> raise Not_found)
                          else eval_thess hp0
-              let stat = solve_stat
+              let stat = solver_stat
             end
           in
           let module S = Solve(F) in
@@ -942,9 +942,8 @@ module Make(R:Field.SPlus) = struct
     let keep = List.length all in
     let time1 = Unix.gettimeofday () in
     let dt = Stdlib.(time1 -. time0) in
-    printf "total: %d/%d, time: %fs, " keep total dt;
-    print_zih_summary ();
-    print_solve_stats solve_stat;
+    printf "total: %d/%d, time: %fs, %t, %a\n" keep total dt
+      print_zih_stats print_solver_stats solver_stat;
     let cps = components all in
     let chr = List.map euler cps in
     printf "%d components %a\n%!" (List.length cps) print_int_list chr;
