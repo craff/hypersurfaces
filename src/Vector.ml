@@ -904,7 +904,7 @@ module Make(R:S) = struct
             steps print_vector c' print f';
           (c',f',steps)
         with Not_found -> (* other stopping conditions *)
-          if lambda <. epsilon2 || steps > F.max_steps then
+          if lambda <. epsilon2 || fc <. epsilon2 || steps > F.max_steps then
             begin
               update_loop_stats steps;
               sol_log "%d, c: %a, fc: %a"

@@ -89,7 +89,7 @@ module Make(R:Field.SPlus) = struct
 
   let h = one /. of_int 2
 
-  let triangulation ?(expected=Nothing) p0 =
+  let triangulation ?(expected=Nothing) param p0 =
     let restore_objects =
       if !Args.prog then Display.hide_all_objects ()
       else (fun () -> ())
@@ -407,7 +407,7 @@ module Make(R:Field.SPlus) = struct
                end
           end
       in
-      hn !Args.subd (to_matrix s.s) l p dp
+      hn param.Args.subd (to_matrix s.s) l p dp
     in
 
     let iter_facets gn codim dim =
@@ -446,7 +446,7 @@ module Make(R:Field.SPlus) = struct
 
     let visible_v s x =
       let d = x *.* s.c in
-      (d >. zero, abs d >. one +. of_float !Args.dprec)
+      (d >. zero, abs d >. one +. of_float param.Args.dprec)
     in
 
     let visible s x =
@@ -456,7 +456,7 @@ module Make(R:Field.SPlus) = struct
 
     let center s =
       let c0 = normalise s.c in
-      if !Args.rmax = 0.0 then Simp.mk c0 true else
+      if param.Args.rmax = 0.0 then Simp.mk c0 true else
       let cos2 c =
         let s = c0 *.* c in
         s *. s
@@ -465,7 +465,7 @@ module Make(R:Field.SPlus) = struct
         let x = one -. cos2 c  in
         if x <. zero then zero else x
       in
-      let rmax = of_float !Args.rmax in
+      let rmax = of_float param.Args.rmax in
       let rmax2 = sin2 (to_vec s.s.(0)) *. rmax *. rmax in
       let radius2 = dist2 (to_vec s.s.(0)) c0 in
       let rs2 = radius2 /. of_int 100_000 in
@@ -491,13 +491,13 @@ module Make(R:Field.SPlus) = struct
       in
       let c1 = normalise (Array.fold_left (fun acc v -> acc +++ v) (zero_v dim) (to_matrix s.s)) in
 
-      let lm = ref (if !Args.crit > 0 then [c0;c1] else [c0]) in
+      let lm = ref (if param.Args.crit > 0 then [c0;c1] else [c0]) in
       let m = to_matrix s.s in
       for i = 0 to Array.length m - 1 do
         let v = m.(i) in
-        if !Args.crit > 1 then
+        if param.Args.crit > 1 then
           lm := normalise (comb (of_float 0.5) c1 (of_float 0.5) v) :: !lm;
-        if !Args.crit > 2 then
+        if param.Args.crit > 2 then
           begin
             for j = i+1 to Array.length m - 1 do
               let w = m.(j) in

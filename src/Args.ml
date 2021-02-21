@@ -1,13 +1,22 @@
 let batch = ref false
 let cont  = ref false
 let show  = ref false
-let rmax  = ref 0.99
-let subd  = ref 15
-let dprec = ref 1e-14
 let prog  = ref false
 let progw  = ref false
 let debug_string = ref ""
-let crit  = ref 5
+
+
+type parameters =
+  { mutable rmax : float
+  ; mutable subd : int
+  ; mutable dprec : float
+  ; mutable crit : int }
+
+let default_parameters =
+  { rmax = 0.99
+  ; subd = 15
+  ; dprec = 1e-14
+  ; crit  = 5 }
 
 let spec =
   [ ( "-c"
@@ -35,16 +44,16 @@ let spec =
     , Arg.(Tuple [Set prog; Set progw])
     , "show building of triangulation and stop at each step")
   ; ( "--rmax"
-    , Arg.Set_float rmax
+    , Arg.Float (fun p -> default_parameters.rmax <- p)
     , "maximum distance to center when optimizing vertex position")
   ; ( "--delauney-prec"
-    , Arg.Set_float dprec
+    , Arg.Float (fun p -> default_parameters.dprec <- p)
     , "minimum visibility to compensate for numerical errors in delauney triangulation")
   ; ( "--subd"
-    , Arg.Set_int subd
+    , Arg.Int (fun p -> default_parameters.subd <- p)
     , "number of subdivision to test a simplex")
   ; ( "--nb-critical"
-    , Arg.Set_int crit
+    , Arg.Int (fun p -> default_parameters.crit <- p)
     , "number of critical point candidates in a simplex")
   ]
 

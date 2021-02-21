@@ -62,6 +62,20 @@ module Parse(R:Field.SPlus) = struct
     ; a = Lex.custom f
     ; f }
 
+  let%parser option =
+      "subd" "=" (p::INT) => (fun opt -> Args.{ opt with subd = p })
+    ; "rmax" "=" (p::FLOAT) => (fun opt -> Args.{ opt with rmax = p })
+    ; "delauney" "prec" "=" (p::FLOAT) => (fun opt -> Args.{ opt with dprec = p })
+    ; "nb critical"     "=" (p::INT) => (fun opt -> Args.{ opt with crit = p })
+
+  let%parser rec options_aux =
+      () => (fun p -> p)
+    ; (p1::options_aux) (p2::option) => (fun p -> p2 (p1 p))
+
+  let%parser options =
+      () => Args.default_parameters
+    ; '[' (p::options_aux) ']' => (p Args.default_parameters)
+
   let%parser float = Grammar.term ~name:"float" float_lit
 
   let%parser ident = (v:: RE("[a-zA-Z_'][a-zA-Z0-9_']*"))           => v
@@ -137,14 +151,15 @@ module Parse(R:Field.SPlus) = struct
         (let p = P.mk name vars p in
          let vars = Array.of_list (vars @ ["s"]) in
          printf "%a\n%!" (B.print_polynome ~vars) p.bern)
-     ; "let" (name::ident) '=' "zeros" (names:: ~+ ident) (t::expected) ';' =>
+    ; "let" (name::ident) '=' "zeros" (opts::options)
+                                 (names:: ~+ ident) (t::expected) ';' =>
         (let p name =
            try (Hashtbl.find polys name).bern
            with Not_found -> Lex.give_up ~msg:("unbound variable "^name) ()
          in
          let ps = List.map p names in
          let (ts, es) =
-           try H.triangulation ~expected:t ps with e ->
+           try H.triangulation ~expected:t opts ps with e ->
              Printexc.print_backtrace stderr;
              eprintf "exception: %s\n%!" (Printexc.to_string e);
              assert false

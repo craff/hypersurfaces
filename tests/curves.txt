@@ -36,7 +36,7 @@ let q3(x,y) = (x^2+y^2-1)^2 + 1/2000 * x * y * (x-y) * (x+y);
 let q3 = zeros q3 (0,0,0,0); display q3 q3__t;
 
 let q4(x,y) = (x^2+y^2-1)^2 + 1/20000 * x * y * (x-y) * (x+y);
-let q4 = zeros q4 (0,0,0,0); display q4 q4__t;
+let q4 = zeros [subd=20] q4 (0,0,0,0); display q4 q4__t;
 
 let e5(x,y) = 500  * (x-1)^2 + (y-1)^2 - 1;
 let e5 = zeros e5 (0); display e5 e5__t;

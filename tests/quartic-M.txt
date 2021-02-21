@@ -23,7 +23,7 @@ let q1(x,y)   = q(x,y,1);
 let q1 = zeros q1 (0,0);
 display q1 q1__t;
 
-let q = zeros q (2,-18);
+let q = zeros [subd=4] q (2,-18);
 display q;
 display q q__t;
 
