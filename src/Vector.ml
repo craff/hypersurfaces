@@ -2,8 +2,9 @@ open Printing
 open FieldGen
 
 (** log for zero in convex hull test *)
-let Debug.{ tst = zih_tst; log = zih_log } = Debug.new_debug "hull" 'h'
-let Debug.{ tst = tri_tst; log = tri_log } = Debug.new_debug "triangulation" 'z'
+let Debug.{ log = zih_log } = Debug.new_debug "hull" 'h'
+let Debug.{ log = tri_log } = Debug.new_debug "triangulation" 'z'
+let Debug.{ log = sol_log } = Debug.new_debug "solve" 's'
 
 (** Functor with linear algebra code for the given field *)
 module Make(R:S) = struct
@@ -791,6 +792,7 @@ module Make(R:S) = struct
       fn 0 v v2
     with ExitZih b -> b
 
+  (** Quick test for zih*)
   module Test = struct
     let a =
       [ Array.map of_int [|-1;0;0|]
@@ -808,8 +810,152 @@ module Make(R:S) = struct
       ]
 
     let _ = assert (exact || zih a)
-
   end
+
+  (** General equation solver using a mixture of steepest descent and newton
+     method *)
+
+  (** solver statistics, can be shared between many solvers, hence are outside
+     the functor *)
+  type solve_stats =
+    { mutable max_reached_steps : int
+    ; mutable sum_steps : int
+    ; mutable nb_calls : int }
+
+  let init_solve_stats () =
+    { max_reached_steps = 0
+    ; sum_steps = 0
+    ; nb_calls = 0 }
+
+  let print_solve_stats stat =
+    printf
+      "critical points loop: %d calls, %.1f avg steps, %d max steps\n"
+        stat.nb_calls
+        Stdlib.(float stat.sum_steps /. float stat.nb_calls)
+        stat.max_reached_steps
+
+  let reset_solve_stats stat =
+    stat.max_reached_steps <- 0;
+    stat.sum_steps <- 0;
+    stat.nb_calls <- 0
+
+  module type Fun = sig
+    val dim : int (** the codomain dimension *)
+    val eval : v -> v (** the function to solve *)
+    val grad : v -> m (** its gradient, should raise Not_found if
+                          null *)
+    val max_steps : int (** limitation of the number of steps *)
+    val stat : solve_stats (** solver stats *)
+  end
+
+  (** the main functor *)
+  module Solve(F:Fun) = struct
+
+    (** memo of all solutions *)
+    let solutions = ref []
+
+    let update_loop_stats steps =
+      F.stat.nb_calls <- F.stat.nb_calls + 1;
+      F.stat.sum_steps <- steps + F.stat.sum_steps;
+      if steps > F.stat.max_reached_steps then
+        F.stat.max_reached_steps <- steps
+
+    (** steepest descent and newton from c *)
+    let descent c =
+      let r = F.eval c in
+      let h = F.grad c in
+      let dx = h *** r in
+      let d2 = norm2 dx in
+      if d2 <=. zero then raise Not_found;
+      (** optimal step should be
+          (-. (r *.* dx) /. d2) **. dx
+          but the following is much better ... do not know why *)
+      let steepest = (-. norm2 r /. d2) **. dx in
+      (** newton direction as usual *)
+      let newton =
+        try solve h (-. one **. r)
+        with Not_found -> zero_v F.dim
+      in
+      (steepest, newton)
+
+    (** [solve rs2 c0] start the solver from [c0]. It reuses an existing
+       solution if it reaches a point [x] s.t. [dist2 x s < rs2] for an existing
+       solution s. May raise Not_found is it reached a point of null gradient *)
+    let solve rs2 c0 =
+      (** main loop function:
+           steps: count the number of steps.
+           c: current position
+           fc: norm2 c
+           nd: newton direction of descent at c
+           sd: steepest direction of descent at c
+           lambda: coefficient used with both desenct direction *)
+
+      let rec loop steps c fc nd sd lambda =
+        assert (fc >=. zero);
+        try (** search for existing solution near enough *)
+          let (c',f') =
+            List.find (fun (c',_) -> dist2 c c' < rs2) !solutions
+          in
+          update_loop_stats steps;
+          sol_log "abort at step %d, c: %a, fc: %a"
+            steps print_vector c' print f';
+          (c',f',steps)
+        with Not_found -> (* other stopping conditions *)
+          if lambda <. epsilon2 || steps > F.max_steps then
+            begin
+              update_loop_stats steps;
+              sol_log "%d, c: %a, fc: %a"
+                steps print_vector c print fc;
+              if steps < F.max_steps then
+                begin
+                  sol_log "%d solutions" (1 + List.length !solutions);
+                  solutions := (c,fc) :: !solutions;
+                end;
+              (c,fc,steps)
+            end
+          else
+            begin
+              (** given [lambda], we search the best [t] by trichotomie
+                for c = c + lambda (t nd + (1 - t) sd)
+                high precision is very important here *)
+              let f t =
+                let d = comb t nd (one -. t) sd in
+                let c0' = comb one c lambda d in
+                let c' = normalise c0' in
+                norm2 (F.eval c')
+              in
+              let stop_cond = { default_stop_cond with max_steps = 60 } in
+              let t = tricho ~safe:false ~stop_cond f zero one in
+              (** we compute new position and functional at this position *)
+              let d = comb t nd (one -. t) sd in
+              let c0' = comb one c lambda d in
+              let c' = normalise c0' in
+              let fc' = norm2 (F.eval c') in
+              (*
+              sol_log "%d, c: %a, fc: %a, c': %a, fc': %a(%a), lambda: %a, beta: %a, rmax - sin: %a"
+              steps
+              print_vector c print fc print_vector c' print fc' print (fc -. fc')
+              print lambda print t print (rmax2 -. sin2 c);*)
+              if fc' <. fc then
+                begin
+                  (** progress, do to next step, try a bigger lambda *)
+                  let (sd,nd) = descent c' in
+                  loop (steps + 1) c' fc' nd sd (min one (lambda *. of_int 11))
+                end
+              else
+                (** no progress, try a smaller lambda *)
+                loop steps c fc nd sd (lambda /. of_int 2)
+
+            end
+      in
+      (** initial call to the loop *)
+      let fc0 = norm2 (F.eval c0) in
+      let (sd,nd) = descent c0 in
+      let (c1,fc1,_) = loop 0 c0 fc0 nd sd one in
+      (c1, fc1)
+
+  end [@@inlined always]
+
 end
 
 module type V = sig
@@ -860,5 +1006,23 @@ module type V = sig
 
   val zih : ?r0:vector -> vector list -> bool
   val print_zih_summary : unit -> unit
+
+  type solve_stats
+
+  val init_solve_stats : unit -> solve_stats
+  val print_solve_stats : solve_stats -> unit
+  val reset_solve_stats : solve_stats -> unit
+
+  module type Fun = sig
+    val dim : int
+    val eval : v -> v
+    val grad : v -> m
+    val max_steps : int
+    val stat : solve_stats
+  end
+
+  module Solve(F:Fun) : sig
+    val solve : t -> v -> (v * t)
+  end
 
 end
