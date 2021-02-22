@@ -849,9 +849,15 @@ module Make(R:S) = struct
   module type Fun = sig
     val dim : int (** the codomain dimension *)
     val eval : v -> v (** the function to solve *)
-    val grad : v -> m (** its gradient, should raise Not_found if
-                          null *)
+    val grad : v -> m (** its gradient, should raise Not_found if null *)
     val max_steps : int (** limitation of the number of steps *)
+    val max_far_steps : int (** limitiation of the number of steps blocked by
+                               maximum radius *)
+    val lambda_min : t (** minimum value for the step size: stop solver if
+                          lambda < lamnbda_min *)
+    val fun_min : t (** minimum value for the target function.
+                        stop solver if a position p with norm2 p < fun_min is reached *)
+
     val stat : solver_stats (** solver stats *)
   end
 
@@ -887,8 +893,9 @@ module Make(R:S) = struct
 
     (** [solve rs2 c0] start the solver from [c0]. It reuses an existing
        solution if it reaches a point [x] s.t. [dist2 x s < rs2] for an existing
-       solution s. May raise Not_found is it reached a point of null gradient *)
-    let solve rs2 c0 =
+       solution sd. May raise Not_found is it reached a point of null gradient *)
+    let solve is_far rs2 c0 =
+
       (** main loop function:
            steps: count the number of steps.
            c: current position
@@ -938,28 +945,29 @@ module Make(R:S) = struct
               let c0' = comb one c lambda d in
               let c' = normalise c0' in
               let fc' = norm2 (F.eval c') in
-              (*
-              sol_log "%d, c: %a, fc: %a, c': %a, fc': %a(%a), lambda: %a, beta: %a, rmax - sin: %a"
-              steps
+              let far' = is_far c' in(*
+              sol_log "%d/%d, c: %a, fc: %a, c': %a, fc': %a(%a), lambda: %a, beta: %a, far: %b/%b"
+              far_steps steps
               print_vector c print fc print_vector c' print fc' print (fc -. fc')
-              print lambda print t print (rmax2 -. sin2 c);*)
-              if fc' <. fc then
+              print lambda print t far' far;*)
+              if fc' <. fc && not far' then
                 begin
                   (** progress, do to next step, try a bigger lambda *)
                   let (sd,nd) = descent c' in
-                  loop (steps + 1) c' fc' nd sd (min one (lambda *. of_int 11))
+                  let far_steps = if far then far_steps + 1 else far_steps in
+                  loop (steps + 1) far_steps false c' fc' nd sd (min one (lambda *. of_int 11))
                 end
               else
                 (** no progress, try a smaller lambda *)
-                loop steps c fc nd sd (lambda /. of_int 2)
+                let far = far || far' in
+                loop steps far_steps far c fc nd sd (lambda /. of_int 2)
 
             end
       in
       (** initial call to the loop *)
       let fc0 = norm2 (F.eval c0) in
       let (sd,nd) = descent c0 in
-      let (c1,fc1,_) = loop 0 c0 fc0 nd sd one in
-      (c1, fc1)
+      loop 0 0 false c0 fc0 nd sd one
 
   end [@@inlined always]
 
@@ -1026,11 +1034,14 @@ module type V = sig
     val eval : v -> v
     val grad : v -> m
     val max_steps : int
+    val max_far_steps : int
+    val lambda_min : t
+    val fun_min : t
     val stat : solver_stats
   end
 
   module Solve(F:Fun) : sig
-    val solve : t -> v -> (v * t)
+    val solve : (v -> bool) -> t -> v -> (v * t * bool)
   end
 
 end
