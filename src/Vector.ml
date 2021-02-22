@@ -903,29 +903,33 @@ module Make(R:S) = struct
            nd: newton direction of descent at c
            sd: steepest direction of descent at c
            lambda: coefficient used with both desenct direction *)
-
-      let rec loop steps c fc nd sd lambda =
+      let rec loop steps far_steps far c fc nd sd lambda =
         assert (fc >=. zero);
         try (** search for existing solution near enough *)
           let (c',f') =
-            List.find (fun (c',_) -> dist2 c c' < rs2) !solutions
+            List.find
+              (fun (c',_) -> dist2 c c' < rs2 && not (is_far c'))
+              !solutions
           in
           update_loop_stats steps;
           sol_log "abort at step %d, c: %a, fc: %a"
             steps print_vector c' print f';
-          (c',f',steps)
+          (c',f',false)
         with Not_found -> (* other stopping conditions *)
-          if lambda <. epsilon2 || fc <. epsilon2 || steps > F.max_steps then
+          if far_steps >= F.max_far_steps then raise Not_found;
+          if lambda <. F.lambda_min || fc <. F.fun_min
+             || steps >= F.max_steps
+          then
             begin
               update_loop_stats steps;
               sol_log "%d, c: %a, fc: %a"
                 steps print_vector c print fc;
-              if steps < F.max_steps then
+              if steps < F.max_steps && far_steps < F.max_far_steps then
                 begin
                   sol_log "%d solutions" (1 + List.length !solutions);
                   solutions := (c,fc) :: !solutions;
                 end;
-              (c,fc,steps)
+              (c,fc,far_steps >= F.max_far_steps)
             end
           else
             begin
