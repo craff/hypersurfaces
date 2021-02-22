@@ -63,14 +63,18 @@ let home () =
   set camera.pos [| 0.0;0.0;-5.0 |];
   set camera.front [| 0.0;0.0;1.0 |];
   set camera.up [| 0.0;1.0;0.0 |];
-  camera.speed <- 0.1;
+  camera.speed <- 0.01;
   camera.rspeed <- acos(-1.0) *. 1. /. 180.
 
-let move_right () = VF.combq 1. camera.pos camera.speed (camera_right ())
-let move_left  () = VF.combq 1. camera.pos (-. camera.speed) (camera_right ())
-let move_left  () = VF.combq 1. camera.pos (-. camera.speed) (camera_right ())
-let move_up    () = VF.combq 1. camera.pos camera.speed camera.up
-let move_down  () = VF.combq 1. camera.pos (-. camera.speed) camera.up
+let camera_speed () =
+  if camera.curve then
+    ~-. VF.(camera.pos *.* camera.front) *. camera.speed
+  else
+    camera.speed
+let move_right () = VF.combq 1. camera.pos (camera_speed ()) (camera_right ())
+let move_left  () = VF.combq 1. camera.pos (-. camera_speed ()) (camera_right ())
+let move_up    () = VF.combq 1. camera.pos (camera_speed ()) camera.up
+let move_down  () = VF.combq 1. camera.pos (-. camera_speed ()) camera.up
 let rotate_right () =
   VF.combq (cos camera.rspeed) camera.front (sin camera.rspeed) (camera_right ())
 let rotate_left () =
@@ -83,13 +87,6 @@ let rotate_down () =
   let r = Array.copy camera.front in
   VF.combq (cos camera.rspeed) camera.front (-. sin camera.rspeed) camera.up;
   VF.combq (cos camera.rspeed) camera.up (sin camera.rspeed) r
-
-
-let camera_speed () =
-  if camera.curve then
-    ~-. VF.(camera.pos *.* camera.front) *. camera.speed
-  else
-    camera.speed
 let move_forward () = VF.combq 1. camera.pos (camera_speed ()) camera.front
 let move_back  () = VF.combq 1. camera.pos (-. camera_speed ()) camera.front
 let accel () = camera.speed <- camera.speed *. 1.5
@@ -128,7 +125,13 @@ let window_ratio  : float ref = ref 1.0 (* Window ratio.  *)
 let camera_mat () =
   Matrix.lookat camera.pos VF.(camera.pos +++ camera.front) camera.up
 
-let projection () = Matrix.perspective 45.0 !window_ratio 0.1 100.0
+let projection () =
+  if camera.curve then
+    Matrix.perspective 45.0 !window_ratio
+      (abs_float camera.pos.(2)*.0.1)
+      (abs_float camera.pos.(2)*. 500.0)
+  else
+    Matrix.perspective 45.0 !window_ratio 0.1 500.0
 
 let _ =
   Egl.initialize ~width:!window_width ~height:!window_height "test_gles"
@@ -194,13 +197,13 @@ let triangles_prg : unit Shaders.program =
 
 (* We set the uniform parameters of the shader. *)
 let triangles_prg = Shaders.float1_cst_uniform triangles_prg  "specular"     0.1
-let triangles_prg = Shaders.float1_cst_uniform triangles_prg  "shininess"    10.0
+let triangles_prg = Shaders.float1_cst_uniform triangles_prg  "shininess"    8.0
 let triangles_prg = Shaders.float3v_cst_uniform triangles_prg "lightPos1"
-                      [|0.3;0.3;-0.2|]
+                      [|0.2;0.2;0.|]
 let triangles_prg = Shaders.float3v_cst_uniform triangles_prg "lightPos2"
-                      [|-0.3;0.3;-0.2|]
+                      [|-0.2;0.2;0.|]
 let triangles_prg = Shaders.float3v_cst_uniform triangles_prg "lightPos3"
-                      [|0.0;-0.3;-0.2|]
+                      [|0.0;-0.2;0.|]
 let triangles_prg = Shaders.float4v_cst_uniform triangles_prg "lightDiffuse"
                       [|0.4;0.4;0.4;1.0|]
 let triangles_prg = Shaders.float4v_cst_uniform triangles_prg "lightAmbient"
@@ -336,14 +339,14 @@ let _ =
 module Make(R:Field.SPlus) = struct
   module V = R.V
 
-  let epsilon = 1e-6
+  let epsilon = 2e-4
 
   let zeroest x y = if abs_float x > abs_float y then y else x
 
   let split_segment f acc x1 x2 =
     let l = [Array.map R.to_float x1;Array.map R.to_float x2] in
-    let (lp, ln) = List.partition (fun x -> x.(3) > 0.) l in
-    let (lz, ln) = List.partition (fun x -> x.(3) = 0.) ln in
+    let (lp, ln) = List.partition (fun x -> x.(3) >= epsilon) l in
+    let (lz, ln) = List.partition (fun x -> x.(3) > -.epsilon) ln in
     match (lp,lz,ln) with
     | [x1;x2],[],[] | [],[],[x1;x2] ->
        f acc x1 x2
@@ -374,8 +377,8 @@ module Make(R:Field.SPlus) = struct
 
   let split_triangle f acc x1 x2 x3 =
     let l = [Array.map R.to_float x1;Array.map R.to_float x2;Array.map R.to_float x3] in
-    let (lp, ln) = List.partition (fun x -> x.(3) > 0.) l in
-    let (lz, ln) = List.partition (fun x -> x.(3) = 0.) ln in
+    let (lp, ln) = List.partition (fun x -> x.(3) >= epsilon) l in
+    let (lz, ln) = List.partition (fun x -> x.(3) > -.epsilon) ln in
     match (lp,lz,ln) with
     | [x1;x2;x3],[],[] | [],[],[x1;x2;x3] ->
        f acc x1 x2 x3
@@ -572,7 +575,7 @@ module Make(R:Field.SPlus) = struct
         setv (9*i+0) a.(0); setv (9*i+1) a.(1); setv (9*i+2) a.(2);
         setv (9*i+3) b.(0); setv (9*i+4) b.(1); setv (9*i+5) b.(2);
         setv (9*i+6) c.(0); setv (9*i+7) c.(1); setv (9*i+8) c.(2);
-        let n = VF.(normalise (vp (b --- a) (c --- a))) in
+        let n = VF.(normalise VF.(vp (b --- a) (c --- b))) in
         setn (9*i+0) n.(0); setn (9*i+1) n.(1); setn (9*i+2) n.(2);
         setn (9*i+3) n.(0); setn (9*i+4) n.(1); setn (9*i+5) n.(2);
         setn (9*i+6) n.(0); setn (9*i+7) n.(1); setn (9*i+8) n.(2);
