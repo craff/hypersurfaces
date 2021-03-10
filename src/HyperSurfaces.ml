@@ -46,6 +46,7 @@ module Make(R:Field.SPlus) = struct
 
   type status =
     | Unknown
+    | Depend of vector
     | NonZero
     | NonDege
     | Removed
@@ -53,6 +54,8 @@ module Make(R:Field.SPlus) = struct
   type simplicies =
     { s : simplex
     ; m : matrix
+    ; d : R.t
+    ; n : v Lazy.t array
     ; p : polynomial list
     ; dp : polynomial_v lazy_t list
     ; l : R.t array list
@@ -115,6 +118,8 @@ module Make(R:Field.SPlus) = struct
           let module F = struct
               let dim = dim
               let max_steps = 10000
+              let fun_min = epsilon2
+              let lambda_min = epsilon2
               let eval c = eval_tgrad dp0 c
               let grad = if hp0 = [] then
                            (fun c -> raise Not_found)
@@ -123,7 +128,7 @@ module Make(R:Field.SPlus) = struct
             end
           in
           let module S = Solve(F) in
-          (p0, S.solve))
+          (p0, F.eval, S.solve))
     in
     let n = List.length ls in
     let all = Hashtbl.create 1001 in
@@ -132,7 +137,7 @@ module Make(R:Field.SPlus) = struct
     let by_edge = Hashtbl.create 1001 in
     let by_vertex = Hashtbl.create 1001 in
     let by_face = Hashtbl.create 1001 in
-    let to_do = Array.make dim [] in
+    let to_do = Array.make (2*dim) [] in
     let add_v s =
       for i = 0 to dim-1 do
         let key = s.s.(i).uid in
@@ -203,17 +208,25 @@ module Make(R:Field.SPlus) = struct
     in
     let add_s s = add s; add_v s; add_e s; add_f s in
 
+    let face_normal m i =
+      let n =
+        Array.init dim (fun j ->
+            let b_j = Array.init dim (fun k -> if k = j then one else zero) in
+            let m' = Array.mapi (fun j y -> if i = j then b_j else y) m in
+            det m')
+      in
+      let n = if n *.* m.(i) >. zero then opp n else n in
+      normalise n
+    in
+
     let mk ?(f=Stdlib.(1.0 /. float_of_int n)) s =
       let m = to_matrix s in
-      decomp_log "before center";
-      let c = center m in
-      decomp_log "after center";
+      let n = Array.init dim (fun i -> lazy (face_normal m i)) in
       let p = List.map (fun p -> Poly.transform p s0 m) p0 in
-      decomp_log "after transform";
       let l = List.map plane p in
-      decomp_log "after plane";
+      let c = center m in
       let dp = List.map (fun p -> lazy (gradient p)) p in
-      let s = { s; m; p; k = Unknown; c; l; dp; f
+      let s = { s; m; p; k = Unknown; c; l; dp; f; n; d = det m
               ; codim = 0; suid = simplex_key s } in
       decomp_log "make %a" print_simplex s.s;
       add_s s;
@@ -340,11 +353,119 @@ module Make(R:Field.SPlus) = struct
       !gd
     in
 
-    let open struct exception Zih end in
+    let visible_v s x =
+      let sg, x = if x *.* s.c <. zero then (false, opp x) else (true, x) in
+      let fn acc v =
+        let d = x --- v in
+        let d2 = norm2 d in
+        match acc with
+        | None -> Some(d,d2)
+        | Some(_,d2') -> if d2 <. d2' then Some(d,d2) else acc
+      in
+      let d = match Array.fold_left fn None s.m with
+        | None -> assert false
+        | Some(d,_) -> d
+      in
+      (sg, d *.* s.c >. of_float param.Args.dprec *. epsilon)
+    in
 
-    let decision_face vs s =
+    let visible s x =
+      let x = to_vec x in
+      visible_v s x
+    in
+(*
+    let proj_simplex s x =
+      let is_far = ref false in
+      let m = ref [] in
+      let y = ref [] in
+      Array.iteri (fun i _ ->
+          let n = Lazy.force s.n.(i) in
+          let c = n *.* x in
+          if c >. zero then
+            begin
+              is_far := true;
+              m := n :: !m;
+              y := c :: !y
+            end
+        ) s.m;
+      if !is_far then
+        begin
+          let m = Array.of_list !m in
+          let y = Array.of_list !y in
+          let d = m **- solve (m **** transpose m) y in
+          let r = normalise (x --- d) in
+          (r, true)
+        end
+      else (normalise x, false)
+    in
+ *)
+    let center s =
+      let c0 as center = normalise s.c in
+      let radius2 = dist2 (to_vec s.s.(0)) c0 in
+      let rs2 = radius2 /. of_int 100_000 in
+      let select x (dy,_,sy,fy as y) =
+        assert (fy >. zero);
+        assert (dy >=. zero);
+        match x with
+        | None -> Some y
+        | Some (dx,_,sx,fx) ->
+           (match compare dx dy with
+               | -1 -> x
+               | _ -> Some y)
+      in
+      let fn best (p, _, solve) c0 =
+        try
+          let project c =
+            let c = normalise c in
+            (false,c)
+          in
+          let (c1,fc1) = solve project rs2 c0 in
+          let (b11,b12) = visible_v s c1 in
+          assert(fc1 >=. zero);
+          if not b11 || not b12 then (Vector.sol_log "reject %b %b" b11 b12; raise Not_found);
+          let p2 = eval p c1 in
+          select best (abs p2, c1, c1 *.* s.c, fc1)
+        with Not_found -> best
+      in
+      let lm = ref [c0] in
+      let rec kn k c l =
+        if List.length l = dim - 1 then
+          begin
+            assert (k - c > 0);
+            let l = (k - c) :: l in
+            let (c1,_) = List.fold_left (fun (acc,j) i ->
+                         (comb one acc (of_int i /. of_int k) s.m.(j),j+1)) (zero_v dim,0) l
+            in
+            (*assert (in_simplex s c1);*)
+            lm := normalise c1 :: !lm
+          end
+        else
+          for i = 1 to k - c - (dim - List.length l) do
+            kn k (c+i) (i::l)
+          done
+      in
+      kn (param.Args.crit + dim) 0 [];
+      let best = ref None in
+      List.iter (fun solve ->
+          List.iter (fun c -> best := fn !best solve c) !lm)  allp;
+      let c = match !best with
+        | None -> Vector.sol_log "keep nothing\n%!"; raise Not_found
+        | Some (pc, c, sc, fc) ->
+           Vector.sol_log "keep %a with sc: %a, fc: %a"
+             print_vector c print sc print fc;
+           c
+      in
+      let (c,b) = if c.(dim-1) <. zero then (opp c,false) else (c,true) in
+      Simp.mk c b
+    in
+
+    let open struct exception Zih of vector end in
+
+    let decision_face vs (s as s0) =
       (*printf "decision for %a (codim %d)\n%!" print_matrix (to_matrix s.s) codim;*)
       let p = sub s.p vs in
+      let len = Array.length vs in
+      let nb_vs = Array.fold_left (fun acc c -> if c then acc+1 else acc) 0 vs in
       let l = List.map first_deg p in
       let dp = sub_v (List.map Lazy.force s.dp) vs in
       let gd = all_gradients vs s in
@@ -372,11 +493,15 @@ module Make(R:Field.SPlus) = struct
             let res = fn [] dp gd in
             match res with
             | false -> (*printf "OK\n%!";*) ()
-            | true when subd <= 0 -> (*printf "Zih\n%!";*) raise Zih
+            | true when subd <= 0 || nb_vs = 1 ->
+               let p = zero_v dim in
+               Array.iteri (fun i x -> if vs.(i) then addq p x) s0.m;
+               normaliseq p;
+               (*printf "Zih\n%!";*) raise (Zih p)
             | true ->
                begin
-                 let best = ref (zero, (-1,-1)) in
-                 for i = 1 to Array.length vs - 1 do
+                 let best = ref (-.one, (-1,-1)) in
+                 for i = 1 to len - 1 do
                    if vs.(i) then
                      for j = 0 to i-1 do
                        if vs.(j) then
@@ -385,29 +510,23 @@ module Make(R:Field.SPlus) = struct
                      done
                  done;
                  let (i,j) = snd !best in
-                 if i >= 0 && j >= 0 (*&& !tw >. of_float 1.5 /. of_int (1 + !nbg)*)
-                 then
-                   begin
-                     assert (i <> j);
-                     (*printf "split %d %d\n%!" i j;*)
-                     let l1,l2 =
-                       List.split (List.map (fun p -> subdivise p i j) l) in
-                     let p1,p2 =
-                       List.split (List.map (fun p -> subdivise p i j) p) in
-                     let dp1,dp2 =
-                       List.split (List.map (fun p -> subdivise_v p i j) dp) in
-                     let s1 = Array.mapi (fun k x ->
-                                  if k = j then (x +++ s.(i)) //. of_int 2 else x) s in
-                     let s2 = Array.mapi (fun k x ->
-                                  if k = i then (x +++ s.(j)) //. of_int 2 else x) s in
-                     hn (subd-1) s1 l1 p1 dp1; hn (subd-1) s2 l2 p2 dp2
-                   end
-                 else
-                   raise Zih
+                 assert (i >= 0 && j >= 0 && i <> j);
+                 (*printf "split %d %d\n%!" i j;*)
+                 let l1,l2 =
+                   List.split (List.map (fun p -> subdivise p i j) l) in
+                 let p1,p2 =
+                   List.split (List.map (fun p -> subdivise p i j) p) in
+                 let dp1,dp2 =
+                   List.split (List.map (fun p -> subdivise_v p i j) dp) in
+                 let s1 = Array.mapi (fun k x ->
+                              if k = j then (x +++ s.(i)) //. of_int 2 else x) s in
+                 let s2 = Array.mapi (fun k x ->
+                              if k = i then (x +++ s.(j)) //. of_int 2 else x) s in
+                 hn (subd-1) s1 l1 p1 dp1; hn (subd-1) s2 l2 p2 dp2
                end
           end
       in
-      hn param.Args.subd (to_matrix s.s) l p dp
+      hn param.Args.subd s.m l p dp
     in
 
     let iter_facets gn codim dim =
@@ -437,89 +556,12 @@ module Make(R:Field.SPlus) = struct
     let decision codim s =
       try
         if List.exists (Array.for_all (fun x -> x =. zero)) s.l then Unknown else
-        if List.exists constant_sign s.p then NonZero else
-        let fn vs = decision_face vs s in
-        try iter_facets fn (Some codim) dim; NonDege with Zih -> Unknown
+          if List.exists constant_sign s.p then NonZero else
+            let fn vs = decision_face vs s in
+            try iter_facets fn (Some codim) dim; NonDege with Zih v -> Depend v
       with e -> eprintf "got except: %s\n%!" (Printexc.to_string e);
                 assert false
     in
-
-    let visible_v s x =
-      let d = x *.* s.c in
-      (d >. zero, abs d >. one +. of_float param.Args.dprec)
-    in
-
-    let visible s x =
-      let x = to_vec x in
-      visible_v s x
-    in
-
-    let center s =
-      let c0 = normalise s.c in
-      if param.Args.rmax = 0.0 then Simp.mk c0 true else
-      let cos2 c =
-        let s = c0 *.* c in
-        s *. s
-      in
-      let sin2 c =
-        let x = one -. cos2 c  in
-        if x <. zero then zero else x
-      in
-      let rmax = of_float param.Args.rmax in
-      let rmax2 = sin2 (to_vec s.s.(0)) *. rmax *. rmax in
-      let radius2 = dist2 (to_vec s.s.(0)) c0 in
-      let rs2 = radius2 /. of_int 100_000 in
-      assert (rmax2 >. zero);
-      let select best (dy,_,fy,_ as y) = match best with
-        | None -> Some y
-        | Some(dx,_,fx,_) as x ->
-           assert (fx >. zero);
-           assert (fy >. zero);
-           match compare (dx /. fx) (dy /. fy) with
-           | -1 -> x
-           | _ -> Some y
-      in
-      let fn best (p, solve) c0 =
-        try
-          let (c1,fc1) = solve rs2 c0 in
-          let (b11,b12) = visible_v s c1 in
-          assert(fc1 >=. zero);
-          if not (sin2 c1 <. rmax2 && b11 && b12) then raise Not_found;
-          let p2 = eval p c1 in
-          select best (abs p2, c1, rmax2 -. sin2 c1, fc1)
-        with Not_found -> best
-      in
-      let c1 = normalise (Array.fold_left (fun acc v -> acc +++ v) (zero_v dim) (to_matrix s.s)) in
-
-      let lm = ref (if param.Args.crit > 0 then [c0;c1] else [c0]) in
-      let m = to_matrix s.s in
-      for i = 0 to Array.length m - 1 do
-        let v = m.(i) in
-        if param.Args.crit > 1 then
-          lm := normalise (comb (of_float 0.5) c1 (of_float 0.5) v) :: !lm;
-        if param.Args.crit > 2 then
-          begin
-            for j = i+1 to Array.length m - 1 do
-              let w = m.(j) in
-              lm := normalise (comb (of_float 0.5) w (of_float 0.5) v) :: !lm
-            done
-          end
-      done;
-      let best = List.fold_left (fun best solve ->
-                  List.fold_left (fun best c -> fn best solve c) best !lm) None allp
-      in
-      let c =
-        match best with
-        | None ->
-           Vector.sol_log "keep c0"; c0
-        | Some(_,c,_,fc) ->
-           Vector.sol_log "keep %a with fc = %a" print_vector c print fc;
-           c
-      in
-      let (c,b) = if c.(dim-1) <. zero then (opp c, false) else (c, true) in
-      Simp.mk c b
-    in
-
 
     let ajoute s x =
       let (sg, v) = visible s x in
@@ -527,9 +569,10 @@ module Make(R:Field.SPlus) = struct
         let x = to_vec x in
         let m = Array.map (fun p -> p --- x) s.m in
         let m' = Array.map (fun p -> p +++ x) s.m in
-        printf "\nx: %a(%a) s:%a => %a\n%a => %a\n%a => %a\n%!"
+        printf "\nx(%b,%b): %a(%a)\nc: %a(%a)\ns:%a => %a\n%a => %a\n%a => %a\n%!" sg v
           print_vector x print (norm2 x)
-          print_matrix s.m print_vector (Array.map norm2 s.m)
+          print_vector s.c print (x *.* s.c -. one)
+          print_matrix s.m print_vector (Array.map (fun x -> x *.* s.c -. one) s.m)
           print_matrix m print (det m)
           print_matrix m' print (det m');
         false);
@@ -636,27 +679,49 @@ module Make(R:Field.SPlus) = struct
     in
 
     let test codim =
-      let order s1 s2 = Stdlib.compare s2.f s1.f in
+      let order s1 s2 = Stdlib.compare (abs s2.d) (abs s1.d) in
       let ls = List.filter (fun s -> s.k <> Removed) to_do.(codim) in
       let ls = List.sort order ls in
       to_do.(codim) <- [];
-      let gn s = decision codim s in
+      let gn s = decision (codim mod dim) s in
       let ds = List.map gn ls in
       List.iter2 (fun s d ->
           if (s.k <> Removed) then
-            if d = Unknown then
-              begin
-                assert (s.k = Unknown);
-                let x = center s in
-                ajoute s x;
-              end
-            else
-              begin
-                total := Stdlib.(!total +. s.f);
-                s.codim <- s.codim + 1;
-                if s.codim < dim then to_do.(s.codim) <- s :: to_do.(s.codim)
-                else s.k <- d;
-              end) ls ds;
+            match d with
+            | Unknown | Depend _ ->
+               begin
+                 assert (s.k = Unknown);
+                 try
+                   let default =
+                     match d with
+                     | Unknown -> None
+                     | Depend v -> Some v
+                     | _ -> assert false
+                   in
+                   let x =
+                     if codim < dim then
+                       center s
+                     else
+                       let c =
+                         match default with
+                         | Some x when codim mod dim <> dim - 1  -> x
+                         | _ -> normalise s.c
+                       in
+                       let (c,b) = if c.(dim-1) <. zero then (opp c,false) else (c,true) in
+                       Simp.mk c b
+                   in
+                   ajoute s x
+                 with Not_found ->
+                   total := Stdlib.(!total +. s.f);
+                   s.codim <- codim + 1;
+                   to_do.(s.codim) <- s :: to_do.(s.codim)
+               end
+            | _ ->
+              total := Stdlib.(!total +. s.f);
+              s.codim <- s.codim + 1;
+              if s.codim < 2*dim then to_do.(s.codim) <- s :: to_do.(s.codim)
+              else s.k <- d;
+              ) ls ds;
     in
 
     let print_total codim =
@@ -668,7 +733,7 @@ module Make(R:Field.SPlus) = struct
       let dt = Stdlib.(time1 -. time0) in
       let (hd,tail) = if Debug.has_debug () then "", "\n" else "\r", "     " in
       eprintf "%sto do:%.3f%% %06d/%06d codim: %d/%d, worst:%.2e, time: %.1fs%s%!"
-        hd Stdlib.(!total *. 100.0 /. float dim)
+        hd Stdlib.(!total *. 100.0 /. float (2*dim))
         (List.length (List.filter (fun s -> s.k <> Removed) to_do.(codim)))
         !total_count
         codim (dim-1) x dt tail;
@@ -680,7 +745,7 @@ module Make(R:Field.SPlus) = struct
       let edges = Hashtbl.fold (fun _ l acc ->
                       match l with
                       | [] -> assert false
-                      | (i,j,s)::_ -> let s = to_matrix s.s in [|s.(i); s.(j)|]::acc)
+                      | (i,j,s)::_ -> [|s.m.(i); s.m.(j)|]::acc)
                     by_edge []
       in
       (match !tmp_object with
@@ -696,7 +761,7 @@ module Make(R:Field.SPlus) = struct
       let codim =
         let res = ref 0 in
         try
-          for i = 0 to dim - 1 do
+          for i = 0 to 2*dim-1 do
             res := i; if to_do.(i) <> [] then raise Exit
           done;
           assert false;
@@ -968,7 +1033,7 @@ module Make(R:Field.SPlus) = struct
     let edges = Hashtbl.fold (fun _ l acc ->
                     match l with
                     | [] -> assert false
-                    | (i,j,s)::_ -> let s = to_matrix s.s in [|s.(i); s.(j)|]::acc)
+                    | (i,j,s)::_ -> [|s.m.(i); s.m.(j)|]::acc)
                   by_edge []
     in
 

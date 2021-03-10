@@ -379,6 +379,28 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
 
   (** evaluation of a polynomial "tangential hessian", i.e.
       a matrix that can be used to solve tangential gradient = 0 *)
+  let last_eval_ghess = ref ([],[||],[||])
+  let eval_ghess hp x =
+    let (lhp,lx,r) = !last_eval_ghess in
+    if hp == lhp && x == lx then r else
+      begin
+        let dim = unsafe_dim hp in
+        let deg = unsafe_degree hp + 2 in
+        let h = eval_hess hp x in
+        let dmg = h *** x in
+        let g  = dmg //. of_int (deg - 1) in
+        let r =
+          Array.init dim (fun i ->
+              Array.init dim (fun j ->
+                  (if h <> [||] then h.(i).(j) else zero)
+                  -. of_int (deg - 1) *. g.(j) *. x.(i)))
+        in
+        last_eval_ghess := (hp,x,r);
+        r
+      end
+
+  (** evaluation of a polynomial "tangential hessian", i.e.
+      a matrix that can be used to solve tangential gradient = 0 *)
   let last_eval_thess = ref ([],[||],[||])
   let eval_thess hp x =
     let (lhp,lx,r) = !last_eval_thess in
@@ -515,6 +537,7 @@ module type B = sig
   val eval_tgrad : polynomial_v -> v -> v
   val eval_hess : polynomial_m -> v -> m
   val eval_thess : polynomial_m -> v -> m
+  val eval_ghess : polynomial_m -> v -> m
 
   val ( ++ ) : polynomial -> polynomial -> polynomial
   val ( -- ) : polynomial -> polynomial -> polynomial

@@ -15,8 +15,8 @@ type parameters =
 let default_parameters =
   { rmax = 0.99
   ; subd = 15
-  ; dprec = 1e-14
-  ; crit  = 5 }
+  ; dprec = 1e2
+  ; crit  = 3 }
 
 let spec =
   [ ( "-c"

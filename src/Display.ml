@@ -95,14 +95,14 @@ let toggle_curve () =
   camera.curve <- not camera.curve;
   Printf.printf "curve mode is %b\n%!" camera.curve
 
-let add_object = fun name obj ->
-  Mutex.lock draw_mutex;
-  objects := (name, obj) :: !objects;
-  Mutex.unlock draw_mutex
-
 let rm_object = fun obj ->
   Mutex.lock draw_mutex;
   objects := List.filter (fun (_,o) -> o.uid <> obj.uid) !objects;
+  Mutex.unlock draw_mutex
+
+let add_object = fun name obj ->
+  Mutex.lock draw_mutex;
+  objects := (name, obj) :: (List.filter (fun (n,_) -> n <> name) !objects);
   Mutex.unlock draw_mutex
 
 let hide_all_objects () =

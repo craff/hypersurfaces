@@ -687,7 +687,7 @@ module Make(R:S) = struct
 
       (** second kind of steps *)
       let linear_step step v _v2 =
-        (** we select indices with [r.(i) > 0] *)
+        (** we selecœ<t indices with [r.(i) > 0] *)
         let sel = ref [] in
         for i = 0 to nb - 1 do
           if r.(i) >. zero then sel := i :: !sel;
@@ -851,8 +851,6 @@ module Make(R:S) = struct
     val eval : v -> v (** the function to solve *)
     val grad : v -> m (** its gradient, should raise Not_found if null *)
     val max_steps : int (** limitation of the number of steps *)
-    val max_far_steps : int (** limitiation of the number of steps blocked by
-                               maximum radius *)
     val lambda_min : t (** minimum value for the step size: stop solver if
                           lambda < lamnbda_min *)
     val fun_min : t (** minimum value for the target function.
@@ -877,7 +875,7 @@ module Make(R:S) = struct
     let descent c =
       let r = F.eval c in
       let h = F.grad c in
-      let dx = h *** r in
+      let dx = of_int 2 **. (h *** r) in
       let d2 = norm2 dx in
       if d2 <=. zero then raise Not_found;
       (** optimal step should be
