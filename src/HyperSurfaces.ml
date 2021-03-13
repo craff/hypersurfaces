@@ -399,7 +399,7 @@ module Make(R:Field.SPlus) = struct
       else (normalise x, false)
     in
  *)
-    let center s =
+    let choose_new s =
       let c0 as center = normalise s.c in
       let radius2 = dist2 (to_vec s.s.(0)) c0 in
       let rs2 = radius2 /. of_int 100_000 in
@@ -700,7 +700,7 @@ module Make(R:Field.SPlus) = struct
                    in
                    let x =
                      if codim < dim then
-                       center s
+                       choose_new s
                      else
                        let c =
                          match default with
