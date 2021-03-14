@@ -49,8 +49,8 @@ type camera =
   ; mutable curve : bool }
 
 let camera =
-  { pos = [| 0.0;0.0;-5.0 |]
-  ; front = [| 0.0;0.0;1.0 |]
+  { pos = [| 0.0;0.0;5.0 |]
+  ; front = [| 0.0;0.0;-1.0 |]
   ; up = [| 0.0;1.0;0.0 |]
   ; speed = 0.1
   ; rspeed = acos(-1.0) *. 1. /. 180.
@@ -60,8 +60,8 @@ let camera_right () = VF.(vp camera.front camera.up)
 
 let home () =
   let set v1 v2 = Array.blit v2 0 v1 0 3 in
-  set camera.pos [| 0.0;0.0;-5.0 |];
-  set camera.front [| 0.0;0.0;1.0 |];
+  set camera.pos [| 0.0;0.0;5.0 |];
+  set camera.front [| 0.0;0.0;-1.0 |];
   set camera.up [| 0.0;1.0;0.0 |];
   camera.speed <- 0.01;
   camera.rspeed <- acos(-1.0) *. 1. /. 180.

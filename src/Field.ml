@@ -37,6 +37,7 @@ module FloatMin =
     let print ch = fprintf ch "%g"
     let exact = false
     let cos = cos
+    let ln = log
   end
 
 module Float = struct
@@ -77,6 +78,10 @@ module GmpMin = struct
   let cos x =
     let r = Mpfr.init () in
     ignore (Mpfr.cos r (_mpfr x) mode);
+    _mpfrf r
+  let ln x =
+    let r = Mpfr.init () in
+    ignore (Mpfr.log r (_mpfr x) mode);
     _mpfrf r
 end
 
@@ -126,6 +131,7 @@ module QMin =
     let print ch x = fprintf ch "%s" (to_string x)
     let exact = true
     let cos _ = failwith "cos not available"
+    let ln _  = failwith "ln not available"
   end
 
 module Q = struct
