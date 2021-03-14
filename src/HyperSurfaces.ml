@@ -404,7 +404,7 @@ module Make(R:Field.SPlus) = struct
       let radius2 = dist2 (to_vec s.s.(0)) c0 in
       let rs2 = radius2 /. of_int 100_000 in
       let select x (dy,_,sy,fy as y) =
-        assert (fy >. zero);
+        assert (fy >=. zero);
         assert (dy >=. zero);
         match x with
         | None -> Some y
