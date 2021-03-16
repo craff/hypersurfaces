@@ -1,45 +1,45 @@
 let d1(x,y,t) = x+y;
-let d1 = zeros d1 (0); display d1 d1__t;
+let d1 = zeros [expected=1] d1 ; display d1 d1__t;
 
 let d2(x,y) = x+2*y+1/3;
-let d2 = zeros d2 (0); display d2 d2__t;
+let d2 = zeros [expected=1] d2; display d2 d2__t;
 
 let c1(x,y) = x^2 + y^2 - 1;
-let c1 = zeros c1 (0); display c1 c1__t;
+let c1 = zeros [expected=1] c1; display c1 c1__t;
 
 let e1(x,y) = 10 * x^2 + y^2 - 1;
-let e1 = zeros e1 (0); display e1 e1__t;
+let e1 = zeros [expected=1] e1; display e1 e1__t;
 
 let c2(x,y) = (x - 1)^2 + (y - 1)^2 - 1;
-let c2 = zeros c2 (0); display c2 c2__t;
+let c2 = zeros [expected=1] c2; display c2 c2__t;
 
 let e2(x,y) = 8 * (x-y)^2 + (x+y)^2 - 1;
-let e2 = zeros e2 (0); display e2 e2__t;
+let e2 = zeros [expected=1] e2; display e2 e2__t;
 
 let e3(x,y) = 50 * (x-y)^2 + (x+y)^2 - 1;
-let e3 = zeros e3 (0); display e3 e3__t;
+let e3 = zeros [expected=1] e3; display e3 e3__t;
 
 let e4(x,y) = 4 * (x-1)^2 + (y-1)^2 - 1;
-let e4 = zeros e4 (0); display e4 e4__t;
+let e4 = zeros [expected=1] e4; display e4 e4__t;
 
 let cubic1(x,y) = c1(x,y) * (x - y) + 1/5000 * (x^2+y^2+1);
-let cubic1 = zeros cubic1 (0,0); display cubic1 cubic1__t;
+let cubic1 = zeros [expected=2] cubic1; display cubic1 cubic1__t;
 display cubic1;
 
 let q1(x,y) = (x^2+y^2-1)^2 + 1/2 * x * y * (x-y) * (x+y);
-let q1 = zeros q1 (0,0,0,0); display q1 q1__t;
+let q1 = zeros [expected=4] q1; display q1 q1__t;
 
 let q2(x,y) = (x^2+y^2-1)^2 + 1/200 * x * y * (x-y) * (x+y);
-let q2 = zeros q2 (0,0,0,0); display q2 q2__t;
+let q2 = zeros [expected=4] q2; display q2 q2__t;
 
 let q3(x,y) = (x^2+y^2-1)^2 + 1/2000 * x * y * (x-y) * (x+y);
-let q3 = zeros q3 (0,0,0,0); display q3 q3__t;
+let q3 = zeros [expected=4] q3; display q3 q3__t;
 
 let q4(x,y) = (x^2+y^2-1)^2 + 1/20000 * x * y * (x-y) * (x+y);
-let q4 = zeros [subd=20] q4 (0,0,0,0); display q4 q4__t;
+let q4 = zeros [subd=20,expected=4] q4; display q4 q4__t;
 
 let e5(x,y) = 500  * (x-1)^2 + (y-1)^2 - 1;
-let e5 = zeros e5 (0); display e5 e5__t;
+let e5 = zeros [expected=1] e5; display e5 e5__t;
 
 let e6(x,y) = 5000 * (x-1)^2 + (y-1)^2 - 1;
-let e6 = zeros e6 (0); display e6 e6__t;
+let e6 = zeros [expected=1] e6; display e6 e6__t;

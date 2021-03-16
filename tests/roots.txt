@@ -1,29 +1,29 @@
 let p(x) = x^2 + x - 1;
-let p = zeros p 2;
+let p = zeros [expected=2] p;
 
 let p(x) = x^3 + x - 1;
-let p = zeros p 1;
+let p = zeros [expected=] p;
 
 let p(x) = x * (x + 1) * (x - 1);
-let p = zeros p 3;
+let p = zeros [expected=3] p;
 
 let p(x) = x * (x + 1e-6) * (x - 1e-6);
-let p = zeros p 3;
+let p = zeros [expected=3] p;
 
 let p(x) = x * (x + 1e-6) * (x - 1e-6) * (x + 2e-6) * (x - 2e-6);
-let p = zeros p 5;
+let p = zeros [expected=5] p;
 
 let p(x) = (x + 1e-12) * (x + 1e-6) * (x - 1e-6) * (x + 2e-6) * (x - 2e-6);
-let p = zeros p 5;
+let p = zeros [expected=5] p;
 
 let p(x) = x * (x + 1e-6) * (x - 1e-6) * (x + 2e-6) * (x - 2e-6) * (x + 3e-6) * (x - 3e-6);
-let p = zeros p 7;
+let p = zeros [expected=7] p;
 
 let p(x) = (x-10) * (x - 100) * (x - 1000) * (x - 10000);
-let p = zeros p 4;
+let p = zeros [expected=4] p;
 
 let p(x) = (x-10) * (x - 100) * (x - 1000) * (x - 10000) * (x - 1000000);
-let p = zeros p 5;
+let p = zeros [expected=5] p;
 
 let p(x) = (x-10) * (x - 100) * (x - 1000) * (x - 10000) * (x - 1000000) * (x - 10000000);
-let p = zeros p 6;
+let p = zeros [expected=6] p;

@@ -62,15 +62,31 @@ module Parse(R:Field.SPlus) = struct
     ; a = Lex.custom f
     ; f }
 
+  let rec mul_cons n m l =
+    if n <= 0 then l else mul_cons (n-1) m (m::l)
+
+  let%parser rec expected_aux =
+    (n::INT) => [n]
+  ; (n::INT) ',' (l::expected_aux) => n::l
+  ; (n::INT) '*' (m::INT) => mul_cons n m []
+  ; (n::INT) '*' (m::INT) ',' (l::expected_aux) => mul_cons n m l
+
+  let%parser expected =
+    ()  => Args.Anything
+  ; (n::INT) => Args.Int n
+  ; '(' ')' => Args.Int 0
+  ; '(' (l::expected_aux) ')' => Args.List l
+
   let%parser option =
       "subd" "=" (p::INT) => (fun opt -> Args.{ opt with subd = p })
     ; "rmax" "=" (p::FLOAT) => (fun opt -> Args.{ opt with rmax = p })
     ; "delauney" "prec" "=" (p::FLOAT) => (fun opt -> Args.{ opt with dprec = p })
-    ; "nb critical"     "=" (p::INT) => (fun opt -> Args.{ opt with crit = p })
+    ; "nb critical" "=" (p::INT) => (fun opt -> Args.{ opt with crit = p })
+    ; "expected" "=" (l::expected) => (fun opt -> Args.{ opt with expected = l})
 
   let%parser rec options_aux =
-      () => (fun p -> p)
-    ; (p1::options_aux) (p2::option) => (fun p -> p2 (p1 p))
+      (p1::option) => (fun p -> p1 p)
+    ; (p1::options_aux) ',' (p2::option) => (fun p -> p2 (p1 p))
 
   let%parser options =
       () => Args.default_parameters
@@ -131,35 +147,20 @@ module Parse(R:Field.SPlus) = struct
     in
     poly
 
-  let rec mul_cons n m l =
-    if n <= 0 then l else mul_cons (n-1) m (m::l)
-
-  let%parser rec expected_aux =
-    (n::INT) => [n]
-  ; (n::INT) ',' (l::expected_aux) => n::l
-  ; (n::INT) '*' (m::INT) => mul_cons n m []
-  ; (n::INT) '*' (m::INT) ',' (l::expected_aux) => mul_cons n m l
-
-  let%parser expected =
-    ()  => H.Nothing
-  ; (n::INT) => H.Int n
-  ; '(' ')' => H.Int 0
-  ; '(' (l::expected_aux) ')' => H.List l
-
   let%parser cmd =
       "let" (name::ident) ((vars,()) >: params) '=' (p::poly vars Sum) ';' =>
         (let p = P.mk name vars p in
          let vars = Array.of_list (vars @ ["s"]) in
          printf "%a\n%!" (B.print_polynome ~vars) p.bern)
     ; "let" (name::ident) '=' "zeros" (opts::options)
-                                 (names:: ~+ ident) (t::expected) ';' =>
+                                 (names:: ~+ ident) ';' =>
         (let p name =
            try (Hashtbl.find polys name).bern
            with Not_found -> Lex.give_up ~msg:("unbound variable "^name) ()
          in
          let ps = List.map p names in
          let (ts, es) =
-           try H.triangulation ~expected:t opts ps with e ->
+           try H.triangulation opts ps with e ->
              Printexc.print_backtrace stderr;
              eprintf "exception: %s\n%!" (Printexc.to_string e);
              assert false

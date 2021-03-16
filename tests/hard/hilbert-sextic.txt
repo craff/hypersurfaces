@@ -27,5 +27,5 @@ let s(x,y,z) =
  -1.5521194243133100950e-08 * 2.4494897427831778813e+00 * x^5 * y +
  -4.8634518149670463716e-01 * x^6 ;
 
-let s = zeros s 11;
+let s = zeros [subd=25, nb critical=10, expected=11] s;
 display s; display s s__t;

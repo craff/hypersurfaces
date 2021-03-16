@@ -350,13 +350,15 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
       end
 
   (** evaluation of a polynomial tangential gradient *)
-  let last_eval_tgrad = ref([],[||],[||])
+  let last_eval_tgrad = ref([],[||],([||],zero))
   let eval_tgrad dp x =
     let (ldp,lx,r) = !last_eval_tgrad in
     if dp == ldp && x == lx then r else
       begin
         let g = eval_grad dp x in
-        let r = comb one g (-. (g *.* x)) x in
+        let p = g *.* x in
+        let r = comb one g (-. p) x in
+        let r = (r,p) in
         last_eval_tgrad := (dp,x,r);
         r
       end
@@ -379,7 +381,7 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
 
   (** evaluation of a polynomial "tangential hessian", i.e.
       a matrix that can be used to solve tangential gradient = 0 *)
-  let last_eval_thess = ref ([],[||],[||])
+  let last_eval_thess = ref ([],[||],([||],[||],zero))
   let eval_thess hp x =
     let (lhp,lx,r) = !last_eval_thess in
     if hp == lhp && x == lx then r else
@@ -389,19 +391,21 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
         let h = eval_hess hp x in
         let dmg = h *** x in
         let g  = dmg //. of_int (deg - 1) in
-        let dp = g *.* x in
+        let p = g *.* x in
         let r =
           Array.init dim (fun i ->
               Array.init dim (fun j ->
                   (if h <> [||] then h.(i).(j) else zero)
                   -. of_int deg *. g.(i) *. x.(j)
                   -. x.(i) *. dmg.(j)
-                  -.  (if i = j then dp else zero)
-                  +. (one +. of_int (deg + 1) *. dp) *. x.(i) *. x.(j)
+                  -.  (if i = j then p else zero)
+                  +. (one +. of_int (deg + 1) *. p) *. x.(i) *. x.(j)
                   ))
         in
+        let r = (r,g,p) in
         last_eval_thess := (hp,x,r);
         r
+
       end
 
   let digho (p:polynomial) epsilon p1 x p2 y =
@@ -512,9 +516,9 @@ module type B = sig
 
   val eval : polynomial -> v -> t
   val eval_grad : polynomial_v -> v -> v
-  val eval_tgrad : polynomial_v -> v -> v
+  val eval_tgrad : polynomial_v -> v -> v * t
   val eval_hess : polynomial_m -> v -> m
-  val eval_thess : polynomial_m -> v -> m
+  val eval_thess : polynomial_m -> v -> m * v * t
 
   val ( ++ ) : polynomial -> polynomial -> polynomial
   val ( -- ) : polynomial -> polynomial -> polynomial

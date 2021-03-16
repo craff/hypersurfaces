@@ -5,18 +5,25 @@ let prog  = ref false
 let progw  = ref false
 let debug_string = ref ""
 
+(* type for the expected topologie *)
+type expected = Anything (* expect anything *)
+              | Int of int (* expect the given number of components *)
+              | List of int list (* expect components with the given euler characteristics *)
+
 
 type parameters =
   { mutable rmax : float
   ; mutable subd : int
   ; mutable dprec : float
-  ; mutable crit : int }
+  ; mutable crit : int
+  ; expected : expected}
 
 let default_parameters =
   { rmax = 0.99
   ; subd = 15
   ; dprec = 1e3
-  ; crit  = 10 }
+  ; crit  = 10
+  ; expected = Anything}
 
 let spec =
   [ ( "-c"

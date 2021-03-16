@@ -11,6 +11,8 @@ let pt4(x,y,z) = -s2p3*cy*x + 1/2*cy*y + cz*z + 1;
 
 let r1 = 2;
 let s1(x,y,z) = x^2 + y^2 + z^2 - r1^2;
+#perturbation to avoid infinite number of critical points
+let s1bis(x,y,z) = x^2 + 1.0001 * y^2 + 1.001*z^2 - r1^2;
 
 let s1 = zeros s1;
 #let d1 = zeros s1 pt1;
@@ -22,11 +24,11 @@ let s1 = zeros s1;
 
 let q0(x,y,z) = pt1(x,y,z)*pt2(x,y,z)*pt3(x,y,z)*pt4(x,y,z) + 0.05;
 
-let ps = zeros [subd=20] q0 s1 (10*0);
+let ps = zeros [subd=20, nb critical=3, expected=(10*0)] q0 s1bis;
 display ps ps__t;
 
 let q1(x,y,z) = 0.5* s1(x,y,z)^2 + q0(x,y,z);
-let ds = zeros q1 (10*2);
+let ds = zeros [expected=(10*2)] q1;
 
 display ds;
 display ds ds__t;
