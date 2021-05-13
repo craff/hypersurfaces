@@ -44,33 +44,30 @@ type camera =
   { pos : float array
   ; front : float array
   ; up: float array
-  ; mutable speed : float
+  ; mutable center : float
   ; mutable rspeed : float
-  ; mutable curve : bool }
+  }
 
 let camera =
   { pos = [| 0.0;0.0;5.0 |]
   ; front = [| 0.0;0.0;-1.0 |]
   ; up = [| 0.0;1.0;0.0 |]
-  ; speed = 0.1
-  ; rspeed = acos(-1.0) *. 1. /. 180.
-  ; curve = true }
+  ; center = 5.0
+  ; rspeed = acos(-1.0) *. 1. /. 180. }
 
 let camera_right () = VF.(vp camera.front camera.up)
 
+let set v1 v2 = Array.blit v2 0 v1 0 3
+
 let home () =
-  let set v1 v2 = Array.blit v2 0 v1 0 3 in
   set camera.pos [| 0.0;0.0;5.0 |];
   set camera.front [| 0.0;0.0;-1.0 |];
   set camera.up [| 0.0;1.0;0.0 |];
-  camera.speed <- 0.01;
+  camera.center <- 5.0;
   camera.rspeed <- acos(-1.0) *. 1. /. 180.
 
-let camera_speed () =
-  if camera.curve then
-    ~-. VF.(camera.pos *.* camera.front) *. camera.speed
-  else
-    camera.speed
+let camera_speed () = camera.center /. 20.0
+
 let move_right () = VF.combq 1. camera.pos (camera_speed ()) (camera_right ())
 let move_left  () = VF.combq 1. camera.pos (-. camera_speed ()) (camera_right ())
 let move_up    () = VF.combq 1. camera.pos (camera_speed ()) camera.up
@@ -87,13 +84,25 @@ let rotate_down () =
   let r = Array.copy camera.front in
   VF.combq (cos camera.rspeed) camera.front (-. sin camera.rspeed) camera.up;
   VF.combq (cos camera.rspeed) camera.up (sin camera.rspeed) r
-let move_forward () = VF.combq 1. camera.pos (camera_speed ()) camera.front
-let move_back  () = VF.combq 1. camera.pos (-. camera_speed ()) camera.front
-let accel () = camera.speed <- camera.speed *. 1.5
-let slow ()  = camera.speed <- camera.speed /. 1.5
-let toggle_curve () =
-  camera.curve <- not camera.curve;
-  Printf.printf "curve mode is %b\n%!" camera.curve
+let to_center () =
+  set camera.pos (VF.comb 1.0 camera.pos camera.center camera.front);
+  set camera.front (VF.opp camera.front)
+let crotate_right () =
+  to_center (); rotate_right (); to_center ()
+let crotate_left () =
+  to_center (); rotate_left (); to_center ()
+let crotate_up () =
+  to_center (); rotate_up (); to_center ()
+let crotate_down () =
+  to_center (); rotate_down (); to_center ()
+let move_forward mc =
+  VF.combq 1. camera.pos (camera_speed ()) camera.front;
+  if mc then camera.center <- camera.center -. camera_speed ()
+let move_back mc =
+  VF.combq 1. camera.pos (-. camera_speed ()) camera.front;
+  if mc then camera.center <- camera.center +. camera_speed ()
+let accel () = camera.center <- camera.center *. 1.5
+let slow ()  = camera.center <- camera.center /. 1.5
 
 let rm_object = fun obj ->
   Mutex.lock draw_mutex;
@@ -126,12 +135,9 @@ let camera_mat () =
   Matrix.lookat camera.pos VF.(camera.pos +++ camera.front) camera.up
 
 let projection () =
-  if camera.curve then
-    Matrix.perspective 45.0 !window_ratio
-      (abs_float camera.pos.(2)*.0.1)
-      (abs_float camera.pos.(2)*. 500.0)
-  else
-    Matrix.perspective 45.0 !window_ratio 0.1 500.0
+  Matrix.perspective 45.0 !window_ratio
+    (camera.center /. 30.0)
+    (camera.center *. 30.0)
 
 let _ =
   Egl.initialize ~width:!window_width ~height:!window_height "test_gles"
@@ -295,13 +301,22 @@ let key_cb ~key ~state ~x ~y =
   let c = if key < 256 then Char.chr key else Char.chr 0 in
   match key, c with
   | _    , ('n'|'N') -> restart ()
-  | 65363, _         -> if state = 0 then move_right () else rotate_right ()
-  | 65361, _         -> if state = 0 then move_left () else rotate_left ()
-  | 65362, _         -> if state = 0 then move_up () else rotate_up ()
-  | 65364, _         -> if state = 0 then move_down () else rotate_down ()
-  | _    , ' '       -> move_forward ()
-  | _    , ('b'|'B') -> move_back ()
-  | _    , ('c'|'C') -> toggle_curve ()
+  | 65363, _         -> if state = 0 then move_right () else
+                          if state = 1 then crotate_right ()
+                          else rotate_right ()
+  | 65361, _         -> if state = 0 then move_left () else
+                          if state = 1 then crotate_left ()
+                          else rotate_left ()
+  | 65362, _         -> if state = 0 then move_up () else
+                          if state = 1 then crotate_up ()
+                          else rotate_up ()
+  | 65364, _         -> if state = 0 then move_down () else
+                          if state = 1 then crotate_down ()
+                          else rotate_down ()
+  | _    , ' '       -> move_forward (state=0)
+  | 65365, _         -> move_forward (state=0)
+  | _    , ('b'|'B') -> move_back (state=0)
+  | 65366, _         -> move_back (state=0)
   | _    , ('h'|'H') -> home ()
   | _    , ('s'|'S') -> save_image ()
   | _    , ('q'|'Q') -> Egl.exit_loop ()
