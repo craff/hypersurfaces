@@ -391,18 +391,19 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
         let h = eval_hess hp x in
         let dmg = h *** x in
         let g  = dmg //. of_int (deg - 1) in
-        let p = g *.* x in
+        let dp = g *.* x in
+        let tg = comb one g (-. dp) x in
         let r =
           Array.init dim (fun i ->
               Array.init dim (fun j ->
                   (if h <> [||] then h.(i).(j) else zero)
-                  -. of_int deg *. g.(i) *. x.(j)
-                  -. x.(i) *. dmg.(j)
-                  -.  (if i = j then p else zero)
-                  +. (one +. of_int (deg + 1) *. p) *. x.(i) *. x.(j)
+                  -. dmg.(i) *. x.(j)
+                  -. of_int deg *. x.(i) *. g.(j)
+                  -.  (if i = j then dp else zero)
+                  +. (one +. of_int (deg + 1) *. dp) *. x.(i) *. x.(j)
                   ))
         in
-        let r = (r,g,p) in
+        let r = (r,tg,dp) in
         last_eval_thess := (hp,x,r);
         r
 
@@ -433,7 +434,7 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
   let print_monomial vars ch l =
     Array.iteri (fun i e ->
         if e <> 0 then
-          if e > 1 then fprintf ch "%s^%d " vars.(i) e
+          if e > 1 then fprintf ch "%s^%d" vars.(i) e
           else  fprintf ch "%s" vars.(i)) l
 
   let mkvars vars p =
@@ -449,7 +450,7 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
           begin
             if not !first then fprintf ch " + ";
             first := false;
-            fprintf ch "%a %a" print c
+            fprintf ch "%a%a" print c
               (print_monomial vars) l;
           end) p
 
