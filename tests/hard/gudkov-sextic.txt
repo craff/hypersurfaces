@@ -29,5 +29,5 @@ let s(x,y,z) =
 
 let s0(x,y,z) = s((x+z)*0.5,y,(x-z)*0.5);
 
-let s = zeros [subd=27, nb critical=10, expected = 11] s0;
+let s = zeros [subd=27, nb critical=50, expected = 11] s0;
 display s; display s s__t;

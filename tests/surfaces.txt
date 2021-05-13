@@ -18,3 +18,14 @@ let e2 = zeros [expected=(2)] e2; display e2; display e2 e2__t;
 
 let h3(x,y,z,t) = (x-0.232*t)^2 - 2*(y-0.312*t)^2 + 20 * (z-0.623*t)^2 - t^2;
 let h3 = zeros [expected=(0)] h3; display h3; display h3 h3__t;
+
+let c3(x,y,z) = x^6 + y^6 + z^6 - 0.2;
+let c3 = zeros [expected=(2)] c3; display c3;
+
+let f3(x,y,z) = x^3*y+x*z^3+y^3*z+z^3+7*z^2+5*z - 1;
+let f3 = zeros [expected=(-2)] f3; display f3;
+
+let R = 1;
+let r = 1/2;
+let t3(x,y,z) = (x^2 + y^2 + z^2 + R^2 - r^2)^2 - 4*R^2*(x^2 + y^2);
+let t3 = zeros [expected=(0)] t3; display t3;

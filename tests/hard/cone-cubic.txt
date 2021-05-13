@@ -27,11 +27,10 @@ let q(x,y,z,t) = p1(x,y,z,t)*p2(x,y,z,t) + b*t^2;
 
 let cubic(x,y,z,t) = q(x,y,z,t)*p3(x,y,z,t) - c*(x^2 + y^2 + z^2 + t^2)*t;
 
-let cubic = zeros cubic;
-
+let cubic = zeros [expected=(2,1),nb critical = 10] cubic;
 display cubic cubic__t;
 
-let cc = zeros [subd=20,expected=5] c0 cubic;
+let cc = zeros [subd=20,expected=5,nb critical=15] cubic c0;
 
 display cc;
 display cc cc__t;
