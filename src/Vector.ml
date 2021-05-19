@@ -505,13 +505,21 @@ module Make(R:S) = struct
   let solve_transpose_both =
     solve_both_gen solve_transpose_cg solve_transpose ( **- )
 
-  (** compute the gravity center of a simplex whose vertices are
-      the line of the matrix m and are normalise, in which case
+  (** compute the circumcenter of a simplex whose vertices are
+      the line of the matrix m and are normalised, in which case
       we must have m.(i) *.* x = one for all i  *)
   let center m =
     let d = Array.length m in
     let b = Array.make d one in
     solve m b
+
+  (** same as above when the number of points if lower than the
+      dimention of the ambiant space *)
+  let lcenter m =
+    let d = Array.length m in
+    let b = Array.make d one in
+    let tm = transpose m in
+    tm *** solve (m **** tm) b
 
   (** Coordinate: compute the coordinates of v is the basis given
       by the lines of matrix m *)
@@ -1138,6 +1146,7 @@ module type V = sig
   val ( **- ) : m -> v -> v
 
   val center : m -> v
+  val lcenter : m -> v
   val pcoord : v -> m -> v
   val transform : v -> m -> m -> v
 
