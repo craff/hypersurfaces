@@ -8,13 +8,16 @@ let p(x) = x * (x + 1) * (x - 1);
 let p = zeros [expected=3] p;
 
 let p(x) = x * (x + 1e-6) * (x - 1e-6);
-let p = zeros [expected=3] p;
+let p = zeros [expected=3,subd=20] p;
 
 let p(x) = x * (x + 1e-6) * (x - 1e-6) * (x + 2e-6) * (x - 2e-6);
 let p = zeros [expected=5] p;
 
 let p(x) = (x + 1e-12) * (x + 1e-6) * (x - 1e-6) * (x + 2e-6) * (x - 2e-6);
 let p = zeros [expected=5] p;
+
+let p(x) = x * (x + 1e-5) * (x - 1e-5) * (x + 2e-5) * (x - 2e-5) * (x + 3e-5) * (x - 3e-5);
+let p = zeros [expected=7] p;
 
 let p(x) = x * (x + 1e-6) * (x - 1e-6) * (x + 2e-6) * (x - 2e-6) * (x + 3e-6) * (x - 3e-6);
 let p = zeros [expected=7] p;

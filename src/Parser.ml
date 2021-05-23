@@ -82,6 +82,7 @@ module Parse(R:Field.SPlus) = struct
     ; "rmax" "=" (p::FLOAT) => (fun opt -> Args.{ opt with rmax = p })
     ; "delauney" "prec" "=" (p::FLOAT) => (fun opt -> Args.{ opt with dprec = p })
     ; "nb critical" "=" (p::INT) => (fun opt -> Args.{ opt with crit = p })
+    ; "limit critical" "=" (p::FLOAT) => (fun opt -> Args.{ opt with crit_limit = p })
     ; "expected" "=" (l::expected) => (fun opt -> Args.{ opt with expected = l})
 
   let%parser rec options_aux =
@@ -159,12 +160,7 @@ module Parse(R:Field.SPlus) = struct
            with Not_found -> Lex.give_up ~msg:("unbound variable "^name) ()
          in
          let ps = List.map p names in
-         let (ts, es) =
-           try H.triangulation opts ps with e ->
-             Printexc.print_backtrace stderr;
-             eprintf "exception: %s\n%!" (Printexc.to_string e);
-             assert false
-         in
+         let (ts, es) = H.triangulation opts ps in
          let os =
            if ts <> [] then
              begin

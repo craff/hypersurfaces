@@ -9,7 +9,6 @@ let solver2_chrono = Chrono.create "solver2"
 let solver3_chrono = Chrono.create "solver3"
 let test_chrono = Chrono.create "test"
 let add_chrono = Chrono.create "add"
-let search_chrono = Chrono.create "search"
 
 let chr_solve1 s a b c = Chrono.add_time solver1_chrono (s a b) c
 let chr_solve2 s a b c = Chrono.add_time solver2_chrono (s a b) c
@@ -70,6 +69,7 @@ module Make(R:Field.SPlus) = struct
   let fst3 (x,_,_) = x
 
   let triangulation param p0 =
+
     let restore_objects =
       if !Args.prog then Display.hide_all_objects ()
       else (fun () -> ())
@@ -79,225 +79,157 @@ module Make(R:Field.SPlus) = struct
     let p0 = List.map Poly.normalise p0 in
     let dim = List.hd dims in
     if not (List.for_all ((=) dim) dims) then failwith "inhomogeneous equations";
-    let sdim = dim - List.length p0 in
+    let codim = List.length p0 in
+    let sdim = dim - codim in
     let dirs = all_dirs dim in
     let dp0 = List.map2 (fun p d -> (p, gradient p, hessian p, d)) p0 deg in
     let dp0 = List.filter (fun (_,_,_,d) -> d > 1) dp0 in
-    let solver_stat = init_solver_stats () in
+    let solver1_stat = init_solver_stats () in
+    let solver2_stat = init_solver_stats () in
+    let solver3_stat = init_solver_stats () in
     let eval_prod c = (*
       let gs = List.map (fun (_,dp,_,_) -> eval_grad dp c) dp0 in
       let gs = Array.of_list gs in
       let m = gs **** transpose gs in
       det m*)
-      List.fold_left (fun acc (p,dp,_,_) ->
+      List.fold_left (fun acc (p,_,_,_) ->
           let n = eval p c in
-          acc +. abs n) zero dp0
+          acc +. n *. n) zero dp0
     in
-    let allp =
-      List.map (fun (p,dp,hp,d) ->
-          let module F = struct
-              let dim = dim
-              let max_steps = 10000
-              let max_proj = 5
-              let fun_min = epsilon2
-              let lambda_min = epsilon2
-              let eval c = fst (eval_tgrad dp c)
-              let grad c = fst3 (eval_thess hp c)
-              let stat = solver_stat
-            end
-          in
-          let module S = Solve(F) in
-          let evalc c = norm2 (F.eval c) in
-          let evalg c = of_int 2 **. (F.grad c **- F.eval c) in
-          (Single, evalc, evalg, chr_solve1 S.solve)) dp0
-    in
-    let allp =
-      match dp0 with
-      | [] | [_] -> allp
-      | _ ->
-         let eval c =
-           List.fold_left (fun acc (_,dp,_,_) ->
-               let (tg,p) = eval_tgrad dp c in
-               let tg = if p >=. zero then tg else opp tg in
-               acc +++ tg) (zero_v dim) dp0
-         in
-         (*let eval c = norm2 (eval_tgrad c) in*)
-         let grad c =
-           List.fold_left (fun acc (_,_,hp,d) ->
-               let (th,tg,p) = eval_thess hp c in
-               let sg = if p >=. zero then one else -. one in
-               let acc = Array.init dim (fun i ->
-                             Array.init dim (fun j -> acc.(i).(j) +. sg *. th.(i).(j)))
-               in
-                acc) (Array.init dim (fun _ -> zero_v dim)) dp0
-         in
+    let single_critical =
+      List.map (fun (_,dp,hp,_) ->
          let module F = struct
              let dim = dim
-              let max_steps = 10000
-              let max_proj = 5
-               let fun_min = epsilon2
-              let lambda_min = epsilon2
-              let eval = eval
-              let grad = grad
-              let stat = solver_stat
-            end
-          in
-          let module S = Solve(F) in
-          let evalc c = norm2 (F.eval c) in
-          let evalg c = of_int 2 **. (F.grad c **- F.eval c) in
-          (Multi, evalc, evalg, chr_solve2 S.solve) :: allp
+             let fun_min = epsilon2
+             let fun_good = of_float param.Args.crit_limit
+             let min_prog_coef = sqrt (of_int 2)
+             let min_prog_int = 2 * dim
+             let lambda_min = epsilon2
+             let eval c = fst (eval_tgrad dp c)
+             let grad c = fst3 (eval_thess hp c)
+             let stat = solver1_stat
+           end
+         in
+         let module S = Solve(F) in
+         (Single, chr_solve1 S.solve)
+        ) dp0
     in
-
-    let penal_allp =
-      List.map (fun (p,dp,hp,d) ->
-          let module F = struct
-              let dim = dim
-              let max_steps = 10000
-              let max_proj = -1
-              let fun_min = epsilon2
-              let lambda_min = epsilon2
-              let eval c = fst (eval_tgrad dp c)
-              let grad c = fst3 (eval_thess hp c)
-              let stat = solver_stat
-            end
-          in
-          let module S = Solve(F) in
-          let evalc c = norm2 (F.eval c) in
-          let evalg c = of_int 2 **. (F.grad c **- F.eval c) in
-          (Any, evalc, evalg, chr_solve3 S.solve)) dp0
-    in
-(*    let penal_allp m =
-      List.map (fun (p,dp,hp,d) ->
-          let gs = Array.of_list (List.map normalise m) in
-          let module F = struct
-              let dim = dim
-              let max_steps = 10000
-              let max_proj = -1
-              let fun_min = epsilon2
-              let lambda_min = epsilon2
-              let eval c =
-                let ngc = normalise (eval_grad dp c) in
-                Array.fold_left (fun acc g -> acc +. norm2 (ngc --- g)) zero gs
-              let grad c =
-                let hc = eval_hess hp c in
-                let gc = (hc *** c) //. of_int (d - 1) in
-                let n2 = norm2 gc in
-                let n = sqrt n2 in
-                let ngc = gc //. n in
-                let ghc = hc **- gc in
-                let m =
-                  Array.init dim (fun i ->
-                      Array.init dim (fun j ->
-                          hc.(i).(j) /. n -. ngc.(i) *. ghc.(j) /. n2))
-                in
-                let r = Array.fold_left
-                          (fun acc g -> acc +++ of_int 2 **. (m **- (ngc --- g)))
-                          (zero_v dim) gs
-                in
-                (*
-                printf "===> %a %a\n%!" print_vector r print (r *.* c);
-                let c' = comb one c (of_float (-1e-10)) r in
-                let m' = eval c' and m = eval c in
-                assert (m' <=. m +. of_float 1e-14 || (printf "%a < %a (%a)\n%!" print m' print m print (m -. m'); false));*)
-                r
-
-              let stat = solver_stat
-            end
-          in
-          let module S = Min(F) in
-          (Any, F.eval, F.grad, chr_solve3 S.minimise)) dp0
-    in
-    *)
-    (*
-    let penal_allp s =
-      let exp = 4 in
-      let ns = norm s in
-      let _f(x) = R.pow (ns -. x) exp /. (x -. one) in
-      let f'(x) =
-        let xo = x -. one in
-        -. (if exp > 0 then of_int exp *. R.pow (ns -. x) (exp - 1) /. xo else zero)
-        -. R.pow (ns -. x) exp /. (xo *. xo)
-      in
-      let f''(x) =
-        let xo = x -. one in
-           (if exp > 1 then of_int (exp * (exp - 1)) *. R.pow (ns -. x) (exp - 2) /. xo else zero)
-        +. (if exp > 0 then of_int (2 * exp) *. R.pow (ns -. x) (exp - 1) /. (xo *. xo) else zero)
-        +. of_int 2 *. R.pow (ns -. x) exp /. (xo *. xo *. xo)
-      in
-      List.map (fun (p,dp,hp,d) ->
-          let module F = struct
-              let dim = dim
-              let max_steps = 10000
-              let max_proj = -1
-              let fun_min = epsilon2
-              let lambda_min = epsilon2
-              let eval c =
-                let (tg,_) = eval_tgrad dp c in
-                let sc = s *.* c in
-                let ts = s --- sc **. c in
-                tg +++ f'(sc) **. ts
-              let grad c =
-                let (th,_,_) = eval_thess hp c in
-                let sc = s *.* c in
-                let ts = s --- sc **. c in
-                let e = f'(sc) in
-                let q = f''(sc) in
-                Array.init dim (fun i ->
-                    Array.init dim (fun j ->
-                        th.(i).(j)
-                        +. q *. ts.(i) *. ts.(j)
-                        -. e *. (c.(i) *. s.(j)
-                                 -. of_int 2 *. sc *. c.(i) *. c.(j)
-                                 +. if i = j then sc else zero)
-                  ))
-              let stat = solver_stat
-            end
-          in
-          let module S = Solve(F) in
-          let evalc c = norm2 (F.eval c) in
-          let evalg c = of_int 2 **. (F.grad c **- F.eval c) in
-          (Any, evalc, evalg, chr_solve3 S.solve)) dp0
-    in
-    *)
-    (*
-    let penal_allp sc =
+    let multi_critical =
       match dp0 with
-      | [] | [_] -> penal_allp sc
+      | []|[_] -> []
       | _ ->
-         let eval c =
-           let denom = sc *.* c -. one in
-           let num =
-             List.fold_left (fun acc (_,dp,_,_) ->
-                 let (tg,p) = eval_tgrad dp c in
-                 acc +++ tg //. p) (zero_v dim) dp0
+         List.init codim (fun i ->
+             let dim0 = dim in
+             let module F = struct
+               let dim = dim + codim
+               let fun_min = epsilon2
+               let fun_good = of_float param.Args.crit_limit
+               let min_prog_coef = sqrt (of_int 2)
+               let min_prog_int = 2 * dim
+               let lambda_min = epsilon2
+               let eval c =
+                 let x = Array.sub c 0 dim0 in
+                 let l = Array.sub c dim0 codim in
+                 let tg = zero_v dim0 in
+                 let ps = zero_v (codim - 1) in
+                 let s = ref (-. one) in
+                 List.iteri
+                   (fun j (_,dp,_,d) ->
+                     let (tg',dp) = eval_tgrad dp x in
+                     let p = dp /. of_int d in
+                     s := !s +. l.(j) *. l.(j);
+                     if j < i then ps.(j) <- p;
+                     if j > i then ps.(j-1) <- p;
+                     combq one tg l.(j) tg') dp0;
+                 Array.init dim (fun j ->
+                     if j < dim0 then tg.(j)
+                     else if j - dim0 < codim - 1 then ps.(j-dim0)
+                     else !s)
+               let grad c =
+                 let x = Array.sub c 0 dim0 in
+                 let l = Array.sub c dim0 codim in
+                 let ths = Array.init codim (fun j ->
+                               let (_,_,hp,_) = List.nth dp0 j in
+                               eval_thess hp x)
+                 in
+                 Array.init dim (fun j ->
+                     let j' = j - dim0 in
+                     Array.init dim (fun k ->
+                         let k' = k - dim0 in
+                         if j < dim0 then
+                           if k < dim0 then
+                             begin
+                               let r = ref zero in
+                               for m = 0 to codim - 1 do
+                                 let (th,_,_) = ths.(m) in
+                                 r := !r +. l.(m) *. th.(j).(k)
+                               done;
+                               !r
+                             end
+                           else
+                             begin
+                               let (_,tg,_) = ths.(k') in
+                               tg.(j)
+                             end
+                         else if j' < codim - 1 then
+                           if k < dim0 then
+                             begin
+                               let j' = if j' < i then j' else j' + 1 in
+                               let (_,tg,_) = ths.(j') in
+                               tg.(k)
+                             end
+                           else zero
+                         else
+                           if k < dim0 then zero else of_int 2 *. l.(k')))
+               let stat = solver2_stat
+           end
+         in
+         let module S = Solve(F) in
+         let solve proj a x =
+           let proj' x =
+             let x' = proj (Array.sub x 0 dim) in
+             let l' = normalise (Array.sub x dim codim) in
+             Array.append x' l'
            in
-           num //. denom
+           let z = sqrt (one /. of_int codim) in
+           let x = Array.init F.dim (fun i ->
+                       if i < dim then x.(i) else z)
+           in
+           let (fc,r) = S.solve proj' a x in
+           (fc,Array.sub r 0 dim)
          in
-         (*let eval c = norm2 (eval_tgrad c) in*)
-         let grad c =
-           let denom = sc *.* c -. one in
-           List.fold_left (fun acc (_,_,hp,_) ->
-               let (th,tg,p) = eval_thess hp c in
-               let m2 = Array.init dim (fun i -> Array.init dim (fun j -> tg.(i) *. tg.(j) /. (p *. p *. denom))) in
-               let m3 = Array.init dim (fun i -> Array.init dim (fun j -> tg.(i) *. sc.(j) /. (p *. denom *. denom))) in
-               let m1 = Array.map (fun x -> x //. (p *. denom)) th in
-               acc ++++ m1 ---- m2 ---- m3) (Array.init dim (fun _ -> zero_v dim)) dp0
-         in
-         let module F = struct
-             let dim = dim
-              let max_steps = 10000
-              let max_proj = 5
-               let fun_min = epsilon2
+         (Multi, chr_solve2 solve))
+    in
+
+    let penal_critical c0 =
+      let nc0 = norm c0 in
+      let penal x =
+        let xc = x *.* c0 in
+        let denom = xc -. one in
+        if denom <=. zero then inf else
+          let r = (nc0 -. one) /. denom in
+          r *. r
+      in
+      List.map (fun (_,dp,hp,_) ->
+          let module F = struct
+              let dim = dim
+              let fun_min = epsilon2
+              let fun_good = inf
+              let min_prog_coef = sqrt (of_int 2)
+              let min_prog_int = 2 * dim
               let lambda_min = epsilon2
-              let eval = eval
-              let grad = grad
-              let stat = solver_stat
+              let eval c =
+                let p = penal c in
+                let n = fst (eval_tgrad dp c) in
+                p **. n
+              let grad c = fst3 (eval_thess hp c)
+              let stat = solver3_stat
             end
           in
           let module S = Solve(F) in
-          (F.eval, S.solve) :: penal_allp sc
+          (Any, chr_solve3 S.solve)) dp0
     in
-     *)
+
     let nb_single = ref 0 in
     let nb_multi  = ref 0 in
     let nb_any    = ref 0 in
@@ -316,29 +248,44 @@ module Make(R:Field.SPlus) = struct
     let s0 = List.hd ls in
 
     let lm =
-      List.fold_left (fun acc (ty,evalc,evalg,solve) ->
-          let sdim = Stdlib.(truncate (sqrt (float dim))) in
+      List.fold_left (fun acc (ty,solve) ->
           let lm =
             List.flatten (
                 List.map
-                  (fun s -> min_in_simplex evalc evalg s (param.Args.crit / sdim)) ls)
+                  (fun s -> pts_in_simplex s param.Args.crit) ls)
           in
           List.fold_left (fun acc x ->
               try
-                let proj c = (normalise c, false) in
-                let c1 = solve proj (one /. of_int 1000) x in
+                let proj = normalise in
+                let (fc1,c1) = solve proj (one /. of_int 1000) x in
                 (*                printf "fc1: %a %a\n%!" print fc1 print_ty ty;*)
-                let fc1 = evalc c1 in
                 let pc = eval_prod c1 in
-                (ty,pc,c1,fc1)::acc
+                if fc1 <. of_float param.Args.crit_limit then
+                  (ty,pc,c1,fc1)::acc
+                else
+                  acc
               with Not_found -> acc
-                  | e -> assert false) acc lm) [] allp
+                  | _ -> assert false) acc lm) [] single_critical
     in
+
+    let mk_sgn (ty,x,v,y) =
+      let m = ref v.(0) in
+      for i = 1 to Array.length v - 1 do
+        if abs v.(i) >. abs !m then m := v.(i)
+      done;
+      let v = if !m <. zero then opp v else v in
+      (ty,x,v,y)
+    in
+    let lm = List.map mk_sgn lm in
     let lm = List.sort_uniq compare lm in
     let lm = ref (Array.of_list lm) in
 
     for i = 0 to (min dim (Array.length !lm)) - 1 do
-      let eval (_,p,c,_) = if i = 0 then p else distance (Array.map (fun (_,_,c,_) -> c) !lm) i c in
+      let eval (_,p,c,_) =
+        if i = 0 then p else
+          min (distance (Array.map (fun (_,_,c,_) -> c) !lm) i c)
+            (distance (Array.map (fun (_,_,c,_) -> c) !lm) i (opp c))
+      in
       let best_i = ref i in
       let best   = ref (eval !lm.(i)) in
       for j = i + 1 to Array.length !lm - 1 do
@@ -354,21 +301,25 @@ module Make(R:Field.SPlus) = struct
 
     let lm = if Array.length !lm < dim then !lm else Array.sub !lm 0 dim in
     let lm = ref (Array.map (fun (ty,_,c,_) -> count_point ty; c) lm) in
+
     while Array.length !lm < dim do
       let m = Array.init (Array.length !lm + 1) (fun i ->
-                  if i = 0 then Array.init dim (fun i -> of_float (Random.float 1.0))
+                  if i = 0 then Array.init dim
+                                  (fun _ -> of_float (Random.float 1.0))
                   else !lm.(i-1))
       in
       let b = Array.init (Array.length !lm + 1) (fun i ->
                   if i = 0 then one else zero)
       in
-      let c = m **- solve (m **** transpose m) b in
-      let c = normalise c in
-      count_point Any;
-      lm := Array.append !lm [|c|]
+      try
+        let c = m **- solve (m **** transpose m) b in
+        let c = normalise c in
+        count_point Any;
+        lm := Array.append !lm [|c|]
+      with Not_found -> ()
     done;
 
-    (*printf "init: %a\n%!" print_matrix lm;*)
+    decomp_log "init simplex: %a" print_matrix !lm;
 
     let lm = Array.map (fun c ->
       let (c,b) = if c.(dim-1) <. zero then (opp c,false) else (c,true) in
@@ -405,11 +356,8 @@ module Make(R:Field.SPlus) = struct
 
     to_do.(0) <- List.map mk ls;
     decomp_log "init simplicies done";
-    let add_to_do dim l =
-      if dim <> 0 then
-        List.iter (fun s -> Stdlib.(total := !total +. float dim *. s.o.f);
-                            s.o.codim <- dim) l;
-      to_do.(dim) <- l @ to_do.(dim)
+    let add_to_do l =
+      to_do.(0) <- l @ to_do.(0)
     in
 
     let constant_sign p =
@@ -428,7 +376,7 @@ module Make(R:Field.SPlus) = struct
     let constant_sign2 (l, p) =
       let ap = ref true in
       let an = ref true in
-      let nz = ref 0    in
+      let nz = ref 0 in
       let fn (_,c) =
         let t = cmp c zero in
         if t < 0 then ap := false;
@@ -471,7 +419,7 @@ module Make(R:Field.SPlus) = struct
           !res) dps
     in
 
-    let all_gradients vs {s; m; o = {l=l0}; suid} =
+    let all_gradients vs {s; m; o = {l=l0}; } =
       let l = ref [] in
       Array.iteri (fun i x -> if x then l := i :: !l) vs;
       let l = !l in
@@ -555,168 +503,93 @@ module Make(R:Field.SPlus) = struct
       visible_v s x
     in
 
-    (*
-    let proj_simplex s x =
-      let is_far = ref false in
-      let m = ref [] in
-      let y = ref [] in
-      Array.iteri (fun i _ ->
-          let n = Lazy.force s.n.(i) in
-          let c = n *.* x in
-          if c >. zero then
-            begin
-              is_far := true;
-              m := n :: !m;
-              y := c :: !y
-            end
-        ) s.m;
-      if !is_far then
-        begin
-          let m = Array.of_list !m in
-          let y = Array.of_list !y in
-          let d = m **- solve (m **** transpose m) y in
-          let r = normalise (x --- d) in
-          (r, true)
-        end
-      else (normalise x, false)
-    in
- *)
-    let search_points old allp v sd =
-      let select x (s,dy,_,sy,fcy,ty as y) =
+    let search_points critical allp sd =
+      Thread.yield ();
+      let select x (_,dy,_,sy,_,_ as y) =
         assert (dy >=. zero);
         match x with
         | None -> Some y
-        | Some (_,dx,_,sx,fcx,_) ->
-           if old then
-             (match compare (dy*.sx) (dx*.sy) with
-              | 1 -> x
-              | _ -> Some y)
-           else
-             (match compare fcy fcx with
-              | 1 -> x
-              | _ -> Some y)
+        | Some (_,dx,_,sx,_,_) ->
+           match compare (dy*.sx) (dx*.sy) with
+           | 1 -> x
+           | _ -> Some y
       in
       let best = ref None in
-      let rec kn (_,s) =
-        let c0 as center = normalise s.c in
+      let kn (_,s) =
+        let c0 = normalise s.c in
         let rs2 =
-          if old then
+          if critical then
             let radius2 = dist2 (to_vec s.s.(0)) c0 in
-            radius2 /. of_int 100_000
+            radius2 *. of_float 1e-12 /. of_int (param.crit * param.crit)
           else -. one
         in
-        let fn best (ty,evalc,evalg, solve) c0 =
+        let fn best (ty,solve) c0 =
           try
-            (*if not old then printf "solve %a %a ==> " print_vector s.c print_vector c0;*)
+            (*if not critical then printf "solve %a %a ==> " print_vector s.c print_vector c0;*)
             let proj =
-              if old then
-                project_circle s.c 0.95
-                (*fun c ->
+              if critical then (*project_circle s.c 0.95*)
+                fun c ->
                   let c = normalise c in
                   let d = c *.* s.c in
-                  let c = if d <. zero then opp c else c in
-                  if abs d <. of_float 0.9999 then raise Not_found;
-                  (c,false)*)
+                  if d <. of_float 0.9 then raise Not_found;
+                  c
               else
                 let cen =
                   (((norm s.c -. one) *. of_float 0.9 +. one) /. norm s.c) **. s.c
                 in
                 project_circle cen 0.05
             in
-            let c1 = solve proj rs2 c0 in
-            let fc1 = evalc c1 in
+            let (fc1,c1) = solve proj rs2 c0 in
             assert(fc1 >=. zero);
             let (b1,b2) = visible_v s c1 in
-            (*            printf "fc1: %a %a %b %b\n%!" print fc1 print_ty ty b1 b2;*)
-            if not b1 || not b2 || (old && fc1 >. of_float 1e-15) then
+            (*if not critical then printf "fc1: %a %a %b %b\n%!" print fc1 print_ty ty b1 b2;*)
+            if not b1 || not b2 || (critical && fc1 >=. of_float param.Args.crit_limit) then
               (
-                assert old;
+                assert critical;
                 Vector.sol_log "reject %b %b %b" b1 b2 (fc1 >. epsilon); raise Not_found);
             let p2 = eval_prod c1 in
             select best (s, p2, c1, c1 *.* s.c, fc1, ty)
           with Not_found -> (*printf "NF\n%!";*) best
         in
-        List.iter (fun (_,evalc,evalg,_ as solve) ->
+        List.iter (fun solve ->
             let lm =
-              if old || true then min_in_simplex evalc evalg s.m (param.Args.crit)
+              if critical then pts_in_simplex s.m (param.Args.crit)
               else [s.c]
             in
             List.iter (fun c -> best := fn !best solve c) lm) allp
       in
-      List.iter kn (if old || true then sd else [List.hd sd]);
+      Vector.sol_log "begin iter";
+      List.iter kn sd;
+      Vector.sol_log "end iter";
       let (s, c, ty) = match !best with
-        | None -> Vector.sol_log "keep nothing\n%!"; raise Not_found
-        | Some (s, pc, c, sc, fc, ty) ->
+        | None -> Vector.sol_log "keep nothing"; raise Not_found
+        | Some (s, _, c, sc, fc, ty) ->
            Vector.sol_log "keep %a with sc: %a, fc: %a"
              print_vector c print sc print fc;
-           if not old then printf "keep %a with sc: %a, fc: %a\n%!"
-             print_vector c print sc print fc;
+(*           if not critical then printf "keep %a with sc: %a, fc: %a\n%!"
+             print_vector c print sc print fc;*)
            (s, c, ty)
       in
       let (c,b) = if c.(dim-1) <. zero then (opp c,false) else (c,true) in
       (s, Simp.mkv c b, ty)
     in
 
-    let search_critical v sd = search_points true allp v sd in
-
-    let search_penal v sd = search_points false penal_allp v sd in
-    (*
-      let vs = List.fold_left (fun acc (b,s) ->
-                   Array.fold_left (fun acc v ->
-                       if List.exists (fun x -> x.uid = v.uid) acc then acc
-                       else (if b then v else ch_sg v)::acc) acc s.s) [] [List.hd sd]
-      in
-      let vs = List.map to_vec vs in
-      let ls = v :: (List.map (fun (b,s) -> normalise (if b then s.c else opp s.c)) sd) @ vs in
-      let cs acc x =
-        try
-          List.fold_left (fun acc (ty,eval,solve) ->
-              let (c,f) = solve (project_circle s.c 0.05) (-. one) x in
-              (c,f)::acc) acc (penal_allp s.c)
-        with Not_found -> acc
-      in
-      let ls = List.fold_left cs [] ls in
-      let fn lm (x,f) =
-        printf "test: %a => %a...%!" print_vector x print f;
-        let gn (b,s) =
-          let x = if b then x else opp x in
-          let (b1,b2) = visible_v s x in
-          printf "(%b=%b,%b) " b b1 b2;
-          b1 && b2 && (f <. of_float 1e-15)
-        in
-        try
-          let cmp (_,s1) (_,s2) = compare (s2.c *.* x) (s1.c *.* x) in
-          let sd = List.sort cmp sd in
-          let (_,s) = List.find gn sd in
-          let (b1,b2) = visible_v s x in
-          let x = if b1 then x else opp x in
-          printf " ok\n%!";
-          (s,x,f)::lm
-        with Not_found -> printf " reject\n%!"; lm
-      in
-      let lm = List.fold_left fn [] ls in
-      let (b,s) = List.hd sd in
-      assert b;
-      let (_,s) = List.hd sd in
-      let best = ref (s,normalise v,inf,zero) in
-      List.iter (fun (s,c,f) ->
-          let (s',c',f',r') = !best in
-          let r = eval_prod c in
-          if r >. r' then best := (s,c,f,r)) lm;
-      let (s,c,f,r) = !best in
-      if f =. inf then raise Not_found;
-      printf "keep: %a => %a\n%!" print_vector c print f;
-      let (c,b) = if c.(dim-1) <. zero then (opp c,false) else (c,true) in
-      let x = Simp.mkv c b in
-      (s, x, Any)
-    in*)
+    let search_single_critical sd =
+      search_points true single_critical sd
+    in
+    let search_multi_critical sd =
+      search_points true multi_critical sd
+    in
+    let search_penal_critical c sd =
+      search_points false (penal_critical c) sd
+    in
 
     let open struct exception Zih of vector * vector list * (bool * simplicies) list end in
 
     let decision_face vs (s as s0) =
-      (* let vsf = Array.map (fun b -> if b then 1 else 0) vs in
-         printf "decision for %a,%a\n%!"
-         print_matrix (to_matrix s.s) print_int_array vsf;*)
+(*      let vsf = Array.map (fun b -> if b then 1 else 0) vs in
+        printf "decision for %a,%a\n%!"
+        print_matrix s.m print_int_array vsf;*)
       let p = sub s.o.p vs in
       let len = Array.length vs in
       let nb_vs = Array.fold_left (fun acc c -> if c then acc+1 else acc) 0 vs in
@@ -725,9 +598,10 @@ module Make(R:Field.SPlus) = struct
       let (sd,gd) = all_gradients vs s in
 
       let rec hn subd s l p dp =
+        (*        printf "l:%a p:%a\n%!" (print_polynome ?vars:None) (List.hd l) (print_polynome ?vars:None) (List.hd p);*)
         let lp = List.combine l p in
         let cst = List.exists constant_sign2 lp in
-        (*printf "cst: %b, subd: %d\n%!" cst subd;*)
+        (*        printf "cst: %b, subd: %d %a\n%!" cst subd print_matrix s;*)
         if not cst then
           begin
             let rec fn points dps gds =
@@ -750,10 +624,14 @@ module Make(R:Field.SPlus) = struct
             match res with
             | None -> (*printf "OK\n%!";*) ()
             | Some all when subd <= 0 || nb_vs = 1 ->
-               let p = zero_v dim in
-               Array.iteri (fun i x -> if vs.(i) then addq p x) s0.m;
-               normaliseq p;
-               (*printf "Zih\n%!";*) raise (Zih (p,all,sd))
+               begin
+                 try
+                   let l = ref [] in
+                   Array.iteri (fun i x -> if vs.(i) then l:= x :: !l) s0.m;
+                   let p = normalise (lcenter (Array.of_list !l)) in
+                   (*printf "Zih\n%!";*) raise (Zih (p,all,sd))
+                 with Not_found -> assert false
+               end
             | Some _ ->
                begin
                  let best = ref (-.one, (-1,-1)) in
@@ -767,7 +645,7 @@ module Make(R:Field.SPlus) = struct
                  done;
                  let (i,j) = snd !best in
                  assert (i >= 0 && j >= 0 && i <> j);
-                 (*printf "split %d %d\n%!" i j;*)
+                 (*                 printf "split %d %d\n%!" i j;*)
                  let l1,l2 =
                    List.split (List.map (fun p -> subdivise p i j) l) in
                  let p1,p2 =
@@ -834,7 +712,7 @@ module Make(R:Field.SPlus) = struct
                 to_do.(old) <- List.filter (fun s -> s != s') to_do.(old);
                 s'.o.codim <- codim;
                 to_do.(codim) <- s' :: to_do.(codim);
-                total := Stdlib.(!total -. float (old - codim) *. s.o.f);
+                total := Stdlib.(!total -. float (old - codim) *. s'.o.f);
               end) l
       done;
     in
@@ -845,16 +723,11 @@ module Make(R:Field.SPlus) = struct
         if List.exists constant_sign s.o.p then NonZero else
           let fn (_,vs) = decision_face vs s in
           let size vs =
-            let best = ref inf in
-            let m = Array.copy s.m in
-            for i = 0 to dim - 1 do
-              let v = m.(dim - 1) in
-              m.(dim - 1) <- m.(i);
-              m.(i) <- v;
-              let s = distance m (dim - 1) m.(i) in
-              if s <. !best then best := s
-            done;
-            !best
+            let m = Array.to_list s.m in
+            let m = List.mapi (fun i x -> (vs.(i), x)) m in
+            let m = List.filter fst m in
+            let m = Array.of_list (List.map snd m) in
+            det (m **** transpose m)
           in
           let facets = enum_facets (Some codim) dim in
           let facets = List.map (fun vs -> size vs, vs) facets in
@@ -981,7 +854,7 @@ module Make(R:Field.SPlus) = struct
                         (List.length l) print_face_key k)) trs.by_face;
       assert !ok;
 
-      add_to_do 0 added;
+      add_to_do added;
       List.iter re_add_neighbour added)
     in
 
@@ -995,7 +868,7 @@ module Make(R:Field.SPlus) = struct
       List.iter2 (fun s d ->
         if (s.k <> Removed && s.o.codim = codim) then
           match d with
-          | Depend(v,all,sd) ->
+          | Depend(v,_,sd) ->
              assert (s.k = Active);
              if List.exists (fun (_,s) -> s.k = Removed) sd then
                begin
@@ -1004,16 +877,19 @@ module Make(R:Field.SPlus) = struct
              else
                begin
                  try
-                   let (s,c,ty) = Chrono.add_time search_chrono (search_critical v) sd in
+                   let (s,c,ty) = search_single_critical sd in
                    ajoute s c ty
                  with Not_found -> try
-                   let (s,c,ty) = Chrono.add_time search_chrono (search_penal v) sd in
+                   let (s,c,ty) = search_multi_critical sd in
                    ajoute s c ty
-                   with Not_found ->
-                     let c = normalise v in
-                     let (c,b) = if c.(dim-1) <. zero then (opp c,false) else (c,true) in
-                     let c = Simp.mkv c b in
-                     ajoute s c Center
+                 with Not_found -> try
+                   let (s,c,ty) = search_penal_critical s.c sd in
+                   ajoute s c ty
+                 with Not_found ->
+                   let c = normalise v in
+                   let (c,b) = if c.(dim-1) <. zero then (opp c,false) else (c,true) in
+                   let c = Simp.mkv c b in
+                   ajoute s c Center
                end
           | NonZero | NonDege ->
              total := Stdlib.(!total +. s.o.f);
@@ -1308,9 +1184,14 @@ module Make(R:Field.SPlus) = struct
     let all = extract (dim-1) codim dirs edges simplices in
     let keep = List.length all in
     erase_total ();
-    eprintf "total: %d/%d pts:%d=%d+%d+%d+%d,\n   %t,\n   %a\n" keep total
-      (!nb_single + !nb_multi + !nb_any + !nb_center) !nb_single !nb_multi !nb_any !nb_center
-      print_zih_stats print_solver_stats solver_stat;
+    eprintf "total: %d/%d pts:%d=%d+%d+%d+%d,\n   %t,\n   %a\n   %a\n   %a\n"
+      keep total
+      (!nb_single + !nb_multi + !nb_any + !nb_center)
+      !nb_single !nb_multi !nb_any !nb_center
+      print_zih_stats
+      (print_solver_stats ~name:"solver1") solver1_stat
+      (print_solver_stats ~name:"solver2") solver2_stat
+      (print_solver_stats ~name:"solver3") solver3_stat;
     let cps = components all in
     let chr = List.map euler cps in
     eprintf "   topology: %d components %a\n%!" (List.length cps) print_int_list chr;
@@ -1344,7 +1225,14 @@ module Make(R:Field.SPlus) = struct
     (List.map (Array.map to_vec) all, edges)
 
   let triangulation param p0 =
-    let r = triangulation param p0 in
+    let r =
+      try
+        triangulation param p0
+      with Not_found as e ->
+        Printexc.print_backtrace stderr;
+        eprintf "Uncaught exception %s\n%!" (Printexc.to_string e);
+        exit 1
+    in
     Chrono.iter (fun n t _ c -> printf "   %10s: %8.3fs for %6d call(s)\n%!" n t c);
     Chrono.reset_all ();
     r

@@ -12,9 +12,7 @@ let _ =
     Grammar.parse_file Parser.main blank fn
   in
   List.iter
-    (Pos.handle_exception ~error:(fun e ->
-         Printexc.print_backtrace stderr;
-         raise e) parse)
+    (Pos.handle_exception ~error:(fun _ -> exit 1) parse)
     files;
   if not !Args.batch then
     while true do

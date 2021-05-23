@@ -16,13 +16,15 @@ type parameters =
   ; mutable subd : int
   ; mutable dprec : float
   ; mutable crit : int
+  ; mutable crit_limit : float
   ; expected : expected}
 
 let default_parameters =
   { rmax = 0.99
   ; subd = 15
   ; dprec = 1e3
-  ; crit  = 10
+  ; crit  = 3
+  ; crit_limit = 1e-15
   ; expected = Anything}
 
 let spec =
@@ -62,6 +64,9 @@ let spec =
   ; ( "--nb-critical"
     , Arg.Int (fun p -> default_parameters.crit <- p)
     , "number of critical point candidates in a simplex")
+  ; ( "--lim-critical"
+    , Arg.Float (fun p -> default_parameters.crit_limit <- p)
+    , "value to consider of point to be critical")
   ]
 
 let files = ref []

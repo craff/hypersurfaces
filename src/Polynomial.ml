@@ -173,6 +173,12 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
       if a > b then binomial b a else
         (of_int (a + b) *. binomial (a - 1) b) /. (of_int a)
 
+  (** binomial coefficient, int type *)
+  let rec ibinomial : int -> int -> int = fun a b ->
+    if a = 0 || b = 0 then 1 else
+      if a > b then ibinomial b a else
+        ((a + b) * ibinomial (a - 1) b) / a
+
   (** multinomial coefficient *)
   let multinomial : int array -> R.t = fun l ->
     let d = Array.fold_left (+) 0 l in
@@ -183,6 +189,12 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
       | a::l -> (of_int d *. fn (d-1) (a-1::l)) /. of_int a
     in
     fn d l
+
+  let dimension p =
+    let d = degree p in
+    let (m,_) = List.hd p in
+    let n = Array.length m - 1 in
+    ibinomial n (n+d)
 
   (** monomial product *)
   let m_prod (l1,a1) (l2,a2) =
@@ -509,6 +521,7 @@ module type B = sig
 
   val dim : 'a p -> int
   val degree : 'a p -> int
+  val dimension : 'a p -> int
   val norm : polynomial -> t
   val normalise : polynomial -> polynomial
 

@@ -267,7 +267,7 @@ module Make(R:Field.SPlus) = struct
   (** [min_in_simplex fn m nb] find the local minima of then function [fn] for
      points in simplex [m] with barycentric coordinated (i_1/nb, ..., i_k/nb)
      with sum i_j = nb and 0 <= i_j <= k *)
-  let min_in_simplex fn gn (m:V.matrix) nb =
+  let pts_in_simplex (m:V.matrix) nb =
     let lm = ref [] in
     let dim = Array.length m in
     let tot = ref 0 in
@@ -285,20 +285,7 @@ module Make(R:Field.SPlus) = struct
           let l = (k - c) :: l in
           (*assert (in_simplex s c1);*)
           let c1 = app l in
-          let v1 = fn c1 in
-          let test l =
-            let open V in
-            let c = app l in
-            let v = fn c in
-            let d1 = normalise (gn c) in
-            let d2 = normalise (c --- c1) in
-            if v <. v1 && d1 *.* d2 <. of_float (-0.25) then raise Exit
-          in
-          try
-            if not (v1 <=. v1) then raise Exit;
-            iter_voisins test l;
-            lm := c1 :: !lm
-          with Exit -> ()
+          lm := c1 :: !lm
         end
       else
         for i = 0 to k - c do

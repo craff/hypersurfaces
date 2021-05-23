@@ -62,5 +62,5 @@ let s8(x,y,z) = -1.0046872539325557572e-01 * z^8 +
   -2.3516844313424694413e-09 * 2.8284271247461902909e+00 * x^7 * y +
   3.1793122633071827275e-08 * x^8;
 
-let s8 = zeros [subd=30,nb critical=30,expected=(22*0)] s8;
+let s8 = zeros [subd=20,nb critical=10,expected=(22*0)] s8;
 display s8; display s8 s8__t;
