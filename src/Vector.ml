@@ -976,7 +976,7 @@ module Make(R:S) = struct
            lambda: coefficient used with both desenct direction *)
       let prev = Previous.create F.min_prog_int in
 
-      let rec loop steps c fc nd sd lambda =
+      let rec loop_eq steps c fc nd sd lambda =
         if not (fc <. inf) then raise Not_found;
         assert (fc >=. zero || (printf "%a %a\n%!" print fc print_vector c; false));
         try (** search for existing solution near enough *)
@@ -987,8 +987,9 @@ module Make(R:S) = struct
           in
           let (fc',c') = match ls with
             | [] -> raise Exit
+            | [(fc',c')] -> (fc',c')
             | (fc',c')::ls ->
-               let best_d = ref (dist2 c c') in
+               let best_d = ref (min (dist2 c c') (dist2 c (opp c'))) in
                let best_fc' = ref fc' in
                let best_c' = ref c' in
                List.iter (fun (fc',c') ->
@@ -1007,7 +1008,10 @@ module Make(R:S) = struct
           sol_log "abort at step %3d, fc: %a, c: %a"
             steps print fc' print_vector c';
           (fc',c')
-        with Exit -> (* other stopping conditions *)
+        with Exit -> loop steps c fc nd sd lambda
+      and loop steps c fc nd sd lambda =
+
+          (* other stopping conditions *)
           let fc1 = try Previous.get prev with Not_found -> inf in
           if lambda <. F.lambda_min || fc1 /. fc <. F.min_prog_coef
           then
@@ -1048,6 +1052,10 @@ module Make(R:S) = struct
               (** we compute new position and functional at this position *)
               let d = comb t nd (one -. t) sd in
               let c' = project (comb one c lambda d) in
+              (** no move: call loop with negative lambda to stop *)
+              if Array.for_all2 (=.) c c' then
+                loop steps c fc nd sd (-. one)
+              else
               let fc' = norm2 (F.eval c') in
 (*            sol_log "%d, c: %a(%a), fc: %a, c': %a(%a), fc': %a(%a), sd: %a (%a), nd! %a,\
                        vc: %a(%a), dc: %a(%a), lambda: %a, beta: %a"
@@ -1062,7 +1070,7 @@ module Make(R:S) = struct
                   (** progress, do to next step, try a bigger lambda *)
                   Previous.add fc' prev;
                   let (sd,nd) = descent c' in
-                  loop (steps + 1) c' fc' nd sd (min one (lambda *. of_int 20))
+                  loop_eq (steps + 1) c' fc' nd sd (min one (lambda *. of_int 20))
                 end
               else
                 (** no progress, try a smaller lambda *)
@@ -1074,7 +1082,7 @@ module Make(R:S) = struct
       let fc0 = norm2 (F.eval c0) in
       Previous.add fc0 prev;
       let (sd,nd) = descent c0 in
-      loop 0 c0 fc0 nd sd one
+      loop_eq 0 c0 fc0 nd sd one
 
   end [@@inlined always]
 
