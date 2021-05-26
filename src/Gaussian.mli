@@ -1,0 +1,2 @@
+
+val random : unit -> float
