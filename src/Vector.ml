@@ -886,6 +886,7 @@ module Make(R:S) = struct
     val dim : int (** the codomain dimension *)
     val eval : v -> v (** the function to solve *)
     val grad : v -> m (** its gradient, should raise Not_found if null *)
+    val dist2 : v -> v -> t
     val min_prog_int : int (** limitation of the number of steps, testes every
                                [min_prog_int] steps *)
     val min_prog_coef : t (** should decrease by [min_prog_coef] factor every
@@ -950,19 +951,6 @@ module Make(R:S) = struct
       let newton = solve h (-. one **. r) in
       (steepest, newton)
 
-    let check_solution rs2 c =
-      try
-        let _ = List.find
-                  (fun (_,c') -> dist2 c c' < rs2 || dist2 c (opp c') < rs2)
-                  !solutions
-        in
-        ()
-      with | Not_found ->
-              let fc = F.eval c in
-              let fc2 = norm2 fc in
-              if fc2 <. F.fun_good then solutions := (fc2, c) :: !solutions
-
-
     (** [solve rs2 c0] start the solver from [c0]. It reuses an existing
        solution if it reaches a point [x] s.t. [dist2 x s < rs2] for an existing
        solution sd. May raise Not_found is it reached a point of null gradient *)
@@ -982,14 +970,14 @@ module Make(R:S) = struct
         try (** search for existing solution near enough *)
           let ls =
             List.find_all
-              (fun (_,c') -> dist2 c c' < rs2 || dist2 c (opp c') < rs2)
+              (fun (_,c') -> F.dist2 c c' < rs2 || F.dist2 c (opp c') < rs2)
               !solutions
           in
           let (fc',c') = match ls with
             | [] -> raise Exit
             | [(fc',c')] -> (fc',c')
             | (fc',c')::ls ->
-               let best_d = ref (min (dist2 c c') (dist2 c (opp c'))) in
+               let best_d = ref (min (F.dist2 c c') (F.dist2 c (opp c'))) in
                let best_fc' = ref fc' in
                let best_c' = ref c' in
                List.iter (fun (fc',c') ->
@@ -1004,7 +992,7 @@ module Make(R:S) = struct
           in
           update_loop_stats false steps;
           assert (fc' <. F.fun_good);
-          let c' = if dist2 c c' < rs2 then c' else opp c' in
+          let c' = if F.dist2 c c' < rs2 then c' else opp c' in
           sol_log "abort at step %3d, fc: %a, c: %a"
             steps print fc' print_vector c';
           (fc',c')
@@ -1201,6 +1189,7 @@ module type V = sig
     val dim : int
     val eval : v -> v
     val grad : v -> m
+    val dist2 : v -> v -> t
     val min_prog_int : int
     val min_prog_coef : t
     val lambda_min : t
@@ -1213,7 +1202,6 @@ module type V = sig
 
   module Solve(F:Fun) : sig
     val solve : (v -> v) -> t -> v -> (t*v)
-    val check_solution : t -> v -> unit
   end
 
   module type FunMin = sig

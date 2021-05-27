@@ -7,54 +7,55 @@ let table_log fmt = table_log.log fmt
 module Make(R:Field.SPlus) = struct
   open R
 
-  (* vectors in the projective space come with a sign, not changing the value,
-     hence the uid. Sign is usefull to denote simplicies, or convex hull in
+  (** Our representation of vectors in the projective space comes with a sign,
+     not changing the value (becaus eof the projective quotient), hence not
+     changing the uid.  Sign is usefull to denote simplicies, or convex hull in
      general.
 
-     For instance, the segment [A,B] is defined by
-       { u A + v B, u + v = 1, 0 < u,v < 1 }
-     Hence, changing the sign control which hal of the projective line
-     is denoted by the segment.
-  *)
-  type vertex = { v : V.vector; p : bool; uid : int }
+     For instance, the segment [A,B] is defined by { u A + v B, u + v = 1, 0 <
+     u,v < 1 } Hence, changing the sign control which half of the projective
+     line is denoted by the segment.  *)
+  type vertex =
+    { v : V.vector (** coordinates of the vector *)
+    ; p : bool     (** true if positive *)
+    ; uid : int    (** uid: positive (>0) integer *) }
 
-  (* sign inversion *)
+  (** sign inversion *)
   let ch_sg e = { e with p = not e.p }
 
-  (* get the coordinated *)
-  let to_vec v =
-    if v.p then v.v else Array.map (~-.) v.v
+  (** get the coordinated *)
+  let to_vec v = if v.p then v.v else V.opp v.v
 
   let print_vertex ch v = V.print_vector ch (to_vec v)
 
-  (* constructor *)
+  (** constructor, convention: last coordinate always positive. *)
   let mkv =
     let c = ref 0 in
-    (fun v p -> c := !c + 1; let uid = !c in { v; p; uid })
+    (fun v ->
+      let dim = Array.length v in
+      let (v,p) = if v.(dim-1) <. zero then (V.opp v,false)
+                  else (v,true) in
+      c := !c + 1; let uid = !c in { v; p; uid })
 
   type status =
     | Active
     | Removed
 
+  type simplex_key = int array
+
+  let simplex_key s =
+    let r = Array.map (fun v -> (v.uid, v.p)) s in
+    Array.sort (fun (u1,_) (u2,_) -> compare u1 u2) r;
+    let p1 = snd r.(0) in
+    Array.map (fun (u,b) -> if b=p1 then u else -u) r
+
   type 'a simplex =
     { s : vertex array
     ; m : V.m
-    ; d : R.t
     ; o : 'a
-    ; c : R.t array
     ; mutable k : status
-    ; suid : int array
-    }
-
-  (** A simplex is represented by the coordinates of all its vertices.
-      Convention: last coordinate always positive.
-  *)
-
-  let vec s i = s.m.(i)
-
-  let cev s i =
-    let e = s.s.(i) in
-    if e.p then Array.map (~-.) e.v else e.v
+    ; suid : simplex_key }
+  (** A simplex is represented by the coordinates of all its vertices. *)
 
   let print_simplex ch s =
     let pr ch v =
@@ -66,31 +67,10 @@ module Make(R:Field.SPlus) = struct
   let pos s i = s.s.(i).p
   let neg s i = not (pos s i)
 
-  let simplex_key s =
-    let r = Array.map (fun v -> (v.uid, v.p)) s in
-    Array.sort (fun (u1,_) (u2,_) -> compare u1 u2) r;
-    let p1 = snd r.(0) in
-    Array.map (fun (u,b) -> if b=p1 then u else -u) r
-
-  let vertex_key v1 = v1.uid
-
-  let edge_key v1 v2 =
-    let i = v1.uid and j = v2.uid in
-    let b = v1.p = v2.p in
-    if i < j then (true,(i,j,b)) else (false,(j,i,b))
-
-  let face_key s i =
-    let r = ref [] in
-    Array.iteri (fun j v -> if i <> j then r := (v.uid,v.p) :: !r) s;
-    let r = List.sort (fun (i,_) (j,_) -> compare i j) !r in
-    match r with
-      | []       -> assert false
-      | (i,p)::r -> (i, List.map (fun (j,q) -> (j, p = q)) r)
 
   let mks data s =
     let m = Array.map to_vec s in
-    let c = V.center m in
-    let s = { s; m; c; d = V.det m; suid = simplex_key s
+    let s = { s; m; suid = simplex_key s
             ; o = data; k = Active } in
     s
 
@@ -112,7 +92,7 @@ module Make(R:Field.SPlus) = struct
    *)
   let quadrants (dim:int) : V.m list =
     (* the identity matrix *)
-    let q0 = Array.init dim (fun i -> mkv (var dim i) true) in
+    let q0 = Array.init dim (fun i -> mkv (var dim i)) in
     (* iterates fn on all quadrant *)
     let rec gn acc q i =
       if i < 0  then Array.map to_vec q::acc
@@ -125,10 +105,27 @@ module Make(R:Field.SPlus) = struct
     in
     gn [] q0 (dim-2)
 
-  type simplex_key = int array
   type vertex_key = int
   type edge_key = int * int * bool
   type face_key = int * (int * bool) list
+
+  let vertex_key v1 = v1.uid
+
+  let edge_key v1 v2 =
+    let i = v1.uid and j = v2.uid in
+    let b = v1.p = v2.p in
+    if i < j then (true,(i,j,b)) else (false,(j,i,b))
+
+  let print_edge_key ch (i,j,b) =
+    fprintf ch "(%d,%d,%b)" i j b
+
+  let face_key s i =
+    let r = ref [] in
+    Array.iteri (fun j v -> if i <> j then r := (v.uid,v.p) :: !r) s;
+    let r = List.sort (fun (i,_) (j,_) -> compare i j) !r in
+    match r with
+      | []       -> assert false
+      | (i,p)::r -> (i, List.map (fun (j,q) -> (j, p = q)) r)
 
   type 'a triangulation =
     { dim       : int
@@ -138,6 +135,9 @@ module Make(R:Field.SPlus) = struct
     ; by_edge   : (edge_key   , (int * int * 'a simplex) list) Hashtbl.t
     ; by_face   : (face_key   , (int * 'a simplex) list) Hashtbl.t
     ; mutable nb : int
+    ; has_v_tbl : bool
+    ; has_e_tbl : bool
+    ; has_f_tbl : bool
     }
 
   let all_dirs d =
@@ -149,13 +149,13 @@ module Make(R:Field.SPlus) = struct
     done;
     !res
 
-  let empty_triangulation dim =
+  let empty_triangulation ?(has_v_tbl=true) ?(has_e_tbl=true) ?(has_f_tbl=true) dim =
     { dim; dirs = all_dirs dim
     ; all = Hashtbl.create 1001
-    ; by_edge = Hashtbl.create 1001
-    ; by_vertex = Hashtbl.create 1001
-    ; by_face = Hashtbl.create 1001
-    ; nb = 0
+    ; by_edge = if has_e_tbl then Hashtbl.create 1001 else Hashtbl.create 0
+    ; by_vertex = if has_v_tbl then Hashtbl.create 1001 else Hashtbl.create 0
+    ; by_face = if has_f_tbl then Hashtbl.create 1001 else Hashtbl.create 0
+    ; nb = 0; has_e_tbl; has_f_tbl; has_v_tbl
     }
 
   let add_s all s = Hashtbl.replace all s.suid s
@@ -224,16 +224,16 @@ module Make(R:Field.SPlus) = struct
       s.k <- Removed;
       t.nb <- t.nb - 1;
       rm_s t.all s;
-      rm_v t.dim t.by_vertex s;
-      rm_e t.dirs t.by_edge s;
-      rm_f t.dim t.by_face s
+      if t.has_v_tbl then rm_v t.dim t.by_vertex s;
+      if t.has_e_tbl then rm_e t.dirs t.by_edge s;
+      if t.has_f_tbl then rm_f t.dim t.by_face s
 
   let add t s =
     t.nb <- t.nb + 1;
     add_s t.all s;
-    add_v t.dim t.by_vertex s;
-    add_e t.dirs t.by_edge s;
-    add_f t.dim t.by_face s
+    if t.has_v_tbl then add_v t.dim t.by_vertex s;
+    if t.has_e_tbl then add_e t.dirs t.by_edge s;
+    if t.has_f_tbl then add_f t.dim t.by_face s
 
   let mks ?t o s =
     let s = mks o s in
@@ -244,27 +244,81 @@ module Make(R:Field.SPlus) = struct
     end;
     s
 
-  let iter_voisins fn l =
-    (*let s = List.fold_left (+) 0 l in*)
-    let rec gn acc l =
-      match l with
-      | [_] -> ()
-      | x::l ->
-         (*if x < s then*) kn (x+1::acc) (-1) l;
-         (*if x > 0 then*) kn (x-1::acc) (+1) l;
-         gn (x::acc) l
-      | _ -> assert false
-    and kn acc d l =
-      match l with
-      | [] -> ()
-      | x::l ->
-         (*if (d > 0 && x < s) || (d < 0 && x > 0) then*)
-         fn (List.rev_append acc (x+d::l));
-         kn (x::acc) d l
+  let components trs =
+    let open UnionFind in
+    let tbl = Hashtbl.create 1024 in
+    let fn _ face =
+      let s = new_uf [face.s] in
+      Array.iter (fun v ->
+          try let s' = Hashtbl.find tbl v.uid in
+              union (@) s s'
+          with Not_found ->
+            Hashtbl.add tbl v.uid s) face.s
     in
-    gn [] l
+    Hashtbl.iter fn trs.all;
+    let res = ref [] in
+    Hashtbl.iter (fun _ s ->
+        let x = find_data s in
+        if not (List.memq x !res) then res := x :: !res) tbl;
+    !res
 
-  (** [min_in_simplex fn m nb] find the local minima of then function [fn] for
+  let iter_facets codim dim gn =
+    let vs = Array.make dim false in
+    let rec fn codim i =
+      if i >= dim then
+        begin
+          if Array.exists (fun b -> b) vs then
+            gn (Array.copy vs)
+        end
+      else
+        begin
+          match codim with
+            None    ->
+             vs.(i) <- false; fn codim (i+1);
+             vs.(i) <- true; fn codim (i+1)
+          | Some cd ->
+             if cd > 0 then
+               (vs.(i) <- false; fn (Some (cd-1)) (i+1));
+             if cd < dim - i then
+               (vs.(i) <- true; fn codim (i+1))
+        end
+    in
+    fn codim 0
+
+  let enum_facets codim dim =
+    let r = ref [] in
+    iter_facets codim dim (fun f -> r := f :: !r);
+    !r
+
+  let euler faces =
+    let res = ref 0 in
+    let tbl = Hashtbl.create 1024 in
+    let dim0 = ref None in
+    let fn face =
+      let dim = match !dim0 with
+        | None -> let d = Array.length face in dim0 := Some d; d
+        | Some d -> assert (d = Array.length face); d
+      in
+      let gn vs =
+        let key = ref [] in
+        Array.iter2 (fun b v -> if b then key := (v.uid, v.p) :: !key) vs face;
+        let key = List.sort (fun (x,_) (y,_) -> compare x y) !key in
+        let key = match key with
+          | [] -> assert false
+          | (x,b)::ls -> (x, List.map (fun (y,b') -> (y,b=b')) ls)
+        in
+        try ignore (Hashtbl.find tbl key)
+        with Not_found ->
+          if (dim - (1 + List.length (snd key))) mod 2 = 0
+          then incr res else decr res;
+          Hashtbl.add tbl key ()
+      in
+      iter_facets None dim gn
+    in
+    List.iter fn faces;
+    !res
+
+  (** [pts_in_simplex fn m nb] find the local minima of then function [fn] for
      points in simplex [m] with barycentric coordinated (i_1/nb, ..., i_k/nb)
      with sum i_j = nb and 0 <= i_j <= k *)
   let pts_in_simplex (m:V.matrix) nb =

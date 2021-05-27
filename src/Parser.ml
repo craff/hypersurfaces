@@ -153,6 +153,13 @@ module Parse(R:Field.SPlus) = struct
         (let p = P.mk name vars p in
          let vars = Array.of_list (vars @ ["s"]) in
          printf "%a\n%!" (B.print_polynome ~vars) p.bern)
+    ; "let" (name::ident) ((vars,__) :: params) '=' "random" (deg::INT) ';' =>
+        (let dim = List.length vars in
+         let p = B.random false deg dim in
+         let pb = of_bernstein vars p in
+         let p = P.mk name vars pb in
+         let vars = Array.of_list (vars @ ["s"]) in
+         printf "%a\n%!" (B.print_polynome ~vars) p.bern)
     ; "let" (name::ident) '=' "zeros" (opts::options)
                                  (names:: ~+ ident) ';' =>
         (let p name =

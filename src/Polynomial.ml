@@ -29,6 +29,27 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
   let norm p =
     sqrt (List.fold_left (fun acc (_,c) -> acc +. c*.c) zero p)
 
+  let random homogen deg dim =
+    let res = ref [] in
+    let rec fn acc deg dim =
+      if dim = 1 && homogen then
+        begin
+          let acc = List.rev (deg::acc) in
+          res := (Array.of_list acc, of_float (Gaussian.random ())) :: !res
+        end
+      else if dim <= 0 then
+        begin
+          let acc = List.rev acc in
+          res := (Array.of_list acc, of_float (Gaussian.random ())) :: !res
+        end
+      else
+        for i = deg downto 0 do
+          fn (i::acc) (deg-i) (dim-1)
+        done
+    in
+    fn [] deg dim;
+    List.rev !res
+
   (** polynomial addition *)
   let (++) p1 p2 =
     let rec fn p1 p2 =
@@ -519,11 +540,14 @@ module type B = sig
   val print_gradient : ?vars:string array -> formatter -> polynomial_v -> unit
   val print_hessian  : ?vars:string array -> formatter -> polynomial_m -> unit
 
+  val multinomial : int array -> t
+
   val dim : 'a p -> int
   val degree : 'a p -> int
   val dimension : 'a p -> int
   val norm : polynomial -> t
   val normalise : polynomial -> polynomial
+  val random : bool -> int -> int -> polynomial
 
   val cst : int -> 'a -> 'a p
   val var_power : int -> int -> int -> int array

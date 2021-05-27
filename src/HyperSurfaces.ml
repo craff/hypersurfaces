@@ -1,14 +1,13 @@
 open Printing
 
-let decomp_log = Debug.new_debug "decomposition" 'd'
-let decomp_tst = decomp_log.tst
-let decomp_log fmt = decomp_log.log fmt
+let Debug.{ log = decomp_log } = Debug.new_debug "decomposition" 'd'
 
 let solver1_chrono = Chrono.create "solver1"
 let solver2_chrono = Chrono.create "solver2"
 let solver3_chrono = Chrono.create "solver3"
 let test_chrono = Chrono.create "test"
 let add_chrono = Chrono.create "add"
+let total_chrono = Chrono.create "total"
 
 let chr_solve1 s a b c = Chrono.add_time solver1_chrono (s a b) c
 let chr_solve2 s a b c = Chrono.add_time solver2_chrono (s a b) c
@@ -23,25 +22,11 @@ module Make(R:Field.SPlus) = struct
   open Simp
   module D = Display.Make(R)
 
-  let print_vpoly ch p =
-    let first = ref true in
-    List.iter (fun (l,c) ->
-          begin
-            if not !first then fprintf ch " + ";
-            first := false;
-            fprintf ch "%a " print_vector c;
-            List.iteri (fun i e ->
-                if e <> 0 then
-                  if e > 1 then fprintf ch "X%d^%d " i e
-                  else  fprintf ch "X%d " i) l;
-          end) p
-
   type point_type =
     | Single
     | Multi
     | Any
     | Center
-
 
   let print_ty ch = function
     | Single -> fprintf ch "S"
@@ -60,11 +45,11 @@ module Make(R:Field.SPlus) = struct
     { p : polynomial list
     ; dp : polynomial_v lazy_t list
     ; l : R.t array list
+    ; c : R.t array
+    ; d : R.t
     ; mutable f : float
     ; mutable codim : int
     }
-
-  let h = one /. of_int 2
 
   let fst3 (x,_,_) = x
 
@@ -81,17 +66,12 @@ module Make(R:Field.SPlus) = struct
     if not (List.for_all ((=) dim) dims) then failwith "inhomogeneous equations";
     let codim = List.length p0 in
     let sdim = dim - codim in
-    let dirs = all_dirs dim in
     let dp0 = List.map2 (fun p d -> (p, gradient p, hessian p, d)) p0 deg in
     let dp0 = List.filter (fun (_,_,_,d) -> d > 1) dp0 in
     let solver1_stat = init_solver_stats () in
     let solver2_stat = init_solver_stats () in
     let solver3_stat = init_solver_stats () in
-    let eval_prod c = (*
-      let gs = List.map (fun (_,dp,_,_) -> eval_grad dp c) dp0 in
-      let gs = Array.of_list gs in
-      let m = gs **** transpose gs in
-      det m*)
+    let eval_prod c =
       List.fold_left (fun acc (p,_,_,_) ->
           let n = eval p c in
           acc +. n *. n) zero dp0
@@ -107,6 +87,7 @@ module Make(R:Field.SPlus) = struct
              let lambda_min = epsilon2
              let eval c = fst (eval_tgrad dp c)
              let grad c = fst3 (eval_thess hp c)
+             let dist2 = dist2
              let stat = solver1_stat
            end
          in
@@ -127,6 +108,13 @@ module Make(R:Field.SPlus) = struct
                let min_prog_coef = sqrt (of_int 2)
                let min_prog_int = 2 * dim
                let lambda_min = epsilon2
+               let dist2 c1 c2 =
+                 let r = ref zero in
+                 for i = 0 to dim0 - 1 do
+                   let d = c1.(i) -. c2.(i) in
+                   r := !r +. d *. d
+                 done;
+                 !r
                let eval c =
                  let x = Array.sub c 0 dim0 in
                  let l = Array.sub c dim0 codim in
@@ -223,6 +211,7 @@ module Make(R:Field.SPlus) = struct
                 let n = fst (eval_tgrad dp c) in
                 p **. n
               let grad c = fst3 (eval_thess hp c)
+              let dist2 _ _ = assert false
               let stat = solver3_stat
             end
           in
@@ -233,7 +222,7 @@ module Make(R:Field.SPlus) = struct
     let nb_single = ref 0 in
     let nb_multi  = ref 0 in
     let nb_any    = ref 0 in
-    let nb_center    = ref 0 in
+    let nb_center = ref 0 in
 
     let count_point = function
       | Single -> incr nb_single
@@ -283,8 +272,7 @@ module Make(R:Field.SPlus) = struct
     for i = 0 to (min dim (Array.length !lm)) - 1 do
       let eval (_,p,c,_) =
         if i = 0 then p else
-          min (distance (Array.map (fun (_,_,c,_) -> c) !lm) i c)
-            (distance (Array.map (fun (_,_,c,_) -> c) !lm) i (opp c))
+          distance (Array.map (fun (_,_,c,_) -> c) !lm) i c
       in
       let best_i = ref i in
       let best   = ref (eval !lm.(i)) in
@@ -299,7 +287,16 @@ module Make(R:Field.SPlus) = struct
       (*printf "keep %d: %a => %a\n%!" i print_vector (let (_,c,_) = !lm.(i) in c) print !best ;*)
     done;
 
-    let lm = if Array.length !lm < dim then !lm else Array.sub !lm 0 dim in
+    let ls = Array.to_list !lm in
+    let ls = List.mapi (fun i x -> (i,x)) ls in
+    let ls = List.filter (fun (i,(_,_,x,_)) ->
+                 i = 0 ||
+                 distance (Array.map (fun (_,_,c,_) -> c) !lm) i x > of_float 1e-6) ls in
+    let lm = List.map snd ls in
+    let lm = Array.of_list lm in
+
+
+    let lm = if Array.length lm < dim then lm else Array.sub lm 0 dim in
     let lm = ref (Array.map (fun (ty,_,c,_) -> count_point ty; c) lm) in
 
     while Array.length !lm < dim do
@@ -322,11 +319,8 @@ module Make(R:Field.SPlus) = struct
     decomp_log "init simplex: %a" print_matrix !lm;
 
     let lm = Array.map (fun c ->
-      let (c,b) = if c.(dim-1) <. zero then (opp c,false) else (c,true) in
-      Simp.mkv c b) !lm
+      Simp.mkv c) !lm
     in
-
-    let order s1 s2 = Stdlib.compare (abs s2.d) (abs s1.d) in
 
     let rec gn acc q i =
       if i < 0  then q::acc
@@ -346,7 +340,9 @@ module Make(R:Field.SPlus) = struct
       let p = List.map (fun p -> Poly.transform p s0 m) p0 in
       let l = List.map plane p in
       let dp = List.map (fun p -> lazy (gradient p)) p in
-      let o = { p; l; dp; f; codim = 0 } in
+      let c = V.center m in
+
+      let o = { p; c; d=abs (det m); l; dp; f; codim = 0 } in
       let s = mks ~t:trs o s in
       decomp_log "make %a" print_simplex s;
       s
@@ -355,6 +351,7 @@ module Make(R:Field.SPlus) = struct
     let total = ref 0.0 in
 
     to_do.(0) <- List.map mk ls;
+
     decomp_log "init simplicies done";
     let add_to_do l =
       to_do.(0) <- l @ to_do.(0)
@@ -467,23 +464,19 @@ module Make(R:Field.SPlus) = struct
            l
       in
       let gd = ref (List.map (fun _ -> []) l0) in
-      List.iter (fun (opp,({o={l}} as s0')) ->
+      List.iter (fun (opp,({o={l}; m=m'})) ->
          let l0 =
            List.map2 (fun deg l ->
-               if deg mod 2 <> 0 && opp then Array.map (~-.) l else l) deg l
+               if deg mod 2 = 0 && opp then Array.map (~-.) l else l) deg l
          in
-         let s2 =
-           if opp then Array.init dim (fun i -> cev s0' i)
-           else Array.init dim (fun i -> vec s0' i)
-         in
-         let l = List.map (fun l -> V.transform l s2 m) l0 in
+         let l = List.map (fun l -> V.transform l m' m) l0 in
          gd := List.map2 (fun l gd -> l :: gd) l !gd ;
         ) ls;
       (ls,!gd)
     in
 
     let visible_v s x =
-      let sg, x = if x *.* s.c <. zero then (false, opp x) else (true, x) in
+      let sg, x = if x *.* s.o.c <. zero then (false, opp x) else (true, x) in
       let fn acc v =
         let d = x --- v in
         let d2 = norm2 d in
@@ -495,7 +488,7 @@ module Make(R:Field.SPlus) = struct
         | None -> assert false
         | Some(d,_) -> d
       in
-      (sg, d *.* s.c >. of_float param.Args.dprec *. epsilon)
+      (sg, d *.* s.o.c >. of_float param.Args.dprec *. epsilon)
     in
 
     let visible s x =
@@ -505,18 +498,23 @@ module Make(R:Field.SPlus) = struct
 
     let search_points critical allp sd =
       Thread.yield ();
-      let select x (_,dy,_,sy,_,_ as y) =
+      let select x (_,dy,_,sy,fcy,_ as y) =
         assert (dy >=. zero);
         match x with
         | None -> Some y
-        | Some (_,dx,_,sx,_,_) ->
-           match compare (dy*.sx) (dx*.sy) with
-           | 1 -> x
-           | _ -> Some y
+        | Some (_,dx,_,sx,fcx,_) ->
+           if critical then
+             match compare (dy*.sx) (dx*.sy) with
+             | 1 -> x
+             | _ -> Some y
+           else
+             match compare fcy fcx with
+             | 1 -> x
+             | _ -> Some y
       in
       let best = ref None in
       let kn (_,s) =
-        let c0 = normalise s.c in
+        let c0 = normalise s.o.c in
         let rs2 =
           if critical then
             let radius2 = dist2 (to_vec s.s.(0)) c0 in
@@ -530,12 +528,12 @@ module Make(R:Field.SPlus) = struct
               if critical then (*project_circle s.c 0.95*)
                 fun c ->
                   let c = normalise c in
-                  let d = c *.* s.c in
+                  let d = c *.* s.o.c in
                   if d <. of_float 0.9 then raise Not_found;
                   c
               else
                 let cen =
-                  (((norm s.c -. one) *. of_float 0.9 +. one) /. norm s.c) **. s.c
+                  (((norm s.o.c -. one) *. of_float 0.9 +. one) /. norm s.o.c) **. s.o.c
                 in
                 project_circle cen 0.05
             in
@@ -548,13 +546,13 @@ module Make(R:Field.SPlus) = struct
                 assert critical;
                 Vector.sol_log "reject %b %b %b" b1 b2 (fc1 >. epsilon); raise Not_found);
             let p2 = eval_prod c1 in
-            select best (s, p2, c1, c1 *.* s.c, fc1, ty)
+            select best (s, p2, c1, c1 *.* s.o.c, fc1, ty)
           with Not_found -> (*printf "NF\n%!";*) best
         in
         List.iter (fun solve ->
             let lm =
               if critical then pts_in_simplex s.m (param.Args.crit)
-              else [s.c]
+              else [s.o.c]
             in
             List.iter (fun c -> best := fn !best solve c) lm) allp
       in
@@ -570,8 +568,7 @@ module Make(R:Field.SPlus) = struct
              print_vector c print sc print fc;*)
            (s, c, ty)
       in
-      let (c,b) = if c.(dim-1) <. zero then (opp c,false) else (c,true) in
-      (s, Simp.mkv c b, ty)
+      (s, Simp.mkv c, ty)
     in
 
     let search_single_critical sd =
@@ -586,17 +583,16 @@ module Make(R:Field.SPlus) = struct
 
     let open struct exception Zih of vector * vector list * (bool * simplicies) list end in
 
-    let decision_face vs (s as s0) =
+    let decision_face codim vs (s as s0) =
 (*      let vsf = Array.map (fun b -> if b then 1 else 0) vs in
         printf "decision for %a,%a\n%!"
         print_matrix s.m print_int_array vsf;*)
       let p = sub s.o.p vs in
       let len = Array.length vs in
-      let nb_vs = Array.fold_left (fun acc c -> if c then acc+1 else acc) 0 vs in
+      let nb_vs = dim - codim in
       let l = List.map first_deg p in
       let dp = sub_v (List.map Lazy.force s.o.dp) vs in
       let (sd,gd) = all_gradients vs s in
-
       let rec hn subd s l p dp =
         (*        printf "l:%a p:%a\n%!" (print_polynome ?vars:None) (List.hd l) (print_polynome ?vars:None) (List.hd p);*)
         let lp = List.combine l p in
@@ -660,33 +656,10 @@ module Make(R:Field.SPlus) = struct
                end
           end
       in
-      hn param.Args.subd s.m l p dp
-    in
-
-    let enum_facets codim dim =
-      let r = ref [] in
-      let vs = Array.make dim false in
-      let rec fn codim i =
-        if i >= dim then
-          begin
-            if Array.exists (fun b -> b) vs then
-              r := Array.copy vs :: !r
-          end
-        else
-          begin
-            match codim with
-              None    ->
-               vs.(i) <- false; fn codim (i+1);
-               vs.(i) <- true; fn codim (i+1)
-            | Some cd ->
-               if cd > 0 then
-                 (vs.(i) <- false; fn (Some (cd-1)) (i+1));
-               if cd < dim - i then
-                 (vs.(i) <- true; fn codim (i+1))
-          end
-      in
-      fn codim 0;
-      !r
+      if List.for_all (fun (_,s) -> assert(s.k <> Removed);
+                                    s.o.codim <= codim) sd
+      then
+        hn param.Args.subd s.m l p dp
     in
 
     let count_common s s' =
@@ -721,7 +694,7 @@ module Make(R:Field.SPlus) = struct
       Thread.yield ();
       try
         if List.exists constant_sign s.o.p then NonZero else
-          let fn (_,vs) = decision_face vs s in
+          let fn (_,vs) = decision_face codim vs s in
           let size vs =
             let m = Array.to_list s.m in
             let m = List.mapi (fun i x -> (vs.(i), x)) m in
@@ -748,8 +721,8 @@ module Make(R:Field.SPlus) = struct
         printf "\nx(%b,%b,%a): %a(%a)\nc: %a(%a)\ns:%a => %a\n%a => %a\n%a => %a\n%!"
           sg v print_ty ty
           print_vector x print (norm2 x)
-          print_vector s.c print (x *.* s.c -. one)
-          print_matrix s.m print_vector (Array.map (fun x -> x *.* s.c -. one) s.m)
+          print_vector s.o.c print (x *.* s.o.c -. one)
+          print_matrix s.m print_vector (Array.map (fun x -> x *.* s.o.c -. one) s.m)
           print_matrix m print (det m)
           print_matrix m' print (det m');
         false);
@@ -858,44 +831,43 @@ module Make(R:Field.SPlus) = struct
       List.iter re_add_neighbour added)
     in
 
+    let order s1 s2 = Stdlib.compare s2.o.d s1.o.d in
+
     let test codim =
       let ls = List.filter (fun s -> s.k <> Removed) to_do.(codim) in
       let ls = List.sort order ls in
       to_do.(codim) <- [];
-      let gn s = Chrono.add_time test_chrono (decision (codim mod dim)) s in
-      let ds = List.map gn ls in
-      eprintf "...";
-      List.iter2 (fun s d ->
+      let rec fn s =
         if (s.k <> Removed && s.o.codim = codim) then
-          match d with
-          | Depend(v,_,sd) ->
-             assert (s.k = Active);
-             if List.exists (fun (_,s) -> s.k = Removed) sd then
-               begin
-                 to_do.(codim) <- s :: to_do.(codim)
-               end
-             else
-               begin
-                 try
-                   let (s,c,ty) = search_single_critical sd in
-                   ajoute s c ty
-                 with Not_found -> try
-                   let (s,c,ty) = search_multi_critical sd in
-                   ajoute s c ty
-                 with Not_found -> try
-                   let (s,c,ty) = search_penal_critical s.c sd in
-                   ajoute s c ty
-                 with Not_found ->
-                   let c = normalise v in
-                   let (c,b) = if c.(dim-1) <. zero then (opp c,false) else (c,true) in
-                   let c = Simp.mkv c b in
-                   ajoute s c Center
-               end
-          | NonZero | NonDege ->
-             total := Stdlib.(!total +. s.o.f);
-             s.o.codim <- s.o.codim + 1;
-             if s.o.codim < dim then to_do.(s.o.codim) <- s :: to_do.(s.o.codim)
-        ) ls ds
+        let d = Chrono.add_time test_chrono (decision codim) s in
+        match d with
+        | NonZero | NonDege ->
+           total := Stdlib.(!total +. s.o.f);
+           s.o.codim <- s.o.codim + 1;
+           if s.o.codim < dim then to_do.(s.o.codim) <- s :: to_do.(s.o.codim);
+        | Depend(v,_,sd) ->
+              assert (s.k = Active);
+              if List.exists (fun (_,s) -> s.k = Removed) sd then
+                begin
+                  to_do.(codim) <- s :: to_do.(codim)
+                end
+              else
+                begin
+                  try
+                    let (s,c,ty) = search_single_critical sd in
+                    ajoute s c ty
+                  with Not_found -> try
+                    let (s,c,ty) = search_multi_critical sd in
+                    ajoute s c ty
+                  with Not_found -> try
+                    let (s,c,ty) = search_penal_critical s.o.c sd in
+                    ajoute s c ty
+                  with Not_found ->
+                    let c = normalise v in
+                    let c = Simp.mkv c in
+                    ajoute s c Center
+                end;
+      in List.iter fn ls
     in
 
     let print_total codim =
@@ -954,127 +926,54 @@ module Make(R:Field.SPlus) = struct
     if !Args.prog then display_current ();
     eprintf "\r                                                         \r%!";
 
-    (*check ();*)
-
-    let components faces =
-      let open UnionFind in
-      let tbl = Hashtbl.create 1024 in
-      let fn face =
-        let s = new_uf [face] in
-        Array.iter (fun v ->
-            try let s' = Hashtbl.find tbl v.uid in
-                union (@) s s'
-            with Not_found ->
-              Hashtbl.add tbl v.uid s) face
-      in
-      List.iter fn faces;
-      let res = ref [] in
-      Hashtbl.iter (fun _ s ->
-          let x = find_data s in
-          if not (List.memq x !res) then res := x :: !res) tbl;
-      !res
-    in
-
-    let euler faces =
-      let res = ref 0 in
-      let tbl = Hashtbl.create 1024 in
-      let dim0 = ref None in
-      let fn face =
-        let dim = match !dim0 with
-          | None -> let d = Array.length face in dim0 := Some d; d
-          | Some d -> assert (d = Array.length face); d
-        in
-        let gn vs =
-          let key = ref [] in
-          Array.iter2 (fun b v -> if b then key := (v.uid, v.p) :: !key) vs face;
-          let key = List.sort (fun (x,_) (y,_) -> compare x y) !key in
-          let key = match key with
+    let check () =
+      eprintf "check that points are not visible from other simplex\n%!";
+      Hashtbl.iter (fun _ l ->
+          let v = match l with
             | [] -> assert false
-            | (x,b)::ls -> (x, List.map (fun (y,b') -> (y,b=b')) ls)
+            | (i,s)::_-> s.s.(i)
           in
-          try incr (fst (Hashtbl.find tbl key))
-          with Not_found ->
-            if (dim - (1 + List.length (snd key))) mod 2 = 0
-            then incr res else decr res;
-            Hashtbl.add tbl key (ref 1, face)
-        in
-        List.iter gn (enum_facets None dim)
-      in
-      List.iter fn faces;
-      !res
+          Hashtbl.iter (fun _ s' ->
+              assert (List.exists (fun (_,s) -> s.suid = s'.suid) l ||
+                        not (snd (visible s' v)))) trs.all) trs.by_vertex;
+      eprintf "check two simplex by faces of opposite side\n%!";
+      Hashtbl.iter (fun _ l ->
+          match l with
+          | [(i,s);(j,s')] ->
+             let m1 = s.m in
+             let v = s'.s.(j) in
+             let i0 = if i = 0 then 1 else 0 in
+             let j0 = ref (-1) in
+             for l = 0 to dim - 1 do
+               if s'.s.(l).uid = s.s.(i0).uid then j0 := l
+             done;
+             assert (!j0 >= 0);
+             let v = if s'.s.(!j0).p = s.s.(i0).p then v else ch_sg v in
+             let m2 = Array.mapi (fun k x -> if k = i then to_vec v else x) m1 in
+             assert (det m1 *. det m2 <. zero);
+          | _ -> assert false) trs.by_face
     in
+    if param.check then check ();
 
-    let rm_edge edges i j s ks =
-      let (_,k) = edge_key s.(i) s.(j) in
-      let l = try Hashtbl.find edges k with Not_found -> assert false in
-      let l = List.filter (fun (_,_,s') ->
-                  simplex_key s' <> ks) l
-      in
-      if l = [] then Hashtbl.remove edges k
-      else Hashtbl.replace edges k l
-    in
+    let ctrs = empty_triangulation ~has_v_tbl:false ~has_f_tbl:false dim in
 
-    let add_edge edges i j s =
-      let (_,k) = edge_key s.(i) s.(j) in
-      let l = try Hashtbl.find edges k with Not_found -> [] in
-      let l = (i,j,s) :: l in
-      Hashtbl.replace edges k l
-    in
+    Hashtbl.iter (fun k s -> add ctrs (mks s.o.l s.s)) trs.all;
 
-    let rm_simplex dirs edges simplices s =
-      let ks = simplex_key s in
-      Hashtbl.remove simplices ks;
-      List.iter (fun (i,j) -> rm_edge edges i j s ks) dirs
-    in
-
-    let add_simplex dirs edges simplices s l =
-      let ks = simplex_key s in
-      if not (Hashtbl.mem simplices ks) then
-        begin
-          Hashtbl.add simplices ks (s,l);
-          List.iter (fun (i,j) -> add_edge edges i j s) dirs;
-          true
-        end
-      else
-        false
-    in
-
-    let edges = Hashtbl.create 1024 in
-    let simplices = Hashtbl.create 1024 in
-
-    let total = ref 0 in
-
-    Hashtbl.iter (fun k ls ->
-        let fn (i,j,s) =
-          let k = simplex_key s.s in
-          if not (Hashtbl.mem simplices k) then
-            begin
-              incr total;
-              Hashtbl.add simplices k (s.s,s.o.l);
-            end;
-          (i,j,s.s)
-        in
-        Hashtbl.add edges k (List.map fn ls)) trs.by_edge;
-
-    let total = !total in
-
-    let rec extract dim codim dirs edges simplices =
+    let rec extract dim codim trs =
       let edge_value l =
         match l with
         | [] -> assert false
         | (i,j,s)::_ ->
 (*           printf "testing %a %a\n%!" print_vector (to_vec s.(i))
              print_vector (to_vec s.(j));*)
-           let k = simplex_key s in
-           let (_,l) = try Hashtbl.find simplices k with Not_found -> assert false in
-           match l with
+           match s.o with
            | [] -> assert false
            | v :: _ ->
-              (s.(i), v.(i), s.(j), v.(j))
+              (s.s.(i), v.(i), s.s.(j), v.(j))
       in
 
       let split_edge k =
-        let l = try Hashtbl.find edges k with Not_found -> assert false in
+        let l = try Hashtbl.find trs.by_edge k with Not_found -> assert false in
         let (si,xi,sj,xj) = edge_value l in
         if xi *. xj <. zero then
           begin
@@ -1084,18 +983,20 @@ module Make(R:Field.SPlus) = struct
             assert (u >. zero);
             let x0 = comb t (to_vec si) u (to_vec sj) in
             (*            printf "splitting: %a\n%!" print_vector x0;*)
-            let x0 = Simp.mkv x0 true in
+            let x0 = Simp.mkv x0 in
             let fn (i,j,s) =
-              let sign,t,u =
-                if s.(i).uid = si.uid then (s.(i).p = si.p,t,u)
-                else if s.(i).uid = sj.uid then (s.(i).p = sj.p,u,t)
-                else assert false
+              assert (s.k = Active);
+              let sign =
+                assert (s.s.(i).uid = si.uid);
+                assert (s.s.(j).uid = sj.uid);
+                let r = s.s.(i).p = si.p in
+                assert (r = (s.s.(j).p = sj.p));
+                r
               in
               let x0 = if sign then x0 else ch_sg x0 in
-              let k = simplex_key s in
-              let (_,l) = try Hashtbl.find simplices k with Not_found -> assert false in
-              let s1 = Array.mapi (fun k x -> if i = k then x0 else x) s in
-              let s2 = Array.mapi (fun k x -> if j = k then x0 else x) s in
+              let l = s.o in
+              let s1 = Array.mapi (fun k x -> if i = k then x0 else x) s.s in
+              let s2 = Array.mapi (fun k x -> if j = k then x0 else x) s.s in
               let l1 = List.mapi (fun k0 v ->
                            Array.mapi (fun k x ->
                                if k = i then
@@ -1110,32 +1011,22 @@ module Make(R:Field.SPlus) = struct
                                else
                                  x) v) l
               in
-(*              printf "old: %a, " print_simplex s;
-              List.iter (fun v -> printf "%a " print_vector v) l;
-              print_newline();*)
-              rm_simplex dirs edges simplices s;
-(*              printf "new: %a, " print_simplex s1;
-              List.iter (fun v -> printf "%a " print_vector v) l1;
-              print_newline();
-              printf "new: %a, " print_simplex s2;
-              List.iter (fun v -> printf "%a " print_vector v) l2;
-              print_newline();*)
-              assert (add_simplex dirs edges simplices s1 l1);
-              assert (add_simplex dirs edges simplices s2 l2)
+              rm trs s;
+              add trs (mks l1 s1);
+              add trs (mks l2 s2);
             in
             List.iter fn l;
           end
       in
 
       let ls = ref [] in
-      Hashtbl.iter (fun k _ -> ls := k :: !ls) edges;
+      Hashtbl.iter (fun k _ -> ls := k :: !ls) trs.by_edge;
       List.iter split_edge !ls;
 
-      let new_edges = Hashtbl.create 1024 in
-      let new_simplices = Hashtbl.create 1024 in
-      let new_dirs = all_dirs dim in
+      let new_trs = empty_triangulation ~has_v_tbl:false ~has_f_tbl:false dim in
 
-      let collect _ (s,l) =
+      let collect _ s0 =
+        let l = s0.o and s = s0.s in
         let (keep, l) = match l with
           | [] -> assert false
           | v::ls ->
@@ -1144,55 +1035,48 @@ module Make(R:Field.SPlus) = struct
              (List.rev !l, ls)
         in
         let nb_keep = List.length keep in
-        (* printf "s: %a, nb_keep: %d %d\n%!" print_simplex s nb_keep dim;*)
         assert (nb_keep <= dim);
         if nb_keep = dim then
           begin
             let s = Array.of_list (List.map (fun i -> s.(i)) keep) in
             let l = List.map (fun v ->
                         Array.of_list (List.map (fun i -> v.(i)) keep)) l in
-            let _ = add_simplex new_dirs new_edges new_simplices s l in
-            (*if is_new then
-              begin
-                printf "keep: %a, " print_simplex s;
-                List.iter (fun v -> printf "%a " print_vector v) l;
-                print_newline();
-              end*)
-            ()
+            if not (Hashtbl.mem new_trs.all (simplex_key s))
+                 then add new_trs (mks l s);
           end
       in
 
-      Hashtbl.iter collect simplices;
+      Hashtbl.iter collect trs.all;
 
       let dim = dim - 1 in
       let codim = codim - 1 in
       if codim > 0 then
         begin
-          extract dim codim new_dirs new_edges new_simplices
+          extract dim codim new_trs
         end
       else
-        begin
-          let all = ref [] in
-          Hashtbl.iter (fun _ (s,l) ->
-              assert (l=[]);
-              all := s :: !all) new_simplices;
-          !all
-        end
+        new_trs
     in
 
     let codim = List.length p0 in
-    let all = extract (dim-1) codim dirs edges simplices in
-    let keep = List.length all in
+    let ctrs = extract (dim-1) codim ctrs in
+    let all =
+      let all = ref [] in
+      Hashtbl.iter (fun _ s ->
+          assert (s.o=[]);
+          all := s.s :: !all) ctrs.all;
+      !all
+    in
     erase_total ();
     eprintf "total: %d/%d pts:%d=%d+%d+%d+%d,\n   %t,\n   %a\n   %a\n   %a\n"
-      keep total
+      ctrs.nb trs.nb
       (!nb_single + !nb_multi + !nb_any + !nb_center)
       !nb_single !nb_multi !nb_any !nb_center
       print_zih_stats
       (print_solver_stats ~name:"solver1") solver1_stat
       (print_solver_stats ~name:"solver2") solver2_stat
       (print_solver_stats ~name:"solver3") solver3_stat;
-    let cps = components all in
+    let cps = components ctrs in
     let chr = List.map euler cps in
     eprintf "   topology: %d components %a\n%!" (List.length cps) print_int_list chr;
     begin
@@ -1227,14 +1111,13 @@ module Make(R:Field.SPlus) = struct
   let triangulation param p0 =
     let r =
       try
-        triangulation param p0
+        Chrono.add_time total_chrono (triangulation param) p0
       with Not_found as e ->
         Printexc.print_backtrace stderr;
         eprintf "Uncaught exception %s\n%!" (Printexc.to_string e);
         exit 1
     in
-    Chrono.iter (fun n t _ c -> printf "   %10s: %8.3fs for %6d call(s)\n%!" n t c);
+    Chrono.iter (fun n t tc c -> printf "   %10s: %8.3fs (%8.3fs self) for %6d call(s)\n%!" n tc t c);
     Chrono.reset_all ();
     r
-
 end

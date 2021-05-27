@@ -17,7 +17,8 @@ type parameters =
   ; mutable dprec : float
   ; mutable crit : int
   ; mutable crit_limit : float
-  ; expected : expected}
+  ; expected : expected
+  ; mutable check : bool}
 
 let default_parameters =
   { rmax = 0.99
@@ -25,6 +26,7 @@ let default_parameters =
   ; dprec = 1e3
   ; crit  = 3
   ; crit_limit = 1e-15
+  ; check = false
   ; expected = Anything}
 
 let spec =
@@ -67,6 +69,9 @@ let spec =
   ; ( "--lim-critical"
     , Arg.Float (fun p -> default_parameters.crit_limit <- p)
     , "value to consider of point to be critical")
+  ; ( "--check"
+    , Arg.Bool (fun p -> default_parameters.check <- true)
+    , "check some coherence propereties of the final triangulation")
   ]
 
 let files = ref []

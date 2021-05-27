@@ -56,6 +56,16 @@ module Make(R:Field.SPlus) = struct
     let env = List.mapi (fun i v -> (v,[(var_power i d 1, R.one)])) vars in
     fn env p
 
+  let of_bernstein vars p =
+    let fn (i,acc) n = (i+1,Pro(acc,Pow(Var(List.nth vars i),n))) in
+    let gn (l,x) = snd (Array.fold_left fn (0, Cst (x *. B.multinomial l)) l) in
+    let rec kn = function
+      | [] -> Cst zero
+      | [m] -> gn m
+      | m::p -> Sum(gn m,kn p)
+    in
+    kn p
+
   let mk name vars poly =
     let dim = List.length vars in
     let bern = to_bernstein dim vars poly in
