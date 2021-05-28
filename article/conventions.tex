@@ -5,7 +5,7 @@ We consider the real projective plane $\PNR$.
 projection $x ↦  \{ λx, λ∈ℝ^⋆ \} ∈ \PNR$. To simplify, we often write $\overline{x}$ for $πₙ(x)$.
 
 
-We use on $\PNR$ the measure induced by
+We use on $\PNR$ the measure and topology induced by
 the chord metric of the unit sphere:
 $$d(\overline{x},\overline{y}) = \min\left(
 \left\|{\frac{x}{\|x\|}} - {\frac{y}{\|y\|}}\right\|, \left\|{\frac{x}{\|x\|}} + {\frac{y}{\|y\|}}\right\|\right) (∀\overline{x},\overline{y} ∈ \PNR).$$
@@ -16,7 +16,10 @@ and radius $r$ and $\cball{x}{r}$ denotes its closure.
 We write $\cardinal{S}$ the cardinal of a set $S$.
 
 For $A ⊂ ℝ^{n+1}$, $\hull{A}$ denotes the convex hull of $A$ and $\cone{A}$ its
-convex cone.
+convex cone:
+$$\cone{A} = \{ ∑_{i=0}ⁿ λᵢ xᵢ, x₀,\dots,xₙ ∈ A, λ₀,\dots,λₙ∈ℝ^⋆₊\}$$
+$$\hull{A} = \{ ∑_{i=0}ⁿ λᵢ xᵢ, x₀,\dots,xₙ ∈ A, λ₀,\dots,λₙ∈ℝ^⋆₊,
+∑_{i=1}ⁿ λᵢ=1 \}$$
 
 We use the following notation for simplices:
 \begin{itemize}
