@@ -231,7 +231,18 @@ module Make(R:Field.SPlus) = struct
       | Center -> incr nb_center
     in
 
-    let to_do = Array.make dim [] in
+    let module SD = struct
+        type t = data simplex
+        let compare s1 s2 =
+          match compare s2.o.d s1.o.d with
+          | 0 -> compare s1.suid s2.suid
+          | c -> c
+      end
+    in
+
+    let module SimpSet = Set.Make(SD) in
+
+    let to_do = Array.make dim SimpSet.empty in
 
     let ls = quadrants dim in
     let s0 = List.hd ls in
@@ -350,11 +361,12 @@ module Make(R:Field.SPlus) = struct
 
     let total = ref 0.0 in
 
-    to_do.(0) <- List.map mk ls;
+    to_do.(0) <- List.fold_left (fun s x -> SimpSet.add (mk x) s)
+                   SimpSet.empty ls;
 
     decomp_log "init simplicies done";
     let add_to_do l =
-      to_do.(0) <- l @ to_do.(0)
+      to_do.(0) <- List.fold_left (fun s x -> SimpSet.add x s) to_do.(0) l
     in
 
     let constant_sign p =
@@ -682,9 +694,9 @@ module Make(R:Field.SPlus) = struct
             let old = s'.o.codim in
             if codim < old then
               begin
-                to_do.(old) <- List.filter (fun s -> s != s') to_do.(old);
+                to_do.(old) <- SimpSet.remove s' to_do.(old);
                 s'.o.codim <- codim;
-                to_do.(codim) <- s' :: to_do.(codim);
+                to_do.(codim) <- SimpSet.add s' to_do.(codim);
                 total := Stdlib.(!total -. float (old - codim) *. s'.o.f);
               end) l
       done;
@@ -730,6 +742,7 @@ module Make(R:Field.SPlus) = struct
       total := Stdlib.(!total -. float s.o.codim *. s.o.f);
       count_point ty;
       rm trs s;
+      to_do.(s.o.codim) <- SimpSet.remove s to_do.(s.o.codim);
       decomp_log "adding center %a" print_vector (to_vec x);
       let rec rml acc k = function
         | [] -> (None, List.rev acc)
@@ -760,24 +773,20 @@ module Make(R:Field.SPlus) = struct
                 begin
                   let i0 = if i = 0 then 1 else 0 in
                   let j0 = ref 0 in
-                  while s'.s.(!j0).uid <> s.s.(i0).uid && !j0 < dim do incr j0 done;
+                  while s'.s.(!j0).uid <> s.s.(i0).uid do incr j0 done;
                   let j0 = !j0 in
-                  assert (j0 < dim);
-                  assert (dim > 2);
                   decomp_log "to remove";
-                  assert (s.s.(i0).uid = s'.s.(j0).uid);
                   let good = (sg = sg') = (s.s.(i0).p = s'.s.(j0).p) in
                   let acc = ref acc in
                   let l   = ref l   in
                   total := Stdlib.(!total -. float s'.o.codim *. s'.o.f);
                   rm trs s';
+                  to_do.(s'.o.codim) <- SimpSet.remove s' to_do.(s'.o.codim);
                   Array.iteri (fun k _ ->
                       if k <> j then
                         begin
                           let key' = face_key s'.s k in
                           let (b,l')  = rml [] key' !l   in
-                          let (b',_)  = rml [] key' !acc   in
-                          assert (b' = None);
                           match b with
                           | None ->
                              decomp_log "adding face %d of %a" k print_simplex s';
@@ -786,9 +795,8 @@ module Make(R:Field.SPlus) = struct
                              l := l';
                              let h0 = if h = 0 then 1 else 0 in
                              let j0 = ref 0 in
-                             while s'.s.(!j0).uid <> s''.s.(h0).uid && !j0 < dim do incr j0 done;
+                             while s'.s.(!j0).uid <> s''.s.(h0).uid do incr j0 done;
                              let j0 = !j0 in
-                             assert (s''.s.(h0).uid = s'.s.(j0).uid);
                              let (sg'',v'') = visible s'' x in
                              assert v'';
                              let good = (sg'' = sg') = (s''.s.(h0).p = s'.s.(j0).p) in
@@ -831,26 +839,22 @@ module Make(R:Field.SPlus) = struct
       List.iter re_add_neighbour added)
     in
 
-    let order s1 s2 = Stdlib.compare s2.o.d s1.o.d in
-
     let test codim =
-      let ls = List.filter (fun s -> s.k <> Removed) to_do.(codim) in
-      let ls = List.sort order ls in
-      to_do.(codim) <- [];
+      let ls = to_do.(codim) in
+      to_do.(codim) <- SimpSet.empty;
       let rec fn s =
-        if (s.k <> Removed && s.o.codim = codim) then
+        if s.k <> Removed && s.o.codim = codim then
         let d = Chrono.add_time test_chrono (decision codim) s in
         match d with
         | NonZero | NonDege ->
            total := Stdlib.(!total +. s.o.f);
            s.o.codim <- s.o.codim + 1;
-           if s.o.codim < dim then to_do.(s.o.codim) <- s :: to_do.(s.o.codim);
+           if s.o.codim < dim then
+             to_do.(s.o.codim) <- SimpSet.add s to_do.(s.o.codim);
         | Depend(v,_,sd) ->
               assert (s.k = Active);
               if List.exists (fun (_,s) -> s.k = Removed) sd then
-                begin
-                  to_do.(codim) <- s :: to_do.(codim)
-                end
+                to_do.(s.o.codim) <- SimpSet.add s to_do.(s.o.codim)
               else
                 begin
                   try
@@ -867,18 +871,18 @@ module Make(R:Field.SPlus) = struct
                     let c = Simp.mkv c in
                     ajoute s c Center
                 end;
-      in List.iter fn ls
+      in SimpSet.iter fn ls
     in
 
     let print_total codim =
-      let x = match to_do.(codim) with
-        | [] -> 0.0
-        | s::_ -> s.o.f
+      let x = match SimpSet.min_elt_opt to_do.(codim) with
+        | None   -> 0.0
+        | Some s -> s.o.f
       in
       let (hd,tail) = if Debug.has_debug () then "", "\n" else "\r", "" in
       eprintf "%s%6.3f%% %06d/%06d pts:%2d=%2d+%2d+%2d+%2d, codim: %d/%d, worst:%5.2e%s%!"
         hd Stdlib.(!total *. 100.0 /. float dim)
-        (List.length (List.filter (fun s -> s.k <> Removed) to_do.(codim)))
+        (SimpSet.cardinal to_do.(codim))
         trs.nb
         (!nb_single + !nb_multi + !nb_any + !nb_center) !nb_single !nb_multi !nb_any !nb_center
         codim (dim-1) x tail;
@@ -907,12 +911,12 @@ module Make(R:Field.SPlus) = struct
       if !Args.progw then Display.wait ();
     in
 
-    while not (Array.for_all (fun l -> l = []) to_do) do
+    while not (Array.for_all SimpSet.is_empty to_do) do
       let codim =
         let res = ref 0 in
         try
           for i = 0 to dim-1 do
-            res := i; if to_do.(i) <> [] then raise Exit
+            res := i; if not (SimpSet.is_empty to_do.(i)) then raise Exit
           done;
           assert false;
         with
