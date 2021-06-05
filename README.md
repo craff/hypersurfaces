@@ -1,6 +1,6 @@
 # An OCaml program for compute hypersurfaces
 
-![Screen shot](https://raw.githubusercontent.com/craff/hypersurfaces/article/quartic-M-2.png?raw=true "A nice screen shot")
+![Screen shot](https://raw.githubusercontent.com/craff/hypersurfaces/master/article/quartic-M-2.png?raw=true "A nice screen shot")
 
 ## Introduction
 
