@@ -10,6 +10,66 @@ module Parse(R:Field.SPlus) = struct
 
   open P
 
+  type cmd =
+    Let_poly of string * string list * polynomial
+  | Let_rand of string * string list * int
+  | Let_surf of string * Args.parameters * string list
+  | Display  of string list
+  | For      of string * R.t * R.t * R.t * cmd list
+
+  let rec run_cmd = function
+    | Let_poly(name,vars,p) ->
+       let p = P.mk name vars p in
+       let vars = Array.of_list (vars @ ["s"]) in
+       printf "%a\n%!" (B.print_polynome ~vars) p.bern
+    | Let_rand(name,vars,deg) ->
+       let dim = List.length vars in
+       let p = B.random false deg dim in
+       let pb = of_bernstein vars p in
+       let p = P.mk name vars pb in
+       let vars = Array.of_list (vars @ ["s"]) in
+       printf "%a\n%!" (B.print_polynome ~vars) p.bern
+    | Let_surf(name, opts, names) ->
+       let p name =
+         try (Hashtbl.find polys name).bern
+         with Not_found -> Lex.give_up ~msg:("unbound variable "^name) ()
+       in
+       let ps = List.map p names in
+       let (ts, es) = H.triangulation opts ps in
+       let os =
+         if ts <> [] then
+           begin
+             let dim = Array.length (List.hd ts) in
+             if dim = 1 then
+               [D.mk_points_from_polyhedron name ts]
+             else if dim = 2 then
+               [D.mk_lines_from_polyhedron name ts]
+             else if dim = 3 then
+               [D.mk_triangles_from_polyhedron name ts]
+             else []
+           end
+         else []
+       in
+       let e_name = name ^ "__t" in
+       let _os =
+         if es <> [] then
+           D.mk_lines_from_polyhedron e_name ~color:[|0.0;1.0;0.0;1.0|] es::os
+         else os
+       in
+       ()
+    | Display(names) ->
+       Display.display names;
+       if not (!Args.cont) then Display.wait ()
+    | For(name,first,last,step,cmds) ->
+       let open R in
+       let i = ref first in
+       while (!i <=. last) do
+         let _ = P.mk name [] (Cst !i) in
+         List.iter run_cmd cmds;
+         i := !i +. step;
+       done
+
+
   (** Parses a float in base 10. [".1"] is as ["0.1"]. *)
   let float_lit : R.t Lex.t =
     let f = fun s0 n0 ->
@@ -118,20 +178,7 @@ module Parse(R:Field.SPlus) = struct
         Atom < Pow < Prod < Sum
       ; (p=Atom) (x :: float)                      => Cst(x)
       ; (p=Atom) '(' (p::poly Sum) ')'             => p
-      ; (p=Atom) (v::ident) (args::args)           =>
-          (try
-             if args <> [] then raise Not_found;
-             if not (List.mem v vars) then raise Not_found;
-             Var v
-           with Not_found -> try
-             let p = Hashtbl.find polys v in
-             let nb = List.length args in
-             if p.dim <> nb then
-               Lex.give_up ~msg:("bad arity for "^ v) ();
-             App(p,args)
-           with Not_found ->
-              Lex.give_up ~msg:("unbound variable "^v) ())
-
+      ; (p=Atom) (v::ident) (args::args)           => Ref(v,args)
       ; (p=Pow) (x::poly Pow) '^' (n::INT)         => P.Pow(x, n)
       ; (p=Prod) '-' (x::poly Pow)                 =>
           (match x with Cst _ -> Lex.give_up ()
@@ -148,52 +195,23 @@ module Parse(R:Field.SPlus) = struct
     in
     poly
 
-  let%parser cmd =
+  let%parser rec cmd =
       "let" (name::ident) ((vars,()) >: params) '=' (p::poly vars Sum) ';' =>
-        (let p = P.mk name vars p in
-         let vars = Array.of_list (vars @ ["s"]) in
-         printf "%a\n%!" (B.print_polynome ~vars) p.bern)
+        Let_poly(name,vars,p)
     ; "let" (name::ident) ((vars,__) :: params) '=' "random" (deg::INT) ';' =>
-        (let dim = List.length vars in
-         let p = B.random false deg dim in
-         let pb = of_bernstein vars p in
-         let p = P.mk name vars pb in
-         let vars = Array.of_list (vars @ ["s"]) in
-         printf "%a\n%!" (B.print_polynome ~vars) p.bern)
+        Let_rand(name,vars,deg)
     ; "let" (name::ident) '=' "zeros" (opts::options)
-                                 (names:: ~+ ident) ';' =>
-        (let p name =
-           try (Hashtbl.find polys name).bern
-           with Not_found -> Lex.give_up ~msg:("unbound variable "^name) ()
-         in
-         let ps = List.map p names in
-         let (ts, es) = H.triangulation opts ps in
-         let os =
-           if ts <> [] then
-             begin
-               let dim = Array.length (List.hd ts) in
-               if dim = 1 then
-                 [D.mk_points_from_polyhedron name ts]
-               else if dim = 2 then
-                 [D.mk_lines_from_polyhedron name ts]
-               else if dim = 3 then
-                 [D.mk_triangles_from_polyhedron name ts]
-               else []
-             end
-           else []
-         in
-         let e_name = name ^ "__t" in
-         let _os =
-           if es <> [] then
-             D.mk_lines_from_polyhedron e_name ~color:[|0.0;1.0;0.0;1.0|] es::os
-           else os
-         in
-         ())
-     ; "display" (names :: ~+ ident) ';' =>
-         (Display.display names;
-          if not (!Args.cont) then Display.wait ())
+        (names:: ~+ ident) ';' =>
+        Let_surf(name, opts, names)
+    ; "display" (names :: ~+ ident) ';' =>
+        Display(names)
+    ; "for" (name::ident) "=" (first::FLOAT) "to" (last::FLOAT)
+        (step:: ~? [1.0] ("step" (x::FLOAT) => x))
+        "do"
+        (cmds :: ~+ cmd) "done" ';' =>
+        For(name,R.of_float first,R.of_float last,R.of_float step,cmds)
 
-  let%parser cmds = (~* cmd) => ()
+  let%parser cmds = (~* ((c::cmd) => run_cmd c)) => ()
 
 end
 

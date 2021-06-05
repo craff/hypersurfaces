@@ -29,25 +29,30 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
   let norm p =
     sqrt (List.fold_left (fun acc (_,c) -> acc +. c*.c) zero p)
 
-  let random homogen deg dim =
-    let res = ref [] in
+  let iter_monomial gn homogen deg dim =
     let rec fn acc deg dim =
       if dim = 1 && homogen then
         begin
           let acc = List.rev (deg::acc) in
-          res := (Array.of_list acc, of_float (Gaussian.random ())) :: !res
+          gn (Array.of_list acc);
         end
       else if dim <= 0 then
         begin
-          let acc = List.rev acc in
-          res := (Array.of_list acc, of_float (Gaussian.random ())) :: !res
+          gn (Array.of_list acc);
         end
       else
         for i = deg downto 0 do
           fn (i::acc) (deg-i) (dim-1)
         done
     in
-    fn [] deg dim;
+    fn [] deg dim
+
+  let random homogen deg dim =
+    let res = ref [] in
+    let gn monom =
+      res := (monom, of_float (Gaussian.random ())) :: !res
+    in
+    iter_monomial gn homogen deg dim;
     List.rev !res
 
   (** polynomial addition *)
@@ -524,6 +529,17 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
                     (v, c)))
     in
     subst p q
+
+  let lift_linear p deg =
+    let dim = Array.length p in
+    let p1 = ref [] in
+    let gn monomial =
+      let res = ref zero in
+      Array.iteri (fun i k ->
+          res := !res +. (of_int k /. of_int deg) *. p.(i)) monomial;
+      p1 := (monomial, !res) :: !p1
+    in
+    iter_monomial gn true deg dim
 
 end [@@inlined always]
 

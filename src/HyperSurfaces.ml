@@ -509,7 +509,6 @@ module Make(R:Field.SPlus) = struct
     in
 
     let search_points critical allp sd =
-      Thread.yield ();
       let select x (_,dy,_,sy,fcy,_ as y) =
         assert (dy >=. zero);
         match x with
@@ -703,7 +702,6 @@ module Make(R:Field.SPlus) = struct
     in
 
     let decision codim s =
-      Thread.yield ();
       try
         if List.exists constant_sign s.o.p then NonZero else
           let fn (_,vs) = decision_face codim vs s in
@@ -843,6 +841,7 @@ module Make(R:Field.SPlus) = struct
       let ls = to_do.(codim) in
       to_do.(codim) <- SimpSet.empty;
       let rec fn s =
+        Thread.yield ();
         if s.k <> Removed && s.o.codim = codim then
         let d = Chrono.add_time test_chrono (decision codim) s in
         match d with

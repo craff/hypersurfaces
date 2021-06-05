@@ -23,8 +23,33 @@ module Make(R:Field.SPlus) = struct
     | Pro of polynomial * polynomial
     | App of poly_rec * polynomial list
     | Fun of func * polynomial
+    | Ref of string * polynomial list
 
   let polys : (string, poly_rec) Hashtbl.t = Hashtbl.create 101
+
+  let bind vars p =
+    let rec bind = function
+      | (Cst _ | Var _) as p -> p
+      | Pow(p,n)             -> Pow(bind p, n)
+      | Sum(p,q)             -> Sum(bind p, bind q)
+      | Sub(p,q)             -> Sub(bind p, bind q)
+      | Pro(p,q)             -> Pro(bind p, bind q)
+      | App(p,qs)            -> App(p, List.map bind qs)
+      | Fun(f,q)             -> Fun(f, bind q)
+      | Ref(v,args)       ->
+         try
+           if args <> [] then raise Not_found;
+           if not (List.mem v vars) then raise Not_found;
+           Var v
+         with Not_found -> try
+             let p = Hashtbl.find polys v in
+             let nb = List.length args in
+             if p.dim <> nb then
+               Pacomb.Lex.give_up ~msg:("bad arity for "^ v) ();
+             App(p,List.map bind args)
+           with Not_found ->
+             Pacomb.Lex.give_up ~msg:("unbound variable "^v) ()
+    in bind p
 
   let eval_cst p =
     let rec fn = function
@@ -37,6 +62,7 @@ module Make(R:Field.SPlus) = struct
                     B.eval f.bern (Array.of_list p)
       | Pow(p,n) -> pow (fn p) n
       | Fun(f,p) -> f.eval (fn p)
+      | Ref _    -> assert false
     in fn p
 
   let to_bernstein d vars p =
@@ -52,9 +78,10 @@ module Make(R:Field.SPlus) = struct
          let env = List.combine p.vars (List.map (fn env) qs) in
          fn env p.poly
       | Fun _ as p -> cst d (eval_cst p)
+      | Ref _    -> assert false
     in
     let env = List.mapi (fun i v -> (v,[(var_power i d 1, R.one)])) vars in
-    fn env p
+    fn env (bind vars p)
 
   let of_bernstein vars p =
     let fn (i,acc) n = (i+1,Pro(acc,Pow(Var(List.nth vars i),n))) in
@@ -75,4 +102,7 @@ module Make(R:Field.SPlus) = struct
             ; triangulation = []; edges = [] } in
     Hashtbl.add polys name p;
     p
+
+  let rm name =
+    Hashtbl.remove polys name
 end
