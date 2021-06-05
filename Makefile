@@ -2,6 +2,9 @@
 all:
 	dune build --release -j 5
 
+install:
+	dune install
+
 clean:
 	dune clean
 	cd article && rubber --clean --pdf main.tex
