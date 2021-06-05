@@ -66,6 +66,7 @@ module Parse(R:Field.SPlus) = struct
        while (!i <=. last) do
          let _ = P.mk name [] (Cst !i) in
          List.iter run_cmd cmds;
+         P.rm name;
          i := !i +. step;
        done
 
