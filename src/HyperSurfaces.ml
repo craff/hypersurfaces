@@ -1060,7 +1060,8 @@ module Make(R:Field.SPlus) = struct
       else
         new_trs
     in
-
+    erase_total ();
+    eprintf "\rExtracting simplicies.%!";
     let codim = List.length p0 in
     let ctrs = extract (dim-1) codim ctrs in
     let all =
@@ -1070,8 +1071,8 @@ module Make(R:Field.SPlus) = struct
           all := s.s :: !all) ctrs.all;
       !all
     in
-    erase_total ();
-    eprintf "total: %d/%d pts:%d=%d+%d+%d+%d,\n   %t,\n   %a\n   %a\n   %a\n"
+
+    eprintf "\rtotal: %d/%d pts:%d=%d+%d+%d+%d,\n   %t,\n   %a\n   %a\n   %a\n"
       ctrs.nb trs.nb
       (!nb_single + !nb_multi + !nb_any + !nb_center)
       !nb_single !nb_multi !nb_any !nb_center
@@ -1080,7 +1081,7 @@ module Make(R:Field.SPlus) = struct
       (print_solver_stats ~name:"solver2") solver2_stat
       (print_solver_stats ~name:"solver3") solver3_stat;
     let cps = components ctrs in
-    let chr = List.map euler cps in
+    let chr = List.sort compare (List.map euler cps) in
     eprintf "   topology: %d components %a\n%!" (List.length cps) print_int_list chr;
     begin
       let open Args in
@@ -1109,7 +1110,7 @@ module Make(R:Field.SPlus) = struct
     in
 
     restore_objects ();
-    (List.map (Array.map to_vec) all, edges)
+    (List.map (Array.map to_vec) all, edges, dim, chr)
 
   let triangulation param p0 =
     let r =

@@ -26,6 +26,7 @@ module type SMin = sig
   val to_float : t -> float
   val of_float : float -> t
   val of_string : string -> t
+  val to_string : t -> string
   val print : formatter -> t -> unit
   (** true is computation are exact, for rational for instance *)
   val exact : bool

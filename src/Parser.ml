@@ -1,5 +1,6 @@
 open Printing
 open Pacomb
+open Db
 
 module Parse(R:Field.SPlus) = struct
 
@@ -16,26 +17,38 @@ module Parse(R:Field.SPlus) = struct
   | Let_surf of string * Args.parameters * string list
   | Display  of string list
   | For      of string * R.t * R.t * R.t * cmd list
+  | Stats    of int * int list
 
   let rec run_cmd = function
     | Let_poly(name,vars,p) ->
-       let p = P.mk name vars p in
+       let p = P.mk false name vars p in
        let vars = Array.of_list (vars @ ["s"]) in
        printf "%a\n%!" (B.print_polynome ~vars) p.bern
     | Let_rand(name,vars,deg) ->
        let dim = List.length vars in
        let p = B.random false deg dim in
        let pb = of_bernstein vars p in
-       let p = P.mk name vars pb in
+       let p = P.mk true name vars pb in
        let vars = Array.of_list (vars @ ["s"]) in
        printf "%a\n%!" (B.print_polynome ~vars) p.bern
     | Let_surf(name, opts, names) ->
        let p name =
-         try (Hashtbl.find polys name).bern
+         try Hashtbl.find polys name
          with Not_found -> Lex.give_up ~msg:("unbound variable "^name) ()
        in
        let ps = List.map p names in
-       let (ts, es) = H.triangulation opts ps in
+       let (ts, es, dim, euler) =
+         H.triangulation opts (List.map (fun p -> p.bern) ps)
+       in
+       let pds = List.map (fun p -> ((p.vars, p.poly), B.degree p.bern, p.rand)) ps in
+       let nbc = List.length euler in
+       let euler = String.concat " " (List.map string_of_int euler) in
+       let rec pr_poly () (vars, p) = P.to_str pid vars p
+       and pid (p:P.poly_rec) =
+         let pid = Db.insert_polynomial pr_poly (p.vars, p.poly) p.deg p.dim p.rand in
+         sprintf "P%Ld" pid
+       in
+       Db.insert_variety pr_poly pds dim nbc euler;
        let os =
          if ts <> [] then
            begin
@@ -64,11 +77,12 @@ module Parse(R:Field.SPlus) = struct
        let open R in
        let i = ref first in
        while (!i <=. last) do
-         let _ = P.mk name [] (Cst !i) in
+         let _ = P.mk false name [] (Cst !i) in
          List.iter run_cmd cmds;
          P.rm name;
          i := !i +. step;
        done
+    | Stats(dim,degs) -> Db.stats dim degs
 
 
   (** Parses a float in base 10. [".1"] is as ["0.1"]. *)
@@ -211,6 +225,7 @@ module Parse(R:Field.SPlus) = struct
         "do"
         (cmds :: ~+ cmd) "done" ';' =>
         For(name,R.of_float first,R.of_float last,R.of_float step,cmds)
+    ; "stats" (dim::INT) (degs :: ~+ INT) ';' => Stats(dim,degs)
 
   let%parser cmds = (~* ((c::cmd) => run_cmd c)) => ()
 

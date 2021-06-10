@@ -142,21 +142,6 @@ let projection () =
 let _ =
   Egl.initialize ~width:!window_width ~height:!window_height "test_gles"
 
-let _ =
-  let p = get_shader_precision gl_vertex_shader gl_high_float in
-  eprintf "Vertex shader float in -2^%d, 2^%d, precision high float: %d bits\n%!"
-    p.min p.max p.precision;
-  let p = get_shader_precision gl_vertex_shader gl_high_int in
-  eprintf "Vertex shader float in -2^%d, 2^%d, precision high int: %d bits\n%!"
-    p.min p.max p.precision;
-  let p = get_shader_precision gl_fragment_shader gl_high_float in
-  eprintf "Fragment shader float in -2^%d, 2^%d, precision high float: %d bits\n%!"
-    p.min p.max p.precision;
-  let p = get_shader_precision gl_fragment_shader gl_high_int in
-  eprintf "Fragment shader float in -2^%d, 2^%d, precision high int: %d bits\n%!"
-    p.min p.max p.precision
-
-
 (* Shader programs for lines *)
 let lines_prg : unit Shaders.program =
   let open Shaders in

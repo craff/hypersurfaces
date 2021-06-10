@@ -1,3 +1,5 @@
+open Format
+
 module Make(R:Field.SPlus) = struct
 
   open R
@@ -6,11 +8,13 @@ module Make(R:Field.SPlus) = struct
 
   type poly_rec =
     { name : string
+    ; deg : int
     ; dim : int
     ; vars: string list
     ; poly : polynomial
     ; bern : B.polynomial
     ; hdim : int
+    ; rand : bool
     ; mutable triangulation : R.t Array.t Array.t list
     ; mutable edges : R.t Array.t Array.t list }
 
@@ -26,6 +30,33 @@ module Make(R:Field.SPlus) = struct
     | Ref of string * polynomial list
 
   let polys : (string, poly_rec) Hashtbl.t = Hashtbl.create 101
+
+  let to_str name_to_string vars p =
+    let index v =
+      let rec fn i l = match l with
+        | [] -> assert false
+        | x::l -> if x = v then i else fn (i+1) l
+      in
+      fn 0 vars
+    in
+    let rec to_str () =
+      function
+      | Cst x      -> (R.to_string x)
+      | Var v      -> sprintf "x%d" (index v)
+      | Pow (p,n)  -> sprintf "(%a)^%d" to_str p n
+      | Sum (p,q)  -> sprintf "(%a+%a)" to_str p to_str q
+      | Sub (p,q)  -> sprintf "(%a-%a)" to_str p to_str q
+      | Pro (p,q)  -> sprintf "(%a*%a)" to_str p to_str q
+      | App (f,ps) -> sprintf "%s(%a)" (name_to_string f) to_str_list ps
+      | Fun (f,p)  -> sprintf "%s(%a)" f.name to_str p
+      | Ref _      -> assert false
+
+    and to_str_list () = function
+      | []   -> ""
+      | [p]  -> to_str () p
+      | p::l -> sprintf "%a,%a" to_str p to_str_list l
+    in
+    to_str () p
 
   let bind vars p =
     let rec bind = function
@@ -81,7 +112,7 @@ module Make(R:Field.SPlus) = struct
       | Ref _    -> assert false
     in
     let env = List.mapi (fun i v -> (v,[(var_power i d 1, R.one)])) vars in
-    fn env (bind vars p)
+    fn env p
 
   let of_bernstein vars p =
     let fn (i,acc) n = (i+1,Pro(acc,Pow(Var(List.nth vars i),n))) in
@@ -93,12 +124,14 @@ module Make(R:Field.SPlus) = struct
     in
     kn p
 
-  let mk name vars poly =
+  let mk rand name vars poly =
     let dim = List.length vars in
+    let poly = bind vars poly in
     let bern = to_bernstein dim vars poly in
     let (bern,h) = B.homogeneisation bern in
+    let deg = B.degree bern in
     let hdim = if h then dim + 1 else dim in
-    let p = { name; vars; dim; poly; bern; hdim
+    let p = { name; vars; deg; dim; poly; bern; hdim; rand
             ; triangulation = []; edges = [] } in
     Hashtbl.add polys name p;
     p

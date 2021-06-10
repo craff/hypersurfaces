@@ -3,6 +3,8 @@ let cont  = ref false
 let show  = ref false
 let prog  = ref false
 let progw  = ref false
+let dbname = ref ".hyper.db"
+
 let debug_string = ref ""
 
 (* type for the expected topologie *)
@@ -72,6 +74,12 @@ let spec =
   ; ( "--check"
     , Arg.Bool (fun p -> default_parameters.check <- true)
     , "check some coherence propereties of the final triangulation")
+  ; ( "--dbname"
+    , Arg.Set_string dbname
+    , "DB name to store result")
+  ; ( "--init-rand"
+    , Arg.Unit (fun () -> Random.self_init ())
+    , "initialize the random generator")
   ]
 
 let files = ref []
