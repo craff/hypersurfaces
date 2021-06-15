@@ -1,0 +1,165 @@
+\section{Proof of main theorem}
+
+In this section, we consider that $p₁,\dots,pₖ$ are homogeneous polynomial of
+degree $d_1,\dots,d_k$ on $ℝ^{n+1}$ and that $(Δᵢ)_{i∈I}$ is a simplicial
+partition of $\PNR$ adapted to $p₁,\dots,pₖ$ and $ε$-thin for some $ε>0$.
+
+We also choose $s:ℝ^{n+1} → ℝ⁺$ a $C^∞$ map with support included in $B_1(0)$
+and such that $∫_{ℝ^{n+1}} s(u)du = 1$ for the usual measure $du$ of
+$ℝ^{n+1}$. We also assume that $s(-x) = s(x)$.
+
+First, for $t > 0$ and $x ∈ ℝ^{n+1}$, we define $$\hat pⱼ(t,x) = ∫_{ℝ^{n+1}} \hat
+pⱼ(x - tεu) s(u)du$$ If we define $fₜ(y) = \hat pⱼ(tεy)$, then $\hat pⱼ(t,x) = (fₜ ⋆
+s)(\frac{x}{tε})$ where $fₜ ⋆ s$ denotes the convolution product. Therefore
+$\hat pⱼ(t,x)$ is $C^∞$ for its second variable.
+
+We prove a few lemmas about the $\hat pⱼ(t,x)$.
+
+\begin{lemm}[Homogeneity]\label{proof-homogeneity}
+  for $t > 0$ and $x ∈ ℝ^{n+1}$, $\hat pⱼ(λt,λx) = λᵈ \hat pⱼ(t,x)$.
+\end{lemm}
+
+\begin{proof}
+  From the homogeneity of $\hat pⱼ$.
+\end{proof}
+
+\begin{lemm}[Derivation]\label{proof-derivation}
+  \begin{eqnarray*}
+    ∇ₓ pⱼ(t,x) &=& ∇ₓ ∫_{ℝ^{n+1}} \hat pⱼ(x - t ε u)s(u) du \cr
+        &=& ∫_{ℝ^{n+1}} ∇\hat pⱼ(x - t ε u) s(u) du \cr
+        &=& ∫_{ℝ^{n+1}} ∇\overline pⱼ(x - t ε u) |\overline{pⱼ}^{d-1}(x - tε u)| s(u) du \cr
+        &=& d Σ_{(i,σ)∈I_{tε}(x)} ∇ᵢ^σpⱼ. ∫_{\Phiᵢ^σ(x,tε)} |\overline{pⱼ}^{d-1}(x - tε u)| s(u) du\cr
+  \end{eqnarray*}
+
+  As the integrals on the last line are positive, this implies that $∇ₓ pⱼ(t,x)$
+  is in the convex hull of the vector $∇ᵢ^σpⱼ$ for $(i,σ)∈I_{tε}(x)$.
+
+
+  \begin{eqnarray*}
+    \frac{∂\hat pⱼ(t,x)}{∂t} &=& \frac{∂}{∂t} ∫_{ℝ^{n+1}} \hat pⱼ(x - t ε u)s(u) du \cr
+        &=& - ε  ∫_{ℝ^{n+1}} ∇\hat pⱼ(x - t ε u) u s(u) du \cr
+        &=& - εd ∫_{ℝ^{n+1}} ∇\overline pⱼ(x - t ε u) |\overline{pⱼ}^{d-1}(x -
+    tε u)| u s(u) du \cr
+        &=& - εd Σ_{(i,σ)∈I_{tε}(x)} ∇ᵢ^σpⱼ. ∫_{\Phiᵢ^σ(x,tε)} |\overline{pⱼ}^{d-1}(x - tε u)| u s(u) du\cr
+  \end{eqnarray*}
+
+  This implies that if $0 < t < \|x\|$ then $\frac{∂\hat pⱼ(t,x)}{∂t} < ε Kⱼ \|x\|^{d-1}$ for some
+  constant $Kⱼ > 0$.
+\end{lemm}
+
+\begin{lemm}[Limit]\label{proof-limit}
+  $$\lim_{t → 0} \hat pⱼ(t,x) = \hat pⱼ(x)$$
+  $$\lim_{t → 0} ∇ₓ \hat pⱼ(t,x) =  d Σ_{(i,σ)∈I(x)}
+  ∇ᵢ^σpⱼ. |\overline{pⱼ}^{d-1}(x)|  ∫_{\Phiᵢ^σ(x,ε)} s(u) du$$
+\end{lemm}
+
+We now consider that $∇ₓ \hat pⱼ(t,x)$ is defined on $[0,1] × ℝ^{n+1}$ using the
+above limit for $t = 0$. However $∇ₓ \hat pⱼ(t,x)$ is not in general continuous
+in $(0,x)$. Still it is in $∇ₓ \hat pⱼ(t,x) ∈ \ncone{pⱼ}{x}$. We will not really
+use $∇ₓ \hat pⱼ(t,x)$ for $t = 0$, but it is more practical if it is defined in
+$t = 0$.
+
+\begin{proof}
+  \dots
+\end{proof}
+
+\begin{lemm}
+  Assume $\|x\|<1,\|y\|<1$ and $0 < t ≤ 1$, then we find a constant $L>0$ such that:
+  \begin{eqnarray*}
+    \|∇ₓ pⱼ(t,x) - ∇_y pⱼ(t,y)\| &=& \left\|∇ₓ ∫_{ℝ^{n+1}} \hat pⱼ(x - t ε u)s(u)
+    du - ∇_y ∫_{ℝ^{n+1}} \hat
+    pⱼ(y - t ε u)s(u) du \right\| \cr
+    &=& \left\|∇ₓ ∫_{ℝ^{n+1}} \hat pⱼ(v)s(\frac{x-v}{tε})\frac{dv}{(tε)^{n+1}} \right.
+    \cr
+    && \hspace{3em} \left. - ∇_y ∫_{ℝ^{n+1}} \hat
+    pⱼ(v) s(\frac{y-v}{tε}) \frac{dv}{(tε)^{n+1}} \right\| \cr
+    &=& \left\|∫_{ℝ^{n+1}} \hat pⱼ(v)∇s(\frac{x-v}{tε})\frac{dv}{(tε)^{n+2}} \right.
+    \cr
+    && \hspace{3em} \left. - ∫_{ℝ^{n+1}} \hat
+    pⱼ(v) ∇s(\frac{y-v}{tε}) \frac{dv}{(tε)^{n+2}} \right\| \cr
+    &=& \frac{1}{tε} \left\|∫_{ℝ^{n+1}} \hat pⱼ(x - tεu)∇s(u) du
+    - ∫_{ℝ^{n+1}} \hat
+    pⱼ(y - tεu) ∇s(u) du \right\| \cr
+    &≤& \frac{1}{tε} ∫_{ℝ^{n+1}} |\hat pⱼ(x - tεu) - \hat pⱼ(y - tεu)|
+    \|∇s(u)\| du \cr
+    &≤& L \frac{\|x-y\|}{tε}
+  \end{eqnarray*}
+\end{lemm}
+
+\begin{defi}
+  For $(t,x) ∈ [0,1] × ℝ^{n+1}$, we define
+  \begin{itemize}
+  \item $Ω$ the compact set defined by $$Ω = \{ x ∈ ℝ^{n+1}, ∀j∈\{1,\dots,k\},
+    pⱼ(x) \overline{p}ⱼ(x) ≤ 0 \}$$
+
+  \item $P(t,x)$ the vector in $ℝᵏ$ whose coefficients are
+    $$Pⱼ(t,x) = t pⱼ(x) + (1-t) \hat pⱼ(t,x)$$
+
+  \item $G(t,x) = ∇ₓ P(t,x)$ the $(n+1)×k$ matrix whose $k$ columns are the vector
+    $$Gⱼ(t,x) = t ∇pⱼ(x) + (1-t) ∇ₓ \hat pⱼ(t,x)$$
+
+  \item $Q(t,x) = \frac{∂P}{∂t}(t,x)$ the vector in $ℝᵏ$ whose coefficients are
+    $$Pⱼ(t,x) = pⱼ(x) - \hat pⱼ(t,x) + (1-t) \frac{∂\hat pⱼ}{∂t}(t,x)$$
+  \end{itemize}
+\end{defi}
+
+\begin{prop}
+  The matrix $G(t,x)$ is of rank $k$ for $(t,x) ∈ [0,1] × Ω$ and therefore the
+  $k × k$ matrix ${ᵗG}(t,x) G(t,x)$ is invertible.
+\end{prop}
+
+\begin{proof}
+  From the definition of adapted simplicial partition, we have that the column
+  of $G(t,x)$ are linearly independant.
+\end{proof}
+
+\begin{defi}
+  We define $Gᵀ(t,x)$ the orthogonal projection of $G(t,x)$ on the tangent plane
+  to the unit sphere at $x$, column by column.
+\end{defi}
+
+\begin{prop}
+  We can find $ε$ small enough and a neighbourhood $Ψ$ of $[0,1] × Ω$, open for
+  the topology of $[0,1] ×  ℝ^{n+1}$ such that  the matrix $Gᵀ(t,x)$ is still of
+  rank $k$ for $(t,x) ∈ Ψ$.
+\end{prop}
+
+\begin{proof}
+  Using the homogeneity, we get:
+  \begin{eqnarray*}
+    Gⱼ(t,x).x &=& t ∇pⱼ(x).x + (1-t) (∇ₓ \hat pⱼ(t,x).x) \cr
+    &=& t ∇pⱼ(x).x + (1-t) (\frac{∂\hat pⱼ(t,x)}{∂t}, ∇ₓ \hat pⱼ(t,x)).(t, x) -
+    t (1-t) \frac{∂\hat pⱼ}{∂}(t,x) \cr
+    &=& t d pⱼ(x) + (1-t) d \hat pⱼ(t,x) - t (1-t) \frac{∂\hat pⱼ}{∂t}(t,x) \cr
+    &=& d P(t,x)  - t (1-t) \frac{∂\hat pⱼ}{∂t}(t,x) \cr
+  \end{eqnarray*}
+
+  For each $x ∈ ...$, the family of matrices in $\nhull{p₁,\dots,pₖ}{x}$ are all
+  of rank $k$. This family of matrix is a compact and as $\Delta$ is adapted, it
+  is of rank $k$ for any $x ∈ Ω$. Moreover, being of rank $k$ is an open
+  condition, therefore we can find a neighbourhood $Ψ$ of $Ω$ and a parameter
+  $η$ such that for any  $x ∈ Ψ$ and any $n+1 × k$ matrices $H$ such that $\|G(t,x) - H\| < η$, then we have $H$ of rank $k$.
+
+  Therefore, if $ε$ is small enough and $x ∈ Ψ$ we have $\|G(t,x) - Gᵀ(t,x)\| < η$
+  and therefore $Gᵀ(t,x)$ of rank $k$.
+\end{proof}
+
+\begin{defi}
+  For $x ∈ Ψ$, we define
+  $$
+  f(t,x) = - Gᵀ(t,x) ({ᵗGᵀ}(t,x) Gᵀ(t,x))^{-1} Q(t,x)
+  $$
+  and we consider the differential equation $$x'(t) = f(t,x(t))$$
+\end{defi}
+
+\begin{prop}
+  Let $x : I → Ψ$ be a maximal solution of the above differential equation with
+  the initial condition $x(t₀) = x₀$ with $P(t₀,x₀) = 0$. Then, $I = [0,1]$ and
+  $P(t,x(t)) = 0$ for all $t ∈ [0,1]$.
+\end{prop}
+
+\begin{proof}
+  \dots
+\end{proof}
+%<!-- Local IspellDict: british -->
+%<!-- Local IspellPersDict: ~/.ispell-british -->

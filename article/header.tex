@@ -16,7 +16,9 @@
 \DeclareUnicodeCharacter{7496}{^d}
 \DeclareUnicodeCharacter{7511}{^t}
 \DeclareUnicodeCharacter{7503}{^k}
-\DeclareUnicodeCharacter{7511}{^t}
+\DeclareUnicodeCharacter{7488}{^T}
+\DeclareUnicodeCharacter{8346}{_p}
+\DeclareUnicodeCharacter{7493}{^\alpha}
 \usepackage[utf8x]{inputenc}
 \usepackage{graphicx}
 \usepackage{stmaryrd}
@@ -28,7 +30,9 @@
 \usepackage{adjustbox}
 
 % Title portion. Note the short title for running heads
-\title{Solving smooth system of algebraic equations}
+
+\title{Piecewise affine approximation of smooth algebraic subvariety of the
+projective space in any dimension and codimension}
 \author{Christophe Raffalli}
 
 \newcommand{\interior}[1]{%
@@ -40,8 +44,14 @@
 \newcommand{\hull}[1]{%
   \mathcal H({#1})%
 }
+\newcommand{\nhull}[2]{%
+  \mathcal H^\nabla({#1},{#2})%
+}
 \newcommand{\cone}[1]{%
   \mathcal C({#1})%
+}
+\newcommand{\ncone}[2]{%
+  \mathcal C^\nabla({#1},{#2})%
 }
 \newcommand{\vertices}[1]{%
   \mathcal V({#1})%
@@ -55,9 +65,12 @@
 
 \newcommand{\PNR}{{\cal P}^n(ℝ)}
 \newcommand{\SNR}{{\cal S}^n(ℝ)}
+\newcommand{\sgn}{\mathrm{sgn}}
 
 \newtheorem{theo}{Theorem}
+\newtheorem{coro}[theo]{Corollary}
 \newtheorem{nota}[theo]{Notation}
 \newtheorem{defi}[theo]{Definition}
 \newtheorem{prop}[theo]{Proposition}
 \newtheorem{exam}[theo]{Example}
+\newtheorem{lemm}[theo]{Lemma}

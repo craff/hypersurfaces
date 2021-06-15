@@ -9,17 +9,67 @@ that is linear on all $Δ^σᵢ$ for $i ∈ I$, $σ ∈ \{+,-\}$, and equal to $
 on all points in $\vertices{Δ}$.
 
 For $i ∈ I$, $σ ∈ \{+,-\}$, we define $∇ᵢ^σp = ∇\overline{p}(x)$
-for any $x ∈ Δ^σᵢ$, as the gradient is constant over $Δ^σᵢ$ for a linear function.
+for any $x ∈ Δ^σᵢ$, as the gradient is constant over $Δ^σᵢ$ for a linear
+function.
+
+We also define $\hat p(x) = \sgn(\overline{p}(x))^{d-1} \overline{p}^d(x)$. $\hat p$
+is homogeneous of degree $d$, i.e. for $x \in ℝ^{n+1}$ and $λ>0$, $\hat p(λx) = λᵈ
+\hat p(x)$. The function $\overline{p}$ and $\hat p$ obviously have the same sign and
+zero locus on $ℝ^{n+1}$.
 \end{defi}
 
-Remark: if $d$ is even (resp. odd), $\overline{p}$ is even (resp. odd).
+\begin{lemm}
+Let $p$ be an homogeneous polynomial of degree $d$ on
+$ℝ^{n+1}$. Let $(Δᵢ)_{i∈I}$ be a simplicial partition of $\PNR$.
+The function $\overline{p}$ and $\hat p$ have derivatives at $x ∈ ℝ^{n+1} ∖\{0\}$ in the
+direction $v$ if the point $I(x + h v)$ is constant
+for $h ∈ [-ε,ε]$ with $ε > 0$ is small enough.
+
+This means that for any line segment $\overline{p}$ and $\hat p$ have
+derivatives almost everywhere in the direction of this line.
+\end{lemm}
+
+\begin{proof}
+  Lines can only meet transversaly intersections $πₙ^{-1}$ of the intersection
+  of at least two simplices of $Δ$ in finitely many points.
+\end{proof}
+
+\begin{lemm}
+  From the previous lemma, with the same hypothesis, we find that $\hat p$ is
+  Lipschitz in $\ball{0}{M}$ for any $M ∈ ℝ₊$.
+\end{lemm}
+
+\begin{proof}
+  Let $L$ be the maximum of the differential of $\hat p$, where it is defined in
+  $\ball{0}{M}$. At a point $x$ in $D = \ball{0}{M} ∩ πₙ^{-1} (Δ_{i₁} ∩ \dots ∩
+  Δ_{iₖ})$, if $v$ is a direction tangent to this intersection, then $\nabla
+  \hat p_{i₁}(x) . v = \dots = \nabla \hat p_{iₖ}(x) . v$ because the functions
+  $\hat p_{i₁}, \dots, \hat p_{iₖ}$ coincide on $D$. We will denote this number
+  by $\nabla \hat p(x) . v$, which for $v$ fixed is defined almost every where,
+  and we have $\nabla \hat p(x) . v ≤ \min_{j ∈ (i₁,\dots,iₖ)} \|\nabla \hat
+  pⱼ(x)\| \|v\| ≤ L \|v\|$.
+
+  Then, we have
+  \begin{eqnarray*}
+    |\hat p(x) - \hat p(y)| &=& \left. ∫₀¹ \nabla \hat p(x + (1-t) y) . (x - y)
+    dt\right. \cr
+    &≤&   ∫₀¹ L \|(x - y)\| dt \cr
+    &≤& L \|x - y\|
+  \end{eqnarray*}
+\end{proof}
 
 \begin{defi}
 Let $p$ be an homogeneous polynomial of degree $d$ on
 $ℝ^{n+1}$. Let $(Δᵢ)_{i∈I}$ be a simplicial partition of $\PNR$.
 Let $\overline{p}$ be the $Δ$-linear approximation of $p$.
-We define the condition $Π(x)$ to be true if and only if $p(x)$ and
-$\overline{p}(x)$ are both positive or both negative.
+We define
+\begin{itemize}
+  \item the condition $Π_p(x)$ to be true if and only if $p(x)$ and
+$\overline{p}(x)$ are both positive or both negative (i.e. $p(x)
+    \overline{p}(x) > 0$),
+  \item The set $\ncone{p}{x} = \cone{\{∇p(x)\} ∪ \{∇ᵢ^σp, (i,σ) ∈ I(x)\}}$
+  \item The set $\nhull{p}{x} = \hull{\{∇p(x)\} ∪ \{∇ᵢ^σp, (i,σ) ∈ I(x)\}}$
+\end{itemize}
 \end{defi}
 
 \begin{prop}\label{adaptedeq}
@@ -29,11 +79,11 @@ Let $\overline{p}$ be the $Δ$-linear approximation of $p$.
 
 The following conditions are equivalent:
 \begin{enumerate}
-\item $∀x ∈  ℝ^{n+1}∖\{0\}, Π(x) \hbox{ or } 0 ∉ \cone{\{∇p(x)\} ∪ \{∇ᵢ^σp, (i,σ) ∈ I(x)\}}$
-\item $∀x ∈  ℝ^{n+1}∖\{0\}, Π(x) \hbox{ or } 0 ∉ \hull{\{∇p(x)\} ∪ \{∇ᵢ^σp, (i,σ) ∈ I(x)\}}$
-\item $∀x ∈  \SNR, Π(x) \hbox{ or } 0 ∉ \cone{\{∇p(x)\} ∪ \{∇ᵢ^σp, (i,σ) ∈ I(x)\}}$
-\item $∀x ∈  \SNR, Π(x) \hbox{ or } 0 ∉ \hull{\{∇p(x)\} ∪ \{∇ᵢ^σp, (i,σ) ∈ I(x)\}}$
-\item\label{hb} $∀x ∈  ℝ^{n+1}∖\{0\}, Π(x) \hbox{ or } ∃δ ∈ ℝ^{n+1}∖\{0\},
+\item $∀x ∈  ℝ^{n+1}∖\{0\}, Π_p(x) \hbox{ or } 0 ∉ \ncone{p}{x}$
+\item $∀x ∈  ℝ^{n+1}∖\{0\}, Π_p(x) \hbox{ or } 0 ∉ \nhull{p}{x}$
+\item $∀x ∈  \SNR, Π_p(x) \hbox{ or } 0 ∉ \ncone{p}{x}$
+\item $∀x ∈  \SNR, Π_p(x) \hbox{ or } 0 ∉ \nhull{p}{x}$
+\item\label{hb} $∀x ∈  ℝ^{n+1}∖\{0\}, Π_p(x) \hbox{ or } ∃δ ∈ ℝ^{n+1}∖\{0\},
   \left\{\begin{array}{l} δ.∇p(x) > 0 \hbox{ and}\cr
     ∀(i,σ) ∈ I(x), δ.∇ᵢ^σp > 0
   \end{array}\right.$
@@ -61,177 +111,39 @@ The following conditions are equivalent:
 \begin{defi}
 Let $p$ be an homogeneous polynomial of degree $d$ on
 $ℝ^{n+1}$. Let $(Δᵢ)_{i∈I}$ be a simplicial partition of $\PNR$.
-
-We say that the partition is \emph{adapted} to $p$ if it satisfies the condition
+We say that the partition is \emph{adapted} to $p$ if it satisfies the conditions
 of proposition \ref{adaptedeq}.
 \end{defi}
 
-\begin{prop}
+\begin{coro}
   Let $p$ be an homogeneous polynomial of degree $d$ on
-$ℝ^{n+1}$.
-  Let $(Δᵢ)_{i∈I}$ be a simplicial partition of $\PNR$ adapted to $p$.
-  We can find a $C^∞$ function $δ$ in $ℝ^{n+1} ∖ \{0\} → ℝ^{n+1}∖\{0\} $
-  and $μ > 0$ such that:
-  $$∀x ∈  ℝ^{n+1}∖\{0\}, Π(x) \hbox{ or } \left\{
-  \begin{array}{l}δ(x).∇p(x) > μ\|x\|^{d-1} \hbox{ and } \cr ∀(i,σ) ∈
-  I(x), δ(x).∇ᵢ^σp > μ.\end{array}\right.
-  $$
-\end{prop}
+  $ℝ^{n+1}$. Let $(Δᵢ)_{i∈I}$ be a simplicial partition of $\PNR$ adapted to $p$.
+  Then, the zero-locus of $p$ and $\overline{p}$ the $\Delta$ approximation of
+  $p$ are isomorphic.
+\end{coro}
 
-\begin{proof}
-From proposition \ref{adaptedeq}.\ref{hb}, for any $x ∈ ℝ^{n+1}∖\{0\}$, if
-$Π_ε(x)$ is not satisfied, we find $δ₀(x)
-∈ ℝ^{n+1}$ such that $δ₀(x).∇p(x) > 0$ and $∀(i,σ) ∈ I_ε(x), δ₀(x).∇ᵢ^σp > 0$.
-We can also assume that $δ₀(λ x) = δ₀(x)$ for $λ > 0$ for the same reason as in
-the proof of $(1) ↔ (3)$ above.
+This theorem is a consequence of the theorem \ref{maintheo} to come.
 
-We start with the following lemma: for each $x ∈
-ℝ^{n+1}∖\{0\}$, we find $0 < η(x) < ε$ such that
-$∀y ∈ \ball{x}{2η(x)}$, $d₀(x).∇p(y) > 0$ and $∀(i,σ) ∈ I_ε(y),
-d₀(x).∇ᵢ^σp > 0$.
+\begin{defi}
+Let $p_1,\dots,p_k$ be $k$ homogeneous polynomial of degree $d_1,\dots,d_k$ on
+$ℝ^{n+1}$. Let $(Δᵢ)_{i∈I}$ be a simplicial partition of $\PNR$.
 
-First, $(i,σ) ∈ I_ε(y) ↔ \cball{y}{ε} ∩ Δᵢ^σ ≠ ∅$ is a closed condition and the
-contrary is an open condition. The condition $Π_ε(x)$ is also an open
-condition. Hence, for $x ∈ℝ^{n+1}∖\{0\}$, we find $η > 0$
-small enough to have $y ∈
-\ball{x}{2η}$ gives $Π_ε(x)$ or $(i,σ) ∉ I_ε(x)$ implies $(i,σ) ∉ I_ε(y)$.
+We say that the partition is \emph{adapted} to $p_1,\dots,p_k$ if it satisfies
+the following condition: for all $x \in ℝ^{n+1}$, either $\Pi_{p_j}(x)$ is true
+for some $1 \leq j \leq k$ or $\ncone{p₁}{x} × \dots × \ncone{pₖ}{x}$ contains
+only linear independant tuple of vectors.
+\end{defi}
 
-which means that
-for $y ∈ \ball{x}{2η}$, we have $Π_ε(x)$ or $I_ε(y) ⊆ I_ε(x)$ and therefore,
+\begin{theo}\label{maintheo}
+  Let $p_1,\dots,p_k$ be $k$ homogeneous polynomial of degree $d_1,\dots,d_k$ on
+$ℝ^{n+1}$. Let $(Δᵢ)_{i∈I}$ be a simplicial partition of $\PNR$ adapted to
+  $p₁,\dots,pₖ$. Then, the zero locus of $p₁,\dots,pₙ$ is isomorphic to the zero
+  locus of $\overline{p}₁,\dots,\overline{p}ₖ$.
+\end{theo}
 
-$$∀y ∈ \ball{x}{2η(x)}, Π_ε(x) \hbox{ or } ∀(i,σ) ∈ I_ε(y), δ₀(x).∇ᵢ^σp > 0.$$
-
-Second, $∇p(x)$ is continuous, thus for  $x ∈ℝ^{n+1}∖\{0\}$, we find $η > 0$
-small enough to have $y ∈ \ball{x}{2η}$
-implies $Π_ε(x)$ or $δ₀(x).∇p(y) > 0$. Grouping both results yields the wanted real $η(x)$
-such that
-
-$$∀x ∈ℝ^{n+1}∖\{0\}, ∀y ∈ \ball{x}{2η(x)}, Π_ε(x) \hbox{ or }
-\left\{\begin{array}{l} δ₀(x).∇p(y) > 0 \hbox{ and}\cr
-∀(i,σ) ∈ I_ε(y), δ₀(x).∇ᵢ^σp > 0
-\end{array}\right.
-$$
-
-
-Now, for $x ∈ \SNR$, the open balls $\ball{x}{η(x)}$ cover $\SNR$, so we can
-find a finite family $(xⱼ)_{j∈J}$ such that the balls $\ball{x}{η(xⱼ)}$ cover
-$\SNR$. We also take $η = \min_{j ∈ J} η(xⱼ)$.
-
-Next, for each $xⱼ ∈ \SNR$, $j ∈ J$, we choose a measurable set
-$Dⱼ ⊂ \ball{x}{η(xⱼ)}$ such that $\SNR$ is a disjoin union of all
-$Dⱼ$. And we define $d₁ : \SNR → ℝ^{n+1}∖\{0\}$ with $δ₁(x) = δ₀(xⱼ)$ if $x ∈ Dⱼ$.
-
-We choose $s : ℝ^{n+1} → ℝ$, a $C^∞$ function with support in
-$\ball{0}{1}$ and $∫_{ℝ^{n+1}} s(t) dt = 1$ for the standard measure $dt$
-on $ℝ^{n+1}$.
-
-We define
-
-$$ δ : \SNR → ℝ^{n+1}∖\{0\} \hbox{ with } δ(x) = ∫_{ℝ^{n+1}} δ₁(x - η t)
-s(t) dt$$
-
-Similarly to a convolution product, using the change of variable $u = x - ηt$, we have $δ(x) = ∫_{ℝ^{n+1}} η^{n +1} δ₁(u)
-s(\frac{x - u}{η}) du$ and therefore $δ$ is $C^∞$ on $\SNR$.
-
-Moreover, if we take $x ∈ \SNR$, we can write
-$$ δ(x) = Σ_{j∈J} δ₁(xⱼ) ∫_{x - η t ∈ Dⱼ} s(t) dt$$
-
-Let us define $λⱼ(x) = ∫_{x - η t ∈ Dⱼ} s(t) dt$. As $Dⱼ ⊂ \ball{xⱼ}{η(xⱼ)}$,
-if $λⱼ(x) > 0$, we have $d(x - η t,xⱼ) ≤ η(xⱼ)$ otherwise $x  - η t ∉ Dⱼ$
-and $d(x, x - η t) < η ≤ η(xⱼ)$ otherwise $s(t) = 0$. Therefore,
-if $λⱼ(x) > 0$, we have $d(x,xⱼ) < 2η(xⱼ)$.
-which implies $Π_ε(x)$ or both $δ₁(xⱼ).∇p(x) > 0$ and $∀(i,σ) ∈ I_ε(x), δ₁(xⱼ).∇ᵢ^σp > 0$.
-
-Moreover, the coefficient $λⱼ$ are positive. Therefore, $δ(x) = Σ_{j∈J}
-λⱼ(x) δ₁(xⱼ)$ implies $δ(x).∇p(x) > 0$ and $∀(i,σ) ∈ I_ε(x), δ(x).∇ᵢ^σp >
-0$.  Thus, we have:
-$$∀x ∈ \SNR, Π_ε(x) \hbox{ or } δ(x).∇p(x) > 0 \hbox{ and }∀(i,σ) ∈
-  I_ε(x), δ(x).∇ᵢ^σp > 0.$$
-
-  As $\SNR$ is compact, we can find $μ > 0$ such that
-$$∀x ∈ \SNR, Π_ε(x) \hbox{ or } δ(x).∇p(x) > μ \hbox{ and }∀(i,σ) ∈
-  I_ε(x), δ(x).∇ᵢ^σp > μ.$$
-
-
-  To extend this to $ℝ^{n+1}∖\{0\}$, we just have to set $δ(λx) = δ(x)$ for $λ >
-  0$ and as $p$ is homogeneous of degree $d$, we have:
-
-
-  $$∀x ∈  ℝ^{n+1} ∖ \{0\}, Π_ε(x) \hbox{ or } \left\{\begin{array}{l}
-  δ(x).∇p(x) > μ\|x\|^{d-1} \hbox{ and }\cr∀(i,σ) ∈
-  I_ε(x), δ(x).∇ᵢ^σp > μ
-  \end{array}\right.$$
-\end{proof}
-
-\begin{prop}
-  Let $p$ be an homogeneous polynomial of degree $d$ on
-$ℝ^{n+1}$.
-  Let $(Δᵢ)_{i∈I}$ be an $ε$-fat simplicial partition of $\PNR$ adapted to $p$.
-  the function  $p$ and $\overline{p}$ have homeomorphic zero locus on
-  $ℝ^{n+1}∖\{0\}$.
-\end{prop}
-
-\begin{proof}
-  The function $\overline{p}$ as a gradient defined in any direction $d$ which
-  may be defined as
-  $$
-  \nabla \overline{p}(x). d = \lim_{h → 0⁺} \frac{\overline{p}(x + hd) - \overline{p}(x)}{h}
-  $$
-  This is true because for $h > 0$ and small enough, $x + hd$ and $x$ belong to
-  at least one common cone $Δᵢ^σ$ with $(i, σ) ∈ I(x)$.
-  If they both belong to more than one cone, as we take the gradient of linear
-  functions that coincide on the intersection of several simplex in a direction which
-  is parallel to this intersection, the gradient $∇ᵢ^σp . d$ coincide and are the limit.
-  This tells us moreover that we have
-  $$\nabla \overline{p}(x). d = ∇ᵢ^σp . d \hbox{ for some }
-  (i, σ) ∈ I(x).$$
-
-  Next, we Consider the differential equation $x'(t) = δ(x(t))$.
-  This differential equation has
-  unique solutions in the neighbourhood of $x$ because $δ$ is $C^∞$.
-
-  Now consider a closed and connnected region $Ω$ of $ℝ^{n+1} ∖ \{0\}$
-  where $p(x) ≤ 0$ and $\overline{p}(x) ≥ 0$, and a maximal solution
-  $x : L → Ω$ with $0$ in the interior of the interval $L$ and $x(0)$ in
-  the interior of $Ω$. The same reasoning will apply in region where $p(x) ≥ 0$
-  and $\overline{p}(x) ≤ 0$.
-
-  We define $\|p\| = max_{x ∈ \SNR} |p(x)|$ and  $\|\overline{p}\| = max_{x ∈
-    \SNR} |\overline{p}(x)|$.
-
-  From the definition of this region,
-  no $x ∈ Ω$ satisfies the condition $Π_ε(x)$. Hence we have
-  $d(x). ∇p(x) > μ\|x\|^{d-1} > 0$, so the solution is increasing in $p$.
-  Similarly, $∀(i,σ) ∈ I_ε(x), d(x). ∇ᵢ^σ > μ > 0$, hence the solution is also
-  increasing in $\overline{p}$.
-
-  Therefore, for $t < 0$, we have $|p(x(0))| < |p(x(t))| < \|p\| \|x(t)\|ᵈ$.
-  for $t > 0$, we have  $|\overline{p}(x(0))| < |\overline{p}(x(t))| <
-  \|\overline{p}\| \|x(t)\|$.
-  Let use take $R = min(\frac{\overline{p}(x(0))}{\|\overline{p}\|},
-  \left(\frac{p(x(0))}{\|p\|}\right)^{\frac{1}{d}})$,
-  we have $\|x(t)\| > R$.   This exludes solution converging to $0$.
-
-  Next, consider $f(t) = p(x(t))$, $f'(t) = ∇p(x(t)).δ(x(t)) > μ R^{d-1} $
-  Therefore $f(t) - f(0) >  ∫₀ᵗ f'(t) dt > t μ R^{d-1}$. Therefore $p(x(t)$
-  reaches the zero locus of $p$ for $0 < t < - f(0) / μ R^{d-1}$.
-  It will also reach  the zero locus of $\overline{p}$ for $0 > t > - f(0) / μ$.
-  This excludes all solution with unbounded interval definition.
-
-  From this we can define the homeomorphism $ϕ$ between the zero loci of $p$ and
-  and $\overline{p}$. Consider a point $x₀$ such that $p(x₀) = 0$. If
-  $\overline{p}(x₀) = 0$, we take $ϕ(x₀) = x₀$. If $\overline{p}(x₀) < 0$, we
-  consider the solution of the equation $x'(t) = δ(x(t))$, with $x(0) = x₀$.
-  This solution reaches $\overline{p}(x(t))$ for some $t₁ < 0$ and we take
-  $ϕ(x₀) = x(t₁)$. If $\overline{p}(x₀) > 0$, we
-  consider the solution of the equation $x'(t) = δ(x(t))$, with $x(0) = x₀$.
-  This solution reaches $\overline{p}(x(t))$ for some $t₁ > 0$ and we take
-  $ϕ(x₀) = x(t₁)$.
-
-  The function $ϕ$ is bijective, because its inverse can be constructed in the
-  same way and solution of the differential equation is unique. And it is
-  $C^∞$ because $δ$ is $C^∞$.
-\end{proof}
+We will prove our main theorem is the next two sections. The rest of the paper
+explains how to test that a simplicial partition is adapted to a finite set of
+polynomials.
 
 %<!-- Local IspellDict: british -->
 %<!-- Local IspellPersDict: ~/.ispell-british -->

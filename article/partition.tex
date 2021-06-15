@@ -11,8 +11,8 @@
     πₙ(\vertices{Δ_{i₁}}) ∩ \dots ∩ πₙ(\vertices{Δ_{iₖ}})$.
     We can not require  $\vertices{Δᵢ ∩ Δⱼ} = \vertices{Δᵢ} ∩ \vertices{Δⱼ}$ because we may have $x ∈
     \vertices{Δᵢ}$ and $y ∈ \vertices{Δⱼ}$ with $x ≠ y$ and $\overline{x} = \overline{y}$ (see
-    the example below). This conditions ensures that the intersection of
-    simplices consists exactly in the face of lower dimensions defined by the
+    the example below). This conditions ensures that an intersection of
+    simplices consists exactly in a face of lower dimensions defined by the
     common vertices of the simplices.
 %  \item We say that $Δᵢ$ and $Δⱼ$ are neighbour if $Δᵢ ∩ Δⱼ ≠ ∅$. The neighbourhood relation is clearly reflexive and symmetric.
   \end{itemize}
@@ -38,18 +38,78 @@ In this examples, we have
 
 \begin{defi} Let $(Δᵢ)_{i∈I}$ be a simplicial partition of $\PNR$. For $x ∈
   ℝ^{n+1} ∖\{0\}$ we define
-  $I^Δ(x) = \{(i,σ) ∈ I × \{-,+\}, x ∈ Δᵢ^σ\}$. In general we only use one
-  simplicial partition at a time and we simply write $I(x)$.
+  $I^Δ(x) = \{(i,σ) ∈ I × \{-,+\}, x ∈ Δᵢ^σ\}$.
+  We also define $I^Δ(x,ε) = \{(i,σ) ∈ I × \{-,+\}, \ball(x,ε) ∩ Δᵢ^σ ≠ \{\}\}$.
+
+  In general we only use one
+  simplicial partition at a time and we simply write $I(x)$ and $I(x,ε)$.
 \end{defi}
 
 \begin{prop}\label{Ihomo}
   Let $(Δᵢ)_{i∈I}$ be a simplicial partition of $\PNR$.
-  For $x ∈  ℝ^{n+1} ∖\{0\}$ and $λ > 0$, we have $I(λx) = I(x)$.
+  For $x ∈  ℝ^{n+1} ∖\{0\}$ and $λ > 0$, we have $I(λx) = I(x)$ and $I(λx,λε) = I(x,ε)$.
 \end{prop}
 
 \begin{proof}
   From the fact that the set $Δᵢ^σ$ are convex cones.
 \end{proof}
+
+\begin{defi}
+  Let $(Δᵢ)_{i∈I}$ be a simplicial partition of $\PNR$.
+  We say that it is $ε$-fat if for any $x ∈ ℝ^{n+1} ∖\{0\}$
+  we have
+   $$ ⋂_{(i,σ) ∈ I(x,ε)} Δᵢ^σ ≠ ∅$$
+\end{defi}
+
+\begin{lemm}
+  Let $(Δᵢ)_{i∈I}$ be an $ε$-fat  simplicial partition of $\PNR$.
+  For any $x ∈ ℝ^{n+1} ∖\{0\}$,
+  there exists $y ∈
+  ℝ^{n+1} ∖\{0\}$, such that $I(x,ε\|x\|) = I(y)$.
+
+\end{lemm}
+
+\begin{proof}
+  First, we have $I(x,ε\|x\|) = I(x',ε)$ with $x' = \frac{x}{\|x\|}$.
+  Second, we know by definition of $ε$-fatness that $ F = ⋂_{(i,σ) ∈ I(x,ε)} Δᵢ^σ ≠
+  ∅$. By definition of simplicial partition, $πₙ(F)$ if
+  the common face to all simplicies $Δᵢ$. It suffices to take $y ∈ F$ such that
+  $πₙ(y)$ not in a face of lower dimension than $πₙ(F)$.
+\end{proof}
+
+\begin{prop} If a simplicial partition $(Δᵢ)_{i∈I}$ is $ε$-fat for $ε > 0$
+  then it is $η$-fat if $0 < η ≤ ε$.
+\end{prop}
+
+\begin{proof} From the fact that for $x ∈ ℝ^{n+1} ∖\{0\}$, $I(x,η) ⊆ I(x,ε)$ if $η ≤ ε$.
+\end{proof}
+
+\begin{prop}
+  Any \emph{simplicial partition} $(Δᵢ)_{i∈I}$ of $\PNR$ is $ε$-fat for
+  some $ε > 0$ small enough.
+\end{prop}
+
+\begin{proof}
+  First, thanks to proposition \ref{Ihomo}, we only have to check the condition
+  for $ε$-fatness in $\SNR$.
+
+  Consider a set $J ⊂ I × \{-,+\}$ with $⋂_{(i,σ)∈J} Δⱼ^σ = ∅$ (1), we first
+  prove that there exists $ε_J > 0$ such that for all $x ∈ \SNR$, $J \not⊆
+  I(x,ε_J)$. For this we assume the contrary: For any $ε>0$ there exists $x_ε
+  ∈ \SNR$ such that $J ⊆ I(x_ε,ε)$. As $\SNR$ is compact, we can extract a
+  sequence $(εₙ,xₙ)_{n ∈ \mathbb N}$ which converges to $(0,x)$ for some $x ∈
+  \SNR$, with $J ⊆ I(x_n,εₙ)$ for all $n ∈ \mathbb N$. Thus, for any $(i,σ)
+  ∈ J$ and $n ∈ \mathbb N$, we have $\ball{xₙ}{εₙ} ∩ Δᵢ^σ ≠ ∅$ which implies
+  $d(xₙ,Δᵢ^σ) < εₙ$. As $Δᵢ^σ$ are closed convex cone, this implies that $x ∈
+  Δᵢ^σ$ for any $(i,σ) ∈ J$ which contradicts the hypothesis (1).
+
+  We end the proof by remarking that the simplicial partition is $ε$-fat if we
+  take $ε$ the minimum of all $ε_J$ for $J ⊂ I$ with $∩_{(i,σ)∈J} Δᵢ^σ =
+  ∅$. This is well defined as $I$ hence his power-set are finite. Indeed, if $J
+  = I(x,ε)$, and $∩_{(i,σ)∈J} Δᵢ^σ = ∅$, then $J \not ⊆ I(x,ε_J) ⊇ I(x,ε)
+  = J$ which is contradictory.
+\end{proof}
+
 
 %<!-- Local IspellDict: british -->
 %<!-- Local IspellPersDict: ~/.ispell-british -->

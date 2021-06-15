@@ -1,4 +1,175 @@
 
+We say that the partition is \emph{adapted} to $p$ if it satisfies the condition
+of proposition \ref{adaptedeq}.
+\begin{prop}
+  Let $p$ be an homogeneous polynomial of degree $d$ on
+$ℝ^{n+1}$.
+  Let $(Δᵢ)_{i∈I}$ be a simplicial partition of $\PNR$ adapted to $p$.
+  We can find a $C^∞$ function $δ$ in $ℝ^{n+1} ∖ \{0\} → ℝ^{n+1}∖\{0\} $
+  and $μ > 0$ such that:
+  $$∀x ∈  ℝ^{n+1}∖\{0\}, Π(x) \hbox{ or } \left\{
+  \begin{array}{l}δ(x).∇p(x) > μ\|x\|^{d-1} \hbox{ and } \cr ∀(i,σ) ∈
+  I(x), δ(x).∇ᵢ^σp > μ.\end{array}\right.
+  $$
+\end{prop}
+
+\begin{proof}
+From proposition \ref{adaptedeq}.\ref{hb}, for any $x ∈ ℝ^{n+1}∖\{0\}$, if
+$Π_ε(x)$ is not satisfied, we find $δ₀(x)
+∈ ℝ^{n+1}$ such that $δ₀(x).∇p(x) > 0$ and $∀(i,σ) ∈ I_ε(x), δ₀(x).∇ᵢ^σp > 0$.
+We can also assume that $δ₀(λ x) = δ₀(x)$ for $λ > 0$ for the same reason as in
+the proof of $(1) ↔ (3)$ above.
+
+We start with the following lemma: for each $x ∈
+ℝ^{n+1}∖\{0\}$, we find $0 < η(x) < ε$ such that
+$∀y ∈ \ball{x}{2η(x)}$, $d₀(x).∇p(y) > 0$ and $∀(i,σ) ∈ I_ε(y),
+d₀(x).∇ᵢ^σp > 0$.
+
+First, $(i,σ) ∈ I_ε(y) ↔ \cball{y}{ε} ∩ Δᵢ^σ ≠ ∅$ is a closed condition and the
+contrary is an open condition. The condition $Π_ε(x)$ is also an open
+condition. Hence, for $x ∈ℝ^{n+1}∖\{0\}$, we find $η > 0$
+small enough to have $y ∈
+\ball{x}{2η}$ gives $Π_ε(x)$ or $(i,σ) ∉ I_ε(x)$ implies $(i,σ) ∉ I_ε(y)$.
+
+which means that
+for $y ∈ \ball{x}{2η}$, we have $Π_ε(x)$ or $I_ε(y) ⊆ I_ε(x)$ and therefore,
+
+$$∀y ∈ \ball{x}{2η(x)}, Π_ε(x) \hbox{ or } ∀(i,σ) ∈ I_ε(y), δ₀(x).∇ᵢ^σp > 0.$$
+
+Second, $∇p(x)$ is continuous, thus for  $x ∈ℝ^{n+1}∖\{0\}$, we find $η > 0$
+small enough to have $y ∈ \ball{x}{2η}$
+implies $Π_ε(x)$ or $δ₀(x).∇p(y) > 0$. Grouping both results yields the wanted real $η(x)$
+such that
+
+$$∀x ∈ℝ^{n+1}∖\{0\}, ∀y ∈ \ball{x}{2η(x)}, Π_ε(x) \hbox{ or }
+\left\{\begin{array}{l} δ₀(x).∇p(y) > 0 \hbox{ and}\cr
+∀(i,σ) ∈ I_ε(y), δ₀(x).∇ᵢ^σp > 0
+\end{array}\right.
+$$
+
+
+Now, for $x ∈ \SNR$, the open balls $\ball{x}{η(x)}$ cover $\SNR$, so we can
+find a finite family $(xⱼ)_{j∈J}$ such that the balls $\ball{x}{η(xⱼ)}$ cover
+$\SNR$. We also take $η = \min_{j ∈ J} η(xⱼ)$.
+
+Next, for each $xⱼ ∈ \SNR$, $j ∈ J$, we choose a measurable set
+$Dⱼ ⊂ \ball{x}{η(xⱼ)}$ such that $\SNR$ is a disjoin union of all
+$Dⱼ$. And we define $d₁ : \SNR → ℝ^{n+1}∖\{0\}$ with $δ₁(x) = δ₀(xⱼ)$ if $x ∈ Dⱼ$.
+
+We choose $s : ℝ^{n+1} → ℝ$, a $C^∞$ function with support in
+$\ball{0}{1}$ and $∫_{ℝ^{n+1}} s(t) dt = 1$ for the standard measure $dt$
+on $ℝ^{n+1}$.
+
+We define
+
+$$ δ : \SNR → ℝ^{n+1}∖\{0\} \hbox{ with } δ(x) = ∫_{ℝ^{n+1}} δ₁(x - η t)
+s(t) dt$$
+
+Similarly to a convolution product, using the change of variable $u = x - ηt$, we have $δ(x) = ∫_{ℝ^{n+1}} η^{n +1} δ₁(u)
+s(\frac{x - u}{η}) du$ and therefore $δ$ is $C^∞$ on $\SNR$.
+
+Moreover, if we take $x ∈ \SNR$, we can write
+$$ δ(x) = Σ_{j∈J} δ₁(xⱼ) ∫_{x - η t ∈ Dⱼ} s(t) dt$$
+
+Let us define $λⱼ(x) = ∫_{x - η t ∈ Dⱼ} s(t) dt$. As $Dⱼ ⊂ \ball{xⱼ}{η(xⱼ)}$,
+if $λⱼ(x) > 0$, we have $d(x - η t,xⱼ) ≤ η(xⱼ)$ otherwise $x  - η t ∉ Dⱼ$
+and $d(x, x - η t) < η ≤ η(xⱼ)$ otherwise $s(t) = 0$. Therefore,
+if $λⱼ(x) > 0$, we have $d(x,xⱼ) < 2η(xⱼ)$.
+which implies $Π_ε(x)$ or both $δ₁(xⱼ).∇p(x) > 0$ and $∀(i,σ) ∈ I_ε(x), δ₁(xⱼ).∇ᵢ^σp > 0$.
+
+Moreover, the coefficient $λⱼ$ are positive. Therefore, $δ(x) = Σ_{j∈J}
+λⱼ(x) δ₁(xⱼ)$ implies $δ(x).∇p(x) > 0$ and $∀(i,σ) ∈ I_ε(x), δ(x).∇ᵢ^σp >
+0$.  Thus, we have:
+$$∀x ∈ \SNR, Π_ε(x) \hbox{ or } δ(x).∇p(x) > 0 \hbox{ and }∀(i,σ) ∈
+  I_ε(x), δ(x).∇ᵢ^σp > 0.$$
+
+  As $\SNR$ is compact, we can find $μ > 0$ such that
+$$∀x ∈ \SNR, Π_ε(x) \hbox{ or } δ(x).∇p(x) > μ \hbox{ and }∀(i,σ) ∈
+  I_ε(x), δ(x).∇ᵢ^σp > μ.$$
+
+
+  To extend this to $ℝ^{n+1}∖\{0\}$, we just have to set $δ(λx) = δ(x)$ for $λ >
+  0$ and as $p$ is homogeneous of degree $d$, we have:
+
+
+  $$∀x ∈  ℝ^{n+1} ∖ \{0\}, Π_ε(x) \hbox{ or } \left\{\begin{array}{l}
+  δ(x).∇p(x) > μ\|x\|^{d-1} \hbox{ and }\cr∀(i,σ) ∈
+  I_ε(x), δ(x).∇ᵢ^σp > μ
+  \end{array}\right.$$
+\end{proof}
+
+\begin{prop}
+  Let $p$ be an homogeneous polynomial of degree $d$ on
+$ℝ^{n+1}$.
+  Let $(Δᵢ)_{i∈I}$ be an $ε$-fat simplicial partition of $\PNR$ adapted to $p$.
+  the function  $p$ and $\overline{p}$ have homeomorphic zero locus on
+  $ℝ^{n+1}∖\{0\}$.
+\end{prop}
+
+\begin{proof}
+  The function $\overline{p}$ as a gradient defined in any direction $d$ which
+  may be defined as
+  $$
+  \nabla \overline{p}(x). d = \lim_{h → 0⁺} \frac{\overline{p}(x + hd) - \overline{p}(x)}{h}
+  $$
+  This is true because for $h > 0$ and small enough, $x + hd$ and $x$ belong to
+  at least one common cone $Δᵢ^σ$ with $(i, σ) ∈ I(x)$.
+  If they both belong to more than one cone, as we take the gradient of linear
+  functions that coincide on the intersection of several simplex in a direction which
+  is parallel to this intersection, the gradient $∇ᵢ^σp . d$ coincide and are the limit.
+  This tells us moreover that we have
+  $$\nabla \overline{p}(x). d = ∇ᵢ^σp . d \hbox{ for some }
+  (i, σ) ∈ I(x).$$
+
+  Next, we Consider the differential equation $x'(t) = δ(x(t))$.
+  This differential equation has
+  unique solutions in the neighbourhood of $x$ because $δ$ is $C^∞$.
+
+  Now consider a closed and connnected region $Ω$ of $ℝ^{n+1} ∖ \{0\}$
+  where $p(x) ≤ 0$ and $\overline{p}(x) ≥ 0$, and a maximal solution
+  $x : L → Ω$ with $0$ in the interior of the interval $L$ and $x(0)$ in
+  the interior of $Ω$. The same reasoning will apply in region where $p(x) ≥ 0$
+  and $\overline{p}(x) ≤ 0$.
+
+  We define $\|p\| = max_{x ∈ \SNR} |p(x)|$ and  $\|\overline{p}\| = max_{x ∈
+    \SNR} |\overline{p}(x)|$.
+
+  From the definition of this region,
+  no $x ∈ Ω$ satisfies the condition $Π_ε(x)$. Hence we have
+  $d(x). ∇p(x) > μ\|x\|^{d-1} > 0$, so the solution is increasing in $p$.
+  Similarly, $∀(i,σ) ∈ I_ε(x), d(x). ∇ᵢ^σ > μ > 0$, hence the solution is also
+  increasing in $\overline{p}$.
+
+  Therefore, for $t < 0$, we have $|p(x(0))| < |p(x(t))| < \|p\| \|x(t)\|ᵈ$.
+  for $t > 0$, we have  $|\overline{p}(x(0))| < |\overline{p}(x(t))| <
+  \|\overline{p}\| \|x(t)\|$.
+  Let use take $R = min(\frac{\overline{p}(x(0))}{\|\overline{p}\|},
+  \left(\frac{p(x(0))}{\|p\|}\right)^{\frac{1}{d}})$,
+  we have $\|x(t)\| > R$.   This exludes solution converging to $0$.
+
+  Next, consider $f(t) = p(x(t))$, $f'(t) = ∇p(x(t)).δ(x(t)) > μ R^{d-1} $
+  Therefore $f(t) - f(0) >  ∫₀ᵗ f'(t) dt > t μ R^{d-1}$. Therefore $p(x(t)$
+  reaches the zero locus of $p$ for $0 < t < - f(0) / μ R^{d-1}$.
+  It will also reach  the zero locus of $\overline{p}$ for $0 > t > - f(0) / μ$.
+  This excludes all solution with unbounded interval definition.
+
+  From this we can define the homeomorphism $ϕ$ between the zero loci of $p$ and
+  and $\overline{p}$. Consider a point $x₀$ such that $p(x₀) = 0$. If
+  $\overline{p}(x₀) = 0$, we take $ϕ(x₀) = x₀$. If $\overline{p}(x₀) < 0$, we
+  consider the solution of the equation $x'(t) = δ(x(t))$, with $x(0) = x₀$.
+  This solution reaches $\overline{p}(x(t))$ for some $t₁ < 0$ and we take
+  $ϕ(x₀) = x(t₁)$. If $\overline{p}(x₀) > 0$, we
+  consider the solution of the equation $x'(t) = δ(x(t))$, with $x(0) = x₀$.
+  This solution reaches $\overline{p}(x(t))$ for some $t₁ > 0$ and we take
+  $ϕ(x₀) = x(t₁)$.
+
+  The function $ϕ$ is bijective, because its inverse can be constructed in the
+  same way and solution of the differential equation is unique. And it is
+  $C^∞$ because $δ$ is $C^∞$.
+\end{proof}
+
+
+
 $$f_{ε,u,v}(x) = v p(x) + u \|x\|^{d-1} ∫ f(x - ε v \|x\| t) s(t) dt  $$
 
 \begin{eqnarray*}
