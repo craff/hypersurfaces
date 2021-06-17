@@ -34,7 +34,10 @@ let wait, restart =
 
 let objects = ref ([] : (string * gl_object) list)
 
+let updated = ref false
+
 let display names =
+  updated := true;
   List.iter (fun (name, o) ->
       o.visible <-  List.mem name names) !objects
 
@@ -60,6 +63,7 @@ let camera_right () = VF.(vp camera.front camera.up)
 let set v1 v2 = Array.blit v2 0 v1 0 3
 
 let home () =
+  updated := true;
   set camera.pos [| 0.0;0.0;5.0 |];
   set camera.front [| 0.0;0.0;-1.0 |];
   set camera.up [| 0.0;1.0;0.0 |];
@@ -68,19 +72,31 @@ let home () =
 
 let camera_speed () = camera.center /. 20.0
 
-let move_right () = VF.combq 1. camera.pos (camera_speed ()) (camera_right ())
-let move_left  () = VF.combq 1. camera.pos (-. camera_speed ()) (camera_right ())
-let move_up    () = VF.combq 1. camera.pos (camera_speed ()) camera.up
-let move_down  () = VF.combq 1. camera.pos (-. camera_speed ()) camera.up
+let move_right () =
+  updated := true;
+  VF.combq 1. camera.pos (camera_speed ()) (camera_right ())
+let move_left  () =
+  updated := true;
+  VF.combq 1. camera.pos (-. camera_speed ()) (camera_right ())
+let move_up    () =
+  updated := true;
+  VF.combq 1. camera.pos (camera_speed ()) camera.up
+let move_down  () =
+  updated := true;
+  VF.combq 1. camera.pos (-. camera_speed ()) camera.up
 let rotate_right () =
+  updated := true;
   VF.combq (cos camera.rspeed) camera.front (sin camera.rspeed) (camera_right ())
 let rotate_left () =
+  updated := true;
   VF.combq (cos camera.rspeed) camera.front (-. sin camera.rspeed) (camera_right ())
 let rotate_up () =
+  updated := true;
   let r = Array.copy camera.front in
   VF.combq (cos camera.rspeed) camera.front (sin camera.rspeed) camera.up;
   VF.combq (cos camera.rspeed) camera.up (-. sin camera.rspeed) r
 let rotate_down () =
+  updated := true;
   let r = Array.copy camera.front in
   VF.combq (cos camera.rspeed) camera.front (-. sin camera.rspeed) camera.up;
   VF.combq (cos camera.rspeed) camera.up (sin camera.rspeed) r
@@ -96,9 +112,11 @@ let crotate_up () =
 let crotate_down () =
   to_center (); rotate_down (); to_center ()
 let move_forward mc =
+  updated := true;
   VF.combq 1. camera.pos (camera_speed ()) camera.front;
   if mc then camera.center <- camera.center -. camera_speed ()
 let move_back mc =
+  updated := true;
   VF.combq 1. camera.pos (-. camera_speed ()) camera.front;
   if mc then camera.center <- camera.center +. camera_speed ()
 let accel () = camera.center <- camera.center *. 1.5
@@ -107,11 +125,13 @@ let slow ()  = camera.center <- camera.center /. 1.5
 let rm_object = fun obj ->
   Mutex.lock draw_mutex;
   objects := List.filter (fun (_,o) -> o.uid <> obj.uid) !objects;
+  updated := true;
   Mutex.unlock draw_mutex
 
 let add_object = fun name obj ->
   Mutex.lock draw_mutex;
   objects := (name, obj) :: (List.filter (fun (n,_) -> n <> name) !objects);
+  updated := true;
   Mutex.unlock draw_mutex
 
 let hide_all_objects () =
@@ -123,6 +143,7 @@ let hide_all_objects () =
           let old = !restore in
           restore := (fun () -> o.visible <- true; old ())
         end) !objects;
+  updated := true;
   !restore
 
 (* Initialise the main window. *)
@@ -231,7 +252,6 @@ let draw_object cam proj (_,obj) =
 
 (* The main drawing function. *)
 let draw : unit -> unit = fun () ->
-  Thread.yield ();
   Gles3.clear_color !background_color;
   Gles3.clear [gl_color_buffer; gl_depth_buffer];
   Mutex.lock draw_mutex;
@@ -324,7 +344,7 @@ let init () =
   Gles3.disable gl_cull_face;
   Gles3.clear_color Gles3.({r=0.0; g=0.0; b=0.0; a=1.0});
   (* When there is nothing to do, we draw. *)
-  Egl.set_idle_callback draw;
+  Egl.set_idle_callback (fun () -> if !updated then (updated := false; draw ()));
   (* Draw once to get exceptions (they are all captured by [main_loop]. *)
   draw ();
   Egl.set_key_press_callback key_cb;
