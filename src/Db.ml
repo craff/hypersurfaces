@@ -20,16 +20,23 @@ let create_variety n = sprintf
     euler_characteristic TEXT)" n (pkey n)
    (* euler : list of integers as string *)
 
-let db =
-  try
-    let db = db_open !Args.dbname in
-    Rc.check (exec db create_polynomial);
-    eprintf "data base %s created\n%!" !Args.dbname;
-    db
-  with
-  | SqliteError s | Error s ->
-     eprintf "can not create data base %s for statistics: %s\n%!" !Args.dbname s;
-     exit 1
+let db_ptr = ref None
+let db () =
+  match !db_ptr with
+  | Some db -> db
+  | None    ->
+     try
+       let db = db_open ~mutex:`FULL ~cache:`PRIVATE
+                  !Args.dbname
+       in
+       Rc.check (exec db create_polynomial);
+       db_ptr := Some db;
+       eprintf "data base %s created\n%!" !Args.dbname;
+       db
+     with
+     | SqliteError s | Error s ->
+        eprintf "can not create data base %s for statistics: %s\n%!" !Args.dbname s;
+        exit 1
 
 let insert_polynomial to_str p deg dim rand =
   let sql = sprintf "SELECT rowid FROM polynomial WHERE value = '%a'"
@@ -38,10 +45,10 @@ let insert_polynomial to_str p deg dim rand =
   let res = ref None in
   let cb row headers =
     assert (Array.length row = 1);
-    printf "got %s\n%!" row.(0);
+    (* printf "got %s\n%!" row.(0);*)
     res := Some (Int64.of_string row.(0))
   in
-  Rc.check (exec_not_null db ~cb sql);
+  Rc.check (exec_not_null (db ()) ~cb sql);
   match !res with
   | Some pid -> pid
   | None ->
@@ -52,8 +59,8 @@ let insert_polynomial to_str p deg dim rand =
          (if rand then 1 else 0)
      in
      try
-       Rc.check (exec db sql);
-       last_insert_rowid db
+       Rc.check (exec (db ()) sql);
+       last_insert_rowid (db ())
      with
        SqliteError s ->
        eprintf "can not insert polynomial: %s %s\n%!" s sql;
@@ -62,7 +69,7 @@ let insert_polynomial to_str p deg dim rand =
 let insert_variety to_str ps dim nbc euler =
   try
     let nb_pol = List.length ps in
-    Rc.check (exec db (create_variety nb_pol));
+    Rc.check (exec (db ()) (create_variety nb_pol));
     let pid =
       List.map (fun (p,deg,rand) ->
           (deg, insert_polynomial to_str p deg dim rand)
@@ -80,7 +87,7 @@ let insert_variety to_str ps dim nbc euler =
       assert (Array.length row = 2);
       res := Some (int_of_string row.(0), row.(1))
     in
-    Rc.check (exec_not_null db ~cb sql);
+    Rc.check (exec_not_null (db ()) ~cb sql);
     match !res with
     | Some (nbc', euler') ->
        if nbc' <> nbc || euler <> euler' then
@@ -93,7 +100,7 @@ let insert_variety to_str ps dim nbc euler =
        let sql =
          sprintf "INSERT INTO variety%d VALUES (%s,%d,'%s')" nb_pol pid_ins nbc euler
        in
-       Rc.check (exec db sql);
+       Rc.check (exec (db ()) sql);
   with
     SqliteError s ->
      eprintf "can not insert variety: %s\n%!" s;
@@ -112,8 +119,8 @@ let stats dim degs =
   let where =
     List.mapi (fun i deg ->
         sprintf
-          "v.p%d = p%d.rowid AND p%d.dimension = %d AND p%d.degree = %d"
-          i i i dim i deg) degs
+          "v.p%d = p%d.rowid AND p%d.dimension = %d AND p%d.degree = %d AND p%d.random = 1"
+          i i i dim i deg i) degs
   in
   let where = String.concat " AND " where in
   let sql =
@@ -128,6 +135,11 @@ let stats dim degs =
     incr total;
     Hashtbl.replace tbl row (nb+1)
   in
-  Rc.check (exec_not_null db ~cb sql);
+  Rc.check (exec_not_null (db ()) ~cb sql);
+  printf "Total: %d\n%!" !total;
+  let total = float !total in
   Hashtbl.iter (fun row nb ->
-      Printf.printf "%s, %s => %d %5.2f%%\n" row.(0) row.(1) nb (float nb /. float !total *. 100.0)) tbl
+      let f = float nb /. total in
+      let e = 2.326 *. sqrt (f *. (1.0 -. f) /. total) in
+      printf "%s, %s => %d %5.2f%%±%3.2f%%\n"
+        row.(0) row.(1) nb (f *. 100.) (e *. 100.)) tbl
