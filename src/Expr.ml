@@ -90,7 +90,7 @@ module Make(R:Field.SPlus) = struct
       | Sub(p,q) -> fn p -. fn q
       | Pro(p,q) -> fn p *. fn q
       | App(f,p) -> let p = List.map fn p in
-                    B.eval f.bern (Array.of_list p)
+                    B.eval (B.pre_eval ( *. ) f.bern) (Array.of_list p)
       | Pow(p,n) -> pow (fn p) n
       | Fun(f,p) -> f.eval (fn p)
       | Ref _    -> assert false

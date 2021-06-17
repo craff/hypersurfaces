@@ -174,12 +174,12 @@ module Make(R:S) = struct
       done
     done [@@inlined always]
 
-  (** alocates a new vector with x v *)
-  let ( ***. ) x v =
-    let n1 = Array.length v in
-    let n2 = Array.length v.(0) in
+  (** alocates a new matrix with x m *)
+  let ( ***. ) x m =
+    let n1 = Array.length m in
+    let n2 = Array.length m.(0) in
     let r = zero_m n1 n2 in
-    smulms r x v;
+    smulms r x m;
     r
 
   (** division by a scalar *)

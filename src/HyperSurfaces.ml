@@ -62,11 +62,14 @@ module Make(R:Field.SPlus) = struct
     let dims = List.map dim p0 in
     let deg = List.map degree p0 in
     let p0 = List.map Poly.normalise p0 in
+    let hp0 = List.map to_horner p0 in
     let dim = List.hd dims in
     if not (List.for_all ((=) dim) dims) then failwith "inhomogeneous equations";
     let codim = List.length p0 in
     let sdim = dim - codim in
-    let dp0 = List.map2 (fun p d -> (p, gradient p, hessian p, d)) p0 deg in
+    let dp0 = List.map2 (fun p d -> ( pre_eval ( *. ) p
+                                    , pre_eval ( **.) (gradient p)
+                                    , pre_eval ( ***. ) (hessian p), d)) p0 deg in
     let dp0 = List.filter (fun (_,_,_,d) -> d > 1) dp0 in
     let solver1_stat = init_solver_stats () in
     let solver2_stat = init_solver_stats () in

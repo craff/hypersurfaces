@@ -19,6 +19,7 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
   type v = V.v
   type m = V.m
   type 'a p         = (int array * 'a) list
+  type 'a pe        = 'a p
   (** we have polynomial with coeeficient in the field *)
   type polynomial   = R.t p
   (** and polynomial with vector coefficient, for the gradient *)
@@ -207,14 +208,15 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
 
   (** multinomial coefficient *)
   let multinomial : int array -> R.t = fun l ->
-    let d = Array.fold_left (+) 0 l in
-    let l = List.sort compare (Array.to_list l) in
-    let rec fn d = function
-      | [_] | [] -> one
-      | 0::l -> fn d l
-      | a::l -> (of_int d *. fn (d-1) (a-1::l)) /. of_int a
-    in
-    fn d l
+    let d = ref (of_int (Array.fold_left (+) 0 l)) in
+    let r = ref one in
+    for i = 0 to Array.length l - 2 do
+      for k = 1 to l.(i) do
+        r := !r *. !d /. of_int k;
+        d := !d -. one
+      done
+    done;
+    !r
 
   let dimension p =
     let d = degree p in
@@ -247,13 +249,67 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
     in
     fn n
 
+  type 'a hf =
+    | HCst of 'a
+    | HVar of 'a hf * 'a hf
+
+  let split p i =
+    let (p,q) = List.partition (fun (l,x) -> l.(i) <> 0) p in
+    let p = List.map (fun (l,x) ->
+                let l = Array.init (Array.length l) (fun j ->
+                            if i = j then l.(i) - 1 else l.(j))
+                in (l,x)) p
+    in
+    (p,q)
+
+  let to_horner : type a. a -> (R.t -> a -> a) -> a p -> a hf =
+    fun zero_c mul p ->
+    let rec fn m d e i p =
+      match p with
+      | [] -> HCst zero_c
+      | [(l,x)] when Array.for_all ((=) 0) l -> HCst (mul m x)
+      | _ ->
+         let (p,q) = split p i in
+         let q = fn m d zero (i+1) q in
+         let d' = d +. one in
+         let e' = e +. one in
+         let m' = m *. d' /. e' in
+         let p = fn m' d' e' i p in
+         HVar(p,q)
+    in
+    fn one zero zero 0 p
+
+  let to_horner_m p =
+    let (l,c) = match p with
+      | [] -> assert false
+      | (_,x)::_ -> (Array.length x, Array.length x.(0))
+    in
+    to_horner (zero_m l c) ( ***. ) p
+
+  let to_horner_v p =
+    let l = match p with
+      | [] -> assert false
+      | (_,x)::_ -> Array.length x
+    in
+    to_horner (zero_v l) ( **. ) p
+
+  let to_horner = to_horner zero ( *. )
+
   (** substitution *)
-  let subst p qs =
-    let d = unsafe_dim p in
+  let subst d p qs =
+    let rec fn p qs = match (p,qs) with
+      | (HCst x, _) -> if x =. zero then [] else cst d x
+      | (HVar (p,q), q0::qs') ->
+         q0 ** fn p qs ++ fn q qs'
+      | (HVar _, []) -> assert false
+    in
+    fn p qs
+(*
     List.fold_left (fun acc (l,x) ->
         List.fold_left2 (fun acc e q ->
             acc ** pow q e) (cst d (multinomial l *. x)) (Array.to_list l) qs
         ++ acc) [] p
+ *)
 
   (** map, that removes the case when Exit is raised *)
   let filter_map f l =
@@ -344,15 +400,15 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
         let l = Array.map (fun x -> if x <> 0 then 1 else 0) l in
         (l,c)) p
 
-  let plane p =
-    let count l = Array.fold_left (fun b n ->
-                      if n = 0 then b else
-                        if n > 0 && b then raise Exit else true)
-                    false l
-    in
-    Array.of_list (filter_map (fun (l,c) -> assert (count l); c) p)
-
   (** for evaluation, we memoize the last evaluation *)
+
+  let pre_eval fn p =
+    List.map (fun (l,x) -> (l, fn (multinomial l) x)) p
+
+  let all_power d x =
+    let r = Array.make (d+1) one in
+    for i = 1 to d do r.(i) <- r.(i-1) *. x done;
+    r
 
   (** evaluation of a polynomial *)
   let last_eval = ref([],[||],zero)
@@ -360,12 +416,13 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
     let (lp,lx,r) = !last_eval in
     if  p == lp && x == lx then r else
       begin
+        let d = unsafe_degree p in
+        let xd = Array.map (all_power d) x in
         let r = ref zero in
         List.iter (fun (l,c) ->
-            r := !r +.
-                   c *. multinomial l *. (
+            r := !r +. c *. (
                      let z = ref one in
-                     Array.iteri (fun i e -> z := !z *. R.pow x.(i) e) l;
+                     Array.iteri (fun i e -> z := !z *. xd.(i).(e)) l;
                      !z)) p;
         last_eval := (p,x,!r);
         !r
@@ -377,12 +434,13 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
     let (ldp,lx,r) = !last_eval_grad in
     if dp == ldp && x == lx then r else
       begin
+        let d = unsafe_degree dp in
+        let xd = Array.map (all_power d) x in
         let res = zero_v (unsafe_dim dp) in
         List.iter (fun (l,c) ->
             let z = ref one in
-            Array.iteri (fun i e -> z := !z *. R.pow x.(i) e) l;
-            let x = multinomial l *. !z in
-            combqo res x c) dp;
+            Array.iteri (fun i e -> z := !z *. xd.(i).(e)) l;
+            combqo res !z c) dp;
         last_eval_grad := (dp,x,res);
         res
       end
@@ -408,11 +466,13 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
     if hp == lhp && x == lx then r else
       begin
         let dim = unsafe_dim hp in
+        let d = unsafe_degree hp in
+        let xd = Array.map (all_power d) x in
         let r = zero_m dim dim in
         List.iter (fun (l,c) ->
             let z = ref one in
-            Array.iteri (fun i e -> z := !z *. R.pow x.(i) e) l;
-            mcombq one r (multinomial l *. !z) c) hp;
+            Array.iteri (fun i e -> z := !z *. xd.(i).(e)) l;
+            mcombq one r !z c) hp;
         last_eval_hess := (hp,x,r);
         r
       end
@@ -516,6 +576,18 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
               (print_monomial vars) l;
           end) p
 
+  let plane : R.t p -> R.t array = fun p ->
+    let count l =
+      let r = Array.fold_left (fun b n ->
+                  if n = 0 then b else
+                    if n > 0 && b then raise Exit else true)
+                false l
+      in
+      if not r then printf "%a\n%!" print_int_array l;
+      r
+    in
+    Array.of_list (filter_map (fun (l,c) -> assert (count l); c) p)
+
   let transform p s1 s2 =
     let dim = Array.length s1 in
     assert (Array.length s1.(0) = dim);
@@ -528,7 +600,7 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
                     let c = m.(i).(j) in
                     (v, c)))
     in
-    subst p q
+    subst dim p q
 
   let lift_linear p deg =
     let dim = Array.length p in
@@ -548,9 +620,11 @@ module type B = sig
   type v
   type m
   type 'a p = (int array * 'a) list
+  type 'a pe
   type polynomial = t p
   type polynomial_v = v p
   type polynomial_m = m p
+  type 'a hf
 
   val print_polynome : ?vars:string array -> formatter -> polynomial -> unit
   val print_gradient : ?vars:string array -> formatter -> polynomial_v -> unit
@@ -568,26 +642,29 @@ module type B = sig
   val cst : int -> 'a -> 'a p
   val var_power : int -> int -> int -> int array
 
-  val eval : polynomial -> v -> t
-  val eval_grad : polynomial_v -> v -> v
-  val eval_tgrad : polynomial_v -> v -> v * t
-  val eval_hess : polynomial_m -> v -> m
-  val eval_thess : polynomial_m -> v -> m * v * t
+  val pre_eval : (t -> 'a -> 'a) -> 'a p -> 'a pe
+  val eval : t pe -> v -> t
+  val eval_grad : v pe -> v -> v
+  val eval_tgrad : v pe -> v -> v * t
+  val eval_hess : m pe -> v -> m
+  val eval_thess : m pe -> v -> m * v * t
 
   val ( ++ ) : polynomial -> polynomial -> polynomial
   val ( -- ) : polynomial -> polynomial -> polynomial
   val ( ** ) : polynomial -> polynomial -> polynomial
   val pow : polynomial -> int -> polynomial
 
-  val subst : polynomial -> polynomial list -> polynomial
+  val to_horner : polynomial -> t hf
+  val to_horner_v : polynomial_v -> v hf
+  val to_horner_m : polynomial_m -> m hf
   val homogeneisation : polynomial -> polynomial * bool
-  val transform : polynomial -> m -> m -> polynomial
+  val transform : t hf -> m -> m -> polynomial
   val subdivise : polynomial -> int -> int -> polynomial * polynomial
   val subdivise_v : polynomial_v -> int -> int -> polynomial_v * polynomial_v
 
   val gradient : polynomial -> polynomial_v
   val hessian  : polynomial -> polynomial_m
-  val plane : 'a p -> 'a array
+  val plane : t p -> t array
   val first_deg : 'a p -> 'a p
 
   val digho : polynomial -> t -> t -> v -> t -> v -> v
