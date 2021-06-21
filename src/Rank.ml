@@ -22,11 +22,11 @@ let gcd a b =
                       if even u then
                         (d, half u, v)
                       else
-                        let u1 = abs (half (u + b)) in
-                        let v1 = abs (v - a') in
-                        let u2 = abs (half (u - b)) in
-                        let v2 = abs (v + a') in
-                        if max u1 v1 < max u2 v2 then
+                        let u1 = half (u + b) in
+                        let v1 = v - a' in
+                        let u2 = half (u - b) in
+                        let v2 = v + a' in
+                        if max (abs u1) (abs v1) < max (abs u2) (abs v2) then
                           (d,u1,v1)
                         else
                           (d,u2,v2)
@@ -45,7 +45,10 @@ let gcd a b =
   let v = if b < zero then neg v else v in
   assert (a mod d = zero);
   assert (b mod d = zero);
-  assert (a * u + b * v = d);
+  assert (a * u + b * v = d
+          || (printf "gcd : %s + %s * %s + %s = %s\n%!"
+                (to_string a) (to_string u) (to_string b)
+                (to_string v) (to_string d); false));
   (d,u,v)
 
 (*
