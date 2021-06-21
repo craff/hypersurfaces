@@ -605,70 +605,71 @@ module Make(R:Field.SPlus) = struct
       let len = Array.length vs in
       let nb_vs = dim - codim in
       let l = List.map first_deg p in
+      let lp = List.combine l p in
+      if not (List.exists constant_sign2 lp) then
       let dp = sub_v (List.map Lazy.force s.o.dp) vs in
       let (sd,gd) = all_gradients vs s in
-      let rec hn subd s l p dp =
-        (*        printf "l:%a p:%a\n%!" (print_polynome ?vars:None) (List.hd l) (print_polynome ?vars:None) (List.hd p);*)
+      let rec kn subd s l p dp =
         let lp = List.combine l p in
         let cst = List.exists constant_sign2 lp in
+        if not cst then hn subd s l p dp
+      and hn subd s l p dp =
+        (*        printf "l:%a p:%a\n%!" (print_polynome ?vars:None) (List.hd l) (print_polynome ?vars:None) (List.hd p);*)
         (*        printf "cst: %b, subd: %d %a\n%!" cst subd print_matrix s;*)
-        if not cst then
-          begin
-            let rec fn points dps gds =
-              match (dps, gds) with
-              | [dp], [gd] ->
-                 let dp = List.map snd dp in
-                 let new_points = dp @ gd in
-                 let all = new_points @ points in
-                 if zih all then Some all else None
-              | dp::dps, gd::gds ->
-                 let dp = List.map snd dp in
-                 let new_points = dp @ gd in
-                 let opp_new = List.map opp new_points in
-                 (match fn (new_points @ points) dps gds with
-                  | None -> fn (opp_new @ points) dps gds
-                  | r    -> r)
-              | _ -> assert false
-            in
-            let res = fn [] dp gd in
-            match res with
-            | None -> (*printf "OK\n%!";*) ()
-            | Some all when subd <= 0 || nb_vs = 1 ->
-               begin
-                 try
-                   let l = ref [] in
-                   Array.iteri (fun i x -> if vs.(i) then l:= x :: !l) s0.m;
-                   let p = normalise (lcenter (Array.of_list !l)) in
-                   (*printf "Zih\n%!";*) raise (Zih (p,all,sd))
-                 with Not_found -> assert false
-               end
-            | Some _ ->
-               begin
-                 let best = ref (-.one, (-1,-1)) in
-                 for i = 1 to len - 1 do
-                   if vs.(i) then
-                     for j = 0 to i-1 do
-                       if vs.(j) then
-                         let c = norm2 (s.(i) --- s.(j)) in
-                         if c >. fst !best then best := (c,(j,i))
-                     done
-                 done;
-                 let (i,j) = snd !best in
-                 assert (i >= 0 && j >= 0 && i <> j);
-                 (*                 printf "split %d %d\n%!" i j;*)
-                 let l1,l2 =
-                   List.split (List.map (fun p -> subdivise p i j) l) in
-                 let p1,p2 =
-                   List.split (List.map (fun p -> subdivise p i j) p) in
-                 let dp1,dp2 =
-                   List.split (List.map (fun p -> subdivise_v p i j) dp) in
-                 let s1 = Array.mapi (fun k x ->
-                              if k = j then (x +++ s.(i)) //. of_int 2 else x) s in
-                 let s2 = Array.mapi (fun k x ->
-                              if k = i then (x +++ s.(j)) //. of_int 2 else x) s in
-                 hn (subd-1) s1 l1 p1 dp1; hn (subd-1) s2 l2 p2 dp2
-               end
-          end
+        let rec fn points dps gds =
+          match (dps, gds) with
+          | [dp], [gd] ->
+             let dp = List.map snd dp in
+             let new_points = dp @ gd in
+             let all = new_points @ points in
+             if zih all then Some all else None
+          | dp::dps, gd::gds ->
+             let dp = List.map snd dp in
+             let new_points = dp @ gd in
+             let opp_new = List.map opp new_points in
+             (match fn (new_points @ points) dps gds with
+              | None -> fn (opp_new @ points) dps gds
+              | r    -> r)
+          | _ -> assert false
+        in
+        let res = fn [] dp gd in
+        match res with
+        | None -> (*printf "OK\n%!";*) ()
+        | Some all when subd <= 0 || nb_vs = 1 ->
+           begin
+             try
+               let l = ref [] in
+               Array.iteri (fun i x -> if vs.(i) then l:= x :: !l) s0.m;
+               let p = normalise (lcenter (Array.of_list !l)) in
+               (*printf "Zih\n%!";*) raise (Zih (p,all,sd))
+             with Not_found -> assert false
+           end
+        | Some _ ->
+           begin
+             let best = ref (-.one, (-1,-1)) in
+             for i = 1 to len - 1 do
+               if vs.(i) then
+                 for j = 0 to i-1 do
+                   if vs.(j) then
+                     let c = norm2 (s.(i) --- s.(j)) in
+                     if c >. fst !best then best := (c,(j,i))
+                 done
+             done;
+             let (i,j) = snd !best in
+             assert (i >= 0 && j >= 0 && i <> j);
+             (*                 printf "split %d %d\n%!" i j;*)
+             let l1,l2 =
+               List.split (List.map (fun p -> subdivise p i j) l) in
+             let p1,p2 =
+               List.split (List.map (fun p -> subdivise p i j) p) in
+             let dp1,dp2 =
+               List.split (List.map (fun p -> subdivise_v p i j) dp) in
+             let s1 = Array.mapi (fun k x ->
+                          if k = j then (x +++ s.(i)) //. of_int 2 else x) s in
+             let s2 = Array.mapi (fun k x ->
+                          if k = i then (x +++ s.(j)) //. of_int 2 else x) s in
+             kn (subd-1) s1 l1 p1 dp1; kn (subd-1) s2 l2 p2 dp2
+           end
       in
       if List.for_all (fun (_,s) -> assert(s.k <> Removed);
                                     s.o.codim <= codim) sd
