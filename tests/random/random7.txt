@@ -1,0 +1,8 @@
+
+for i = 1 to NB do
+  let p1 (x,y,z,t,u,v,w) = random D1;
+
+  let p = zeros p1;
+  stats 8 D1;
+  display p;
+done;

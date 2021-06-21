@@ -11,6 +11,9 @@ let print_int_array ch l =
   let f ch = fprintf ch "%d" in
   print_array f ch l
 
+let print_int_matrix ch l =
+  print_array print_int_array ch l
+
 let print_list fn ch v =
   fprintf ch "(";
   List.iteri (fun i x ->
@@ -21,6 +24,9 @@ let print_list fn ch v =
 let print_int_list ch l =
   let f ch = fprintf ch "%d" in
   print_list f ch l
+
+let print_int_list_list ch l =
+  print_list print_int_list ch l
 
 (** a variant of sprintf that use its own internal buffer (more
    thread safe, if not partially applied), and that can use print_array

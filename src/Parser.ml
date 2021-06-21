@@ -13,11 +13,15 @@ module Parse(R:Field.SPlus) = struct
 
   type cmd =
     Let_poly of string * string list * polynomial
-  | Let_rand of string * string list * int
+  | Let_rand of string * string list * polynomial
   | Let_surf of string * Args.parameters * string list
   | Display  of string list
-  | For      of string * R.t * R.t * R.t * cmd list
-  | Stats    of int * int list
+  | For      of string * polynomial * polynomial * polynomial * cmd list
+  | Stats    of int * polynomial list
+
+  let interp_poly p =
+    let p = P.mk false "" [] p in
+    B.eval (B.pre_eval R.( *. ) p.bern) [||]
 
   let rec run_cmd = function
     | Let_poly(name,vars,p) ->
@@ -25,8 +29,9 @@ module Parse(R:Field.SPlus) = struct
        let vars = Array.of_list (vars @ ["s"]) in
        printf "%a\n%!" (B.print_polynome ~vars) p.bern
     | Let_rand(name,vars,deg) ->
+       let deg = interp_poly deg in
        let dim = List.length vars in
-       let p = B.random false deg dim in
+       let p = B.random false (R.to_int deg) dim in
        let pb = of_bernstein vars p in
        let p = P.mk true name vars pb in
        let vars = Array.of_list (vars @ ["s"]) in
@@ -37,18 +42,22 @@ module Parse(R:Field.SPlus) = struct
          with Not_found -> Lex.give_up ~msg:("unbound variable "^name) ()
        in
        let ps = List.map p names in
-       let (ts, es, dim, euler) =
+       let (ts, es, dim, topo) =
          H.triangulation opts (List.map (fun p -> p.bern) ps)
        in
-       let pds = List.map (fun p -> ((p.vars, p.poly), B.degree p.bern, p.rand)) ps in
-       let nbc = List.length euler in
-       let euler = String.concat " " (List.map string_of_int euler) in
-       let rec pr_poly () (vars, p) = P.to_str pid vars p
-       and pid (p:P.poly_rec) =
-         let pid = Db.insert_polynomial pr_poly (p.vars, p.poly) p.deg p.dim p.rand in
-         sprintf "P%Ld" pid
-       in
-       Db.insert_variety pr_poly pds dim nbc euler;
+       if !Args.dbname <> None then
+         begin
+           let pds = List.map (fun p -> ((p.vars, p.poly), B.degree p.bern, p.rand)) ps in
+           let nbc = List.length topo in
+           let topo_s = Topology.to_string topo in
+           let rec pr_poly () (vars, p) = P.to_str pid vars p
+           and pid (p:P.poly_rec) =
+             let pid = Db.insert_polynomial pr_poly (p.vars, p.poly) p.deg p.dim p.rand in
+             sprintf "P%Ld" pid
+           in
+           Db.insert_variety pr_poly pds dim nbc topo_s;
+           printf "variety inserted in database\n%!";
+         end;
        let os =
          if ts <> [] then
            begin
@@ -74,6 +83,9 @@ module Parse(R:Field.SPlus) = struct
        Display.display names;
        if not (!Args.cont) then Display.wait ()
     | For(name,first,last,step,cmds) ->
+       let first = interp_poly first in
+       let last = interp_poly last in
+       let step = interp_poly step in
        let open R in
        let i = ref first in
        while (!i <=. last) do
@@ -82,7 +94,13 @@ module Parse(R:Field.SPlus) = struct
          P.rm name;
          i := !i +. step;
        done
-    | Stats(dim,degs) -> Db.stats dim degs
+    | Stats(dim,degs) ->
+       if !Args.dbname <> None then
+         begin
+           printf "stats\n%!";
+           let degs = List.map (fun p -> R.to_int (interp_poly p)) degs in
+           Db.stats dim degs
+         end
 
 
   (** Parses a float in base 10. [".1"] is as ["0.1"]. *)
@@ -140,25 +158,13 @@ module Parse(R:Field.SPlus) = struct
   let rec mul_cons n m l =
     if n <= 0 then l else mul_cons (n-1) m (m::l)
 
-  let%parser rec expected_aux =
-    (n::INT) => [n]
-  ; (n::INT) ',' (l::expected_aux) => n::l
-  ; (n::INT) '*' (m::INT) => mul_cons n m []
-  ; (n::INT) '*' (m::INT) ',' (l::expected_aux) => mul_cons n m l
-
-  let%parser expected =
-    ()  => Args.Anything
-  ; (n::INT) => Args.Int n
-  ; '(' ')' => Args.Int 0
-  ; '(' (l::expected_aux) ')' => Args.List l
-
   let%parser option =
       "subd" "=" (p::INT) => (fun opt -> Args.{ opt with subd = p })
     ; "rmax" "=" (p::FLOAT) => (fun opt -> Args.{ opt with rmax = p })
     ; "delauney" "prec" "=" (p::FLOAT) => (fun opt -> Args.{ opt with dprec = p })
     ; "nb critical" "=" (p::INT) => (fun opt -> Args.{ opt with crit = p })
     ; "limit critical" "=" (p::FLOAT) => (fun opt -> Args.{ opt with crit_limit = p })
-    ; "expected" "=" (l::expected) => (fun opt -> Args.{ opt with expected = l})
+    ; "expected" "=" (l::Topology.parse) => (fun opt -> Args.{ opt with expected = l})
 
   let%parser rec options_aux =
       (p1::option) => (fun p -> p1 p)
@@ -213,19 +219,19 @@ module Parse(R:Field.SPlus) = struct
   let%parser rec cmd =
       "let" (name::ident) ((vars,()) >: params) '=' (p::poly vars Sum) ';' =>
         Let_poly(name,vars,p)
-    ; "let" (name::ident) ((vars,__) :: params) '=' "random" (deg::INT) ';' =>
+    ; "let" (name::ident) ((vars,__) :: params) '=' "random" (deg::poly [] Sum) ';' =>
         Let_rand(name,vars,deg)
     ; "let" (name::ident) '=' "zeros" (opts::options)
         (names:: ~+ ident) ';' =>
         Let_surf(name, opts, names)
     ; "display" (names :: ~+ ident) ';' =>
         Display(names)
-    ; "for" (name::ident) "=" (first::FLOAT) "to" (last::FLOAT)
-        (step:: ~? [1.0] ("step" (x::FLOAT) => x))
+    ; "for" (name::ident) "=" (first::poly [] Sum) "to" (last::poly [] Sum)
+        (step:: ~? [Cst R.one] ("step" (x::poly [] Sum) => x))
         "do"
         (cmds :: ~+ cmd) "done" ';' =>
-        For(name,R.of_float first,R.of_float last,R.of_float step,cmds)
-    ; "stats" (dim::INT) (degs :: ~+ INT) ';' => Stats(dim,degs)
+        For(name,first,last,step,cmds)
+    ; "stats" (dim::INT) (degs :: ~+ (poly [] Sum)) ';' => Stats(dim,degs)
 
   let%parser cmds = (~* ((c::cmd) => run_cmd c)) => ()
 

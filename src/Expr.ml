@@ -133,9 +133,15 @@ module Make(R:Field.SPlus) = struct
     let hdim = if h then dim + 1 else dim in
     let p = { name; vars; deg; dim; poly; bern; hdim; rand
             ; triangulation = []; edges = [] } in
-    Hashtbl.add polys name p;
+    if name <> "" then Hashtbl.add polys name p;
     p
 
   let rm name =
     Hashtbl.remove polys name
+
+  let add_def (name, x) =
+    let p = Cst (of_float x) in
+    ignore (mk false name [] p)
+
+  let _ = List.iter add_def !Args.defs
 end

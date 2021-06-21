@@ -1,17 +1,15 @@
+open Format
+
 let batch = ref false
 let cont  = ref false
 let show  = ref false
 let prog  = ref false
 let progw  = ref false
-let dbname = ref ".hyper.db"
+let dbname = ref None
+let vname = ref ""
+let defs = ref []
 
 let debug_string = ref ""
-
-(* type for the expected topologie *)
-type expected = Anything (* expect anything *)
-              | Int of int (* expect the given number of components *)
-              | List of int list (* expect components with the given euler characteristics *)
-
 
 type parameters =
   { mutable rmax : float
@@ -19,8 +17,9 @@ type parameters =
   ; mutable dprec : float
   ; mutable crit : int
   ; mutable crit_limit : float
-  ; expected : expected
-  ; mutable check : bool}
+  ; mutable topo : Topology.topo_ask
+  ; expected : Topology.topology option
+  ; mutable check : bool }
 
 let default_parameters =
   { rmax = 0.99
@@ -29,7 +28,8 @@ let default_parameters =
   ; crit  = 3
   ; crit_limit = 1e-15
   ; check = false
-  ; expected = Anything}
+  ; topo = Ask_Nbc
+  ; expected = None}
 
 let spec =
   [ ( "-c"
@@ -74,9 +74,24 @@ let spec =
   ; ( "--check"
     , Arg.Bool (fun p -> default_parameters.check <- true)
     , "check some coherence propereties of the final triangulation")
-  ; ( "--dbname"
-    , Arg.Set_string dbname
+  ; ( "--topo-components"
+    , Arg.Unit (fun () -> default_parameters.topo <- Ask_Nbc)
+    , "compute only the number of connected components of each variety")
+  ; ( "--topo-euler"
+    , Arg.Unit (fun () -> default_parameters.topo <- Ask_Euler)
+    , "compute only the number of connected components of each variety")
+  ; ( "--topo-betti"
+    , Arg.Unit (fun () -> default_parameters.topo <- Ask_Betti)
+    , "compute only the number of connected components of each variety")
+  ; ( "--db"
+    , Arg.Tuple [Arg.String (fun s -> printf "Set db: %s\n%!" s;
+                                      dbname := Some s)
+               ; Arg.Unit (fun () -> default_parameters.topo <- Ask_Betti)]
     , "DB name to store result")
+  ; ( "-D"
+    , Arg.Tuple [Arg.String (fun s -> vname := s)
+               ; Arg.Float (fun f -> defs := (!vname, f) :: !defs)]
+    , "Define a variable with a float value from the command line")
   ; ( "--init-rand"
     , Arg.Unit (fun () -> Random.self_init ())
     , "initialize the random generator")

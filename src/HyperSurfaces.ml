@@ -351,7 +351,7 @@ module Make(R:Field.SPlus) = struct
 
     let mk ?(f=Stdlib.(1.0 /. float_of_int n)) s =
       let m = Array.map to_vec s in
-      let p = List.map (fun p -> Poly.transform p s0 m) p0 in
+      let p = List.map (fun p -> Poly.transform p s0 m) hp0 in
       let l = List.map plane p in
       let dp = List.map (fun p -> lazy (gradient p)) p in
       let c = V.center m in
@@ -1083,26 +1083,20 @@ module Make(R:Field.SPlus) = struct
       (print_solver_stats ~name:"solver1") solver1_stat
       (print_solver_stats ~name:"solver2") solver2_stat
       (print_solver_stats ~name:"solver3") solver3_stat;
-    let cps = components ctrs in
-    let chr = List.sort compare (List.map euler cps) in
-    eprintf "   topology: %d components %a\n%!" (List.length cps) print_int_list chr;
+    let topo_ask =
+      match param.expected with
+      | None -> param.topo
+      | Some t -> max param.topo (Topology.min_demand t)
+    in
+    let topo = topology topo_ask ctrs in
+    eprintf "   topology: %a\n%!" Topology.print topo;
     begin
       let open Args in
       match param.expected with
-      | Anything -> ()
-      | Int n ->
-         if List.length chr <> n then
-           failwith
-             (sprintf "wrong number of components: %d, expected %d"
-                (List.length chr) n)
-      | List l ->
-         let l = List.sort compare l in
-         let chr = List.sort compare chr in
-         if  l <> chr then
-           failwith
-             (sprintf "wrong characteristics of components: %a, expected %a"
-                print_int_list chr print_int_list l)
-
+      | None -> ()
+      | Some t -> if not (Topology.agree t topo) then
+                    failwith (sprintf "wrong topology %a"
+                                Topology.print t)
     end;
 
     let edges = Hashtbl.fold (fun _ l acc ->
@@ -1113,7 +1107,7 @@ module Make(R:Field.SPlus) = struct
     in
 
     restore_objects ();
-    (List.map (Array.map to_vec) all, edges, dim, chr)
+    (List.map (Array.map to_vec) all, edges, dim, topo)
 
   let triangulation param p0 =
     let r =

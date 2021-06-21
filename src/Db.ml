@@ -22,21 +22,21 @@ let create_variety n = sprintf
 
 let db_ptr = ref None
 let db () =
-  match !db_ptr with
-  | Some db -> db
-  | None    ->
+  match (!db_ptr, !Args.dbname) with
+  | (Some db, _     ) -> db
+  | (None, None     ) -> assert false
+  | (None, Some name) ->
      try
-       let db = db_open ~mutex:`FULL ~cache:`PRIVATE
-                  !Args.dbname
-       in
+       let db = db_open ~mutex:`FULL ~cache:`PRIVATE name in
        Rc.check (exec db create_polynomial);
        db_ptr := Some db;
-       eprintf "data base %s created\n%!" !Args.dbname;
+       eprintf "data base %s created\n%!" name;
        db
      with
      | SqliteError s | Error s ->
-        eprintf "can not create data base %s for statistics: %s\n%!" !Args.dbname s;
+        eprintf "can not create data base %s for statistics: %s\n%!" name s;
         exit 1
+
 
 let insert_polynomial to_str p deg dim rand =
   let sql = sprintf "SELECT rowid FROM polynomial WHERE value = '%a'"
@@ -128,6 +128,7 @@ let stats dim degs =
       "SELECT nb_components, euler_characteristic FROM variety%d as v%s WHERE %s"
       nb pols where
   in
+  printf "sql: %s\n%!" sql;
   let tbl = Hashtbl.create 1001 in
   let total = ref 0 in
   let cb row headers =
@@ -136,10 +137,10 @@ let stats dim degs =
     Hashtbl.replace tbl row (nb+1)
   in
   Rc.check (exec_not_null (db ()) ~cb sql);
-  printf "Total: %d\n%!" !total;
-  let total = float !total in
+  let total_f = float !total in
   Hashtbl.iter (fun row nb ->
-      let f = float nb /. total in
-      let e = 2.326 *. sqrt (f *. (1.0 -. f) /. total) in
+      let f = float nb /. total_f in
+      let e = 2.326 *. sqrt (f *. (1.0 -. f) /. total_f) in
       printf "%s, %s => %d %5.2f%%±%3.2f%%\n"
-        row.(0) row.(1) nb (f *. 100.) (e *. 100.)) tbl
+        row.(0) row.(1) nb (f *. 100.) (e *. 100.)) tbl;
+  printf "Total: %d\n%!" !total

@@ -23,6 +23,7 @@ module type SMin = sig
   val abs : t -> t
   val sqrt : t -> t
   val of_int : int -> t
+  val to_int : t -> int
   val to_float : t -> float
   val of_float : float -> t
   val of_string : string -> t
