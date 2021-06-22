@@ -17,7 +17,7 @@ let create_variety n = sprintf
   "CREATE TABLE IF NOT EXISTS variety%d (
     %s,
     nb_components INTEGER,
-    euler_characteristic TEXT)" n (pkey n)
+    topology TEXT)" n (pkey n)
    (* euler : list of integers as string *)
 
 let db_ptr = ref None
@@ -79,7 +79,7 @@ let insert_variety to_str ps dim nbc euler =
     let pid_sel = String.concat " AND " (List.mapi (sprintf "p%d = %Ld") pid) in
     let sql =
       sprintf
-        "SELECT nb_components, euler_characteristic FROM variety%d WHERE %s"
+        "SELECT nb_components, topology FROM variety%d WHERE %s"
         nb_pol pid_sel
     in
     let res = ref None in
@@ -125,22 +125,23 @@ let stats dim degs =
   let where = String.concat " AND " where in
   let sql =
     sprintf
-      "SELECT nb_components, euler_characteristic FROM variety%d as v%s WHERE %s"
+      "SELECT nb_components, topology, COUNT() FROM variety%d as v%s WHERE %s
+       GROUP BY topology"
       nb pols where
   in
   printf "sql: %s\n%!" sql;
-  let tbl = Hashtbl.create 1001 in
   let total = ref 0 in
+  let res = ref [] in
   let cb row headers =
-    let nb = try Hashtbl.find tbl row with Not_found -> 0 in
-    incr total;
-    Hashtbl.replace tbl row (nb+1)
+    res := row :: !res;
+    total := !total + int_of_string row.(2);
   in
   Rc.check (exec_not_null (db ()) ~cb sql);
   let total_f = float !total in
-  Hashtbl.iter (fun row nb ->
+  List.iter (fun row ->
+      let nb = int_of_string row.(2) in
       let f = float nb /. total_f in
       let e = 2.326 *. sqrt (f *. (1.0 -. f) /. total_f) in
-      printf "%s, %s => %d %5.2f%%±%3.2f%%\n"
-        row.(0) row.(1) nb (f *. 100.) (e *. 100.)) tbl;
+      printf "%s, %s => %s %5.2f%%±%3.2f%%\n"
+        row.(0) row.(1) row.(2) (f *. 100.) (e *. 100.)) !res;
   printf "Total: %d\n%!" !total

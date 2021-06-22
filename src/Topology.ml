@@ -47,7 +47,9 @@ let to_string t =
     | Betti l -> fprintf ch "%a" print_int_list l
   in
   let gn i (t,nb) =
-    if nb = 1 then
+    if nb = 0 then
+      sprintf "0"
+    else if nb = 1 then
       sprintf "%a" fn t
     else
       sprintf "%d*%a" nb fn t
@@ -72,8 +74,8 @@ let%parser rec topo_list =
   ; (l::topo_list) "," (t::topo_mul) => t::l
 
 let%parser parse =
-    ()       => None
-  ; (n::INT) => Some[(Any,n)]
+  ()         => None
+  ; (n::INT) => if n = 0 then Some[] else Some[(Any,n)]
   ; '(' ')'  => Some[]
   ; '(' (l:: topo_list) ')' => Some (List.sort compare2 l)
 
