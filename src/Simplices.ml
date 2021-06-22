@@ -479,7 +479,7 @@ module Make(R:Field.SPlus) = struct
           m.(i) <-
             List.fold_left (fun acc (i,x) ->
                 assert (x < nbc);
-                Rank.Elt(i,Z.of_int x,acc)) Rank.End
+                Rank.cons i (Z.of_int x) acc) Rank.End
               (List.sort (fun (a,_) (b,_) -> compare b a) !row)) tbl;
       m)
     in

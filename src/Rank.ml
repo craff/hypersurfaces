@@ -61,7 +61,7 @@ let _ =
  *)
 
 type line =
-  | Elt of int * Z.t * line
+  | Elt of int * Z.t * line * int (** column, coef, rest, length *)
   | End
 
 let print_mat ch =
@@ -69,99 +69,103 @@ let print_mat ch =
       fprintf ch "  ";
       let rec fn = function
         | End -> ()
-        | Elt(i,x,l) -> fprintf ch "%d:%s " i (to_string x); fn l
+        | Elt(i,x,l,_) -> fprintf ch "%d:%s " i (to_string x); fn l
       in
       fn row;
       print_newline ())
 
-let snf nbl nbc m =
-  let m = Array.copy m in
+let length_row = function
+    | Elt(_,_,r,s) -> s
+    | End -> 0
+
+let cons k x l = if x = zero then l else Elt(k,x,l, Stdlib.(length_row l + 1))
+
+let getc l c = match l with
+  | Elt(c',x,_,_) ->
+     assert (c' >= c);
+     if c = c' then x else zero
+  | End -> zero
+
+let kernel nbl nbc m =
+  let mc = Array.make nbc [] in
   let k = ref 0 in
-  let swap_line i j =
-    if i <> j then
-      let tmp = m.(i) in
-      m.(i) <- m.(j); m.(j) <- tmp
+  let i1 = ref 0 in
+  let i2 = ref 0 in
+  let add_line l =
+    match l with
+    | End -> incr i1
+    | Elt(c,_,_,_) -> mc.(c) <- l :: mc.(c)
   in
-  let cons k x l = if x = zero then l else Elt(k,x,l) in
+  Array.iter add_line m;
   let fn u l1 v l2 =
     let rec fn l1 l2 =
       match (l1,l2) with
-      | (Elt(k1,s1,l1), Elt(k2,s2,l2)) when k1 = k2 ->
+      | (Elt(k1,s1,l1,_), Elt(k2,s2,l2,_)) when k1 = k2 ->
          cons k1 (u*s1 + v*s2) (fn l1 l2)
-      | (Elt(k1,s1,l1), Elt(k2,_,_)) when k1 < k2 ->
+      | (Elt(k1,s1,l1,_), Elt(k2,_,_,_)) when k1 < k2 ->
          cons k1 (u*s1) (fn l1 l2)
-      | (Elt(k1,_,_), Elt(k2,s2,l2)) (*when k1 > k2*) ->
+      | (Elt(k1,_,_,_), Elt(k2,s2,l2,_)) (*when k1 > k2*) ->
          cons k2 (v*s2) (fn l1 l2)
-      | (Elt(k1,s1,l1), End) ->
+      | (Elt(k1,s1,l1,_), End) ->
          cons k1 (u*s1) (fn l1 l2)
-      | (End, Elt(k2,s2,l2)) ->
+      | (End, Elt(k2,s2,l2,_)) ->
          cons k2 (v*s2) (fn l1 l2)
       | (End, End) -> End
     in fn l1 l2
   in
 
-  let comb_line i u j v =
-    m.(i) <- fn u m.(i) v m.(j)
+  let comb_line l1 u l2 v =
+    fn u l1 v l2
   in
-  let comb_line2 i u a j v b =
-    let l1 = m.(i) in
-    let l2 = m.(j) in
-    m.(i) <- fn u l1 v l2;
-    m.(j) <- fn a l1 b l2
+  let comb_line2 l1 u a l2 v b =
+    (fn u l1 v l2, fn a l1 b l2)
   in
-  let getc l c = match l with
-    | Elt(c',x,_) ->
-       assert (c' >= c);
-       if c = c' then x else zero
-    | End -> zero
-  in
-  let i1 = ref 0 in
-  let i2 = ref 0 in
   (*printf "start\n%!";*)
   while !i1 < nbl && !i2 < nbc do
-    let il = !i1 in
     let ic = !i2 in
+    let lines = mc.(ic) in
+    match lines with
+    | [] -> incr k; incr i2
+    | pl::lines -> incr i1; incr i2;
     (*printf "loop %d %d =>\n%a\n%!" il ic print_mat m;*)
-    let best_j = ref il in
-    let best   = ref (abs (getc m.(il) ic)) in
-    for j = Stdlib.(il+1) to Stdlib.(nbl - 1) do
-      let p = abs (getc m.(j) ic) in
-      if p <> zero && (!best = zero || p < !best) then
-        (best_j := j; best := p)
-    done;
-    if !best <> zero then
-      begin
-        swap_line il !best_j;
-        incr i1; incr i2;
-        for j = Stdlib.(il+1) to Stdlib.(nbl - 1) do
-          let p = getc m.(il) ic in
-          let q = getc m.(j) ic in
-          if q <> zero then
-            begin
-              if q mod p <> zero then
-                begin
-                  let (d,u,v) = gcd p q in
-                  let a = p / d in
-                  let b = q / d in
-                  assert (u * a + v * b = one);
-                  comb_line2 il u (-b) j v a;
-                  assert (getc m.(j) ic = zero);
-                end
-              else
-                begin
-                  assert (q mod p = zero);
-                  let x = q / p in
-                  comb_line j one il (-x);
-                end
-            end
-        done;
-      end
-    else (incr i2; incr k)
+    let best  = (abs (getc pl ic), length_row pl) in
+    let (lines,pl,_) = List.fold_left (fun (lines,pl,best) l ->
+      let p = (abs (getc l ic), length_row l) in
+      if fst p <> zero && (fst best = zero || p < best) then
+        (pl::lines, l, p)
+      else (l::lines,pl,best)) ([],pl,best) lines
+    in
+    let pl = List.fold_left (fun pl l ->
+      let p = getc pl ic in
+      assert (p <> zero);
+      let q = getc l ic in
+      assert (q <> zero);
+      if q mod p <> zero then
+        begin
+          let (d,u,v) = gcd p q in
+          let a = p / d in
+          let b = q / d in
+          assert (u * a + v * b = one);
+          let (pl,l) = comb_line2 pl u (-b) l v a in
+          assert (getc l ic = zero);
+          add_line l;
+          pl
+        end
+      else
+        begin
+          assert (q mod p = zero);
+          let x = q / p in
+          let l = comb_line l one pl (-x) in
+          assert (getc l ic = zero);
+          add_line l;
+          pl
+        end) pl lines in
+    mc.(ic) <- [pl]
   done;
   (*printf "end %d %d %d %d %d =>\n%a\n%!" nbl nbc !k !i1 !i2 print_mat m;*)
   Stdlib.(!k + nbc - !i2)
 
 let rank nbl nbc m =
-  let k = snf nbl nbc m in
+  let k = kernel nbl nbc m in
   (*printf "%a\n%!" print_int_matrix m;*)
   Stdlib.(k , nbc - k)
