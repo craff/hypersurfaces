@@ -1,5 +1,4 @@
-let d1(x,y,t) = x+y;
-let d1 = zeros [expected=1] d1 ; display d1 d1__t;
+let d1(x,y,t) = zeros [expected=1] x+y ; display d1 d1__t;
 
 let d2(x,y) = x+2*y+1/3;
 let d2 = zeros [expected=1] d2; display d2 d2__t;

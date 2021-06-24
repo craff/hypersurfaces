@@ -14,40 +14,38 @@ module Parse(R:Field.SPlus) = struct
   type cmd =
     Let_poly of string * string list * polynomial
   | Let_rand of string * string list * polynomial
-  | Let_surf of string * Args.parameters * string list
+  | Let_surf of string * Args.parameters * string list * polynomial list
   | Display  of string list
   | For      of string * polynomial * polynomial * polynomial * cmd list
   | Stats    of int * polynomial list
 
-  let interp_poly p =
-    let p = P.mk false "" [] p in
-    B.eval (B.pre_eval R.( *. ) p.bern) [||]
-
   let rec run_cmd = function
-    | Let_poly(name,vars,p) ->
-       let p = P.mk false name vars p in
-       let vars = Array.of_list (vars @ ["s"]) in
-       printf "%a\n%!" (B.print_polynome ~vars) p.bern
-    | Let_rand(name,vars,deg) ->
-       let deg = interp_poly deg in
-       let dim = List.length vars in
+    | Let_poly(name,vars0,p) ->
+       let p = P.mk false name vars0 p in
+       let vars = Array.of_list vars0 in
+       printf "%a\n%!" (B.print_polynome ~vars) (to_bernstein p.dim vars0 p.poly)
+    | Let_rand(name,vars0,deg) ->
+       let deg = eval_cst deg in
+       let dim = List.length vars0 in
        let p = B.random false (R.to_int deg) dim in
-       let pb = of_bernstein vars p in
-       let p = P.mk true name vars pb in
-       let vars = Array.of_list (vars @ ["s"]) in
-       printf "%a\n%!" (B.print_polynome ~vars) p.bern
-    | Let_surf(name, opts, names) ->
-       let p name =
-         try Hashtbl.find polys name
-         with Not_found -> Lex.give_up ~msg:("unbound variable "^name) ()
-       in
-       let ps = List.map p names in
+       let pb = of_bernstein vars0 p in
+       let p = P.mk true name vars0 pb in
+       let vars = Array.of_list vars0 in
+       printf "%a\n%!" (B.print_polynome ~vars) (to_bernstein p.dim vars0 p.poly)
+    | Let_surf(name, opts, vars, pols) ->
+       let dim = List.length vars in
+       let ps = B.homogeneise_many (List.map (to_bernstein dim vars) pols) in
        let (ts, es, dim, topo) =
-         H.triangulation opts (List.map (fun p -> p.bern) ps)
+         H.triangulation opts ps
        in
        if !Args.dbname <> None then
          begin
-           let pds = List.map (fun p -> ((p.vars, p.poly), B.degree p.bern, p.rand)) ps in
+           let rand p = match p with
+             | App(p,_) -> p.rand | _ -> false
+           in
+           let fn p = P.mk (rand p) "" vars p in
+           let pds = List.map fn pols in
+           let pds = List.map (fun p -> ((p.vars, p.poly), p.deg, p.rand)) pds in
            let nbc = List.length topo in
            let topo_s = Topology.to_string topo in
            let rec pr_poly () (vars, p) = P.to_str pid vars p
@@ -83,9 +81,9 @@ module Parse(R:Field.SPlus) = struct
        Display.display names;
        if not (!Args.cont) then Display.wait ()
     | For(name,first,last,step,cmds) ->
-       let first = interp_poly first in
-       let last = interp_poly last in
-       let step = interp_poly step in
+       let first = eval_cst first in
+       let last = eval_cst last in
+       let step = eval_cst step in
        let open R in
        let i = ref first in
        while (!i <=. last) do
@@ -98,10 +96,22 @@ module Parse(R:Field.SPlus) = struct
        if !Args.dbname <> None then
          begin
            printf "stats\n%!";
-           let degs = List.map (fun p -> R.to_int (interp_poly p)) degs in
+           let degs = List.map (fun p -> R.to_int (eval_cst p)) degs in
            Db.stats dim degs
          end
 
+  let expand_short_surf names =
+    let p name =
+      try Hashtbl.find polys name
+      with Not_found -> Lex.give_up ~msg:("unbound variable "^name) ()
+    in
+    let ps = List.map p names in
+    let vars = (List.hd ps).vars in
+    if not (List.for_all (fun p -> p.vars = vars) ps) then
+      failwith "Illegal short syntax for zeros";
+    let pvs = List.map (fun v -> Var v) vars in
+    let ps = List.map (fun p -> App(p,pvs)) ps in
+    (vars, ps)
 
   (** Parses a float in base 10. [".1"] is as ["0.1"]. *)
   let float_lit : R.t Lex.t =
@@ -200,6 +210,8 @@ module Parse(R:Field.SPlus) = struct
       ; (p=Atom) (x :: float)                      => Cst(x)
       ; (p=Atom) '(' (p::poly Sum) ')'             => p
       ; (p=Atom) (v::ident) (args::args)           => Ref(v,args)
+      ; (p=Atom) "DIFF" "(" (p::poly Sum) "," (v::ident) ")"
+                                                   => Der(p,v)
       ; (p=Pow) (x::poly Pow) '^' (n::INT)         => P.Pow(x, n)
       ; (p=Prod) '-' (x::poly Pow)                 =>
           (match x with Cst _ -> Lex.give_up ()
@@ -221,9 +233,13 @@ module Parse(R:Field.SPlus) = struct
         Let_poly(name,vars,p)
     ; "let" (name::ident) ((vars,__) :: params) '=' "random" (deg::poly [] Sum) ';' =>
         Let_rand(name,vars,deg)
+    ; "let" (name::ident) ((vars,()) >: params) '=' "zeros" (opts::options)
+        (pols:: ~+ (poly vars Sum)) ';' =>
+        Let_surf(name, opts, vars, pols)
     ; "let" (name::ident) '=' "zeros" (opts::options)
         (names:: ~+ ident) ';' =>
-        Let_surf(name, opts, names)
+        (let (vars, pols) = expand_short_surf names in
+         Let_surf(name, opts, vars, pols))
     ; "display" (names :: ~+ ident) ';' =>
         Display(names)
     ; "for" (name::ident) "=" (first::poly [] Sum) "to" (last::poly [] Sum)

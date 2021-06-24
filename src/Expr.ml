@@ -1,5 +1,8 @@
 open Format
 
+exception Unbound of string
+let unbound s = raise (Unbound s)
+
 module Make(R:Field.SPlus) = struct
 
   open R
@@ -12,8 +15,6 @@ module Make(R:Field.SPlus) = struct
     ; dim : int
     ; vars: string list
     ; poly : polynomial
-    ; bern : B.polynomial
-    ; hdim : int
     ; rand : bool
     ; mutable triangulation : R.t Array.t Array.t list
     ; mutable edges : R.t Array.t Array.t list }
@@ -26,6 +27,7 @@ module Make(R:Field.SPlus) = struct
     | Sub of polynomial * polynomial
     | Pro of polynomial * polynomial
     | App of poly_rec * polynomial list
+    | Der of polynomial * string
     | Fun of func * polynomial
     | Ref of string * polynomial list
 
@@ -49,6 +51,7 @@ module Make(R:Field.SPlus) = struct
       | Pro (p,q)  -> sprintf "(%a*%a)" to_str p to_str q
       | App (f,ps) -> sprintf "%s(%a)" (name_to_string f) to_str_list ps
       | Fun (f,p)  -> sprintf "%s(%a)" f.name to_str p
+      | Der (p,v)  -> sprintf "diff(%a,%s)" to_str p v
       | Ref _      -> assert false
 
     and to_str_list () = function
@@ -67,7 +70,8 @@ module Make(R:Field.SPlus) = struct
       | Pro(p,q)             -> Pro(bind p, bind q)
       | App(p,qs)            -> App(p, List.map bind qs)
       | Fun(f,q)             -> Fun(f, bind q)
-      | Ref(v,args)       ->
+      | Der(p,v)             -> Der(bind p,v)
+      | Ref(v,args)          ->
          try
            if args <> [] then raise Not_found;
            if not (List.mem v vars) then raise Not_found;
@@ -82,29 +86,52 @@ module Make(R:Field.SPlus) = struct
              Pacomb.Lex.give_up ~msg:("unbound variable "^v) ()
     in bind p
 
-  let eval_cst p =
+  let rec eval env p =
     let rec fn = function
       | Cst x -> x
-      | Var _ -> failwith "Illegal polynomial"
+      | Var v -> (try List.assoc v env with Not_found -> unbound v)
       | Sum(p,q) -> fn p +. fn q
       | Sub(p,q) -> fn p -. fn q
       | Pro(p,q) -> fn p *. fn q
-      | App(f,p) -> let p = List.map fn p in
-                    B.eval (B.pre_eval ( *. ) f.bern) (Array.of_list p)
+      | App(f,l)-> let xs = List.map fn l in
+                   let env = List.combine f.vars xs in
+                   eval env f.poly
       | Pow(p,n) -> pow (fn p) n
       | Fun(f,p) -> f.eval (fn p)
-      | Ref _    -> assert false
+      | Der _    -> failwith "diff in eval"
+      | Ref(v,l) -> assert false (*
+         try
+           if l <> [] then raise Not_found;
+           List.assoc v env
+         with Not_found -> try
+             let p = Hashtbl.find polys v in
+             let nb = List.length l in
+             if p.dim <> nb then
+               Pacomb.Lex.give_up ~msg:("bad arity for "^ v) ();
+             fn (App(p,l))
+           with Not_found ->
+             Pacomb.Lex.give_up ~msg:("unbound variable "^v) ()*)
+
     in fn p
 
+  let eval_cst p = eval [] (bind [] p)
+
   let to_bernstein d vars p =
+    let p = bind vars p in
     let open B in
     let rec fn env = function
       | Cst x     -> cst d x
-      | Var s     -> (try List.assoc s env with Not_found -> assert false)
+      | Var s     -> (try List.assoc s env with Not_found -> unbound s)
       | Sum(p,q)  -> fn env p ++ fn env q
       | Sub(p,q)  -> fn env p -- fn env q
       | Pro(p,q)  -> fn env p ** fn env q
       | Pow(p,n)  -> pow (fn env p) n
+      | Der(p,v)  -> let rec gn i = function
+                       | [] -> unbound v
+                       | (w,_)::l -> if v = w then i else gn (i+1) l
+                     in
+                     let v = gn 0 env in
+                     B.partial (fn env p) v
       | App(p,qs) ->
          let env = List.combine p.vars (List.map (fn env) qs) in
          fn env p.poly
@@ -128,10 +155,8 @@ module Make(R:Field.SPlus) = struct
     let dim = List.length vars in
     let poly = bind vars poly in
     let bern = to_bernstein dim vars poly in
-    let (bern,h) = B.homogeneisation bern in
     let deg = B.degree bern in
-    let hdim = if h then dim + 1 else dim in
-    let p = { name; vars; deg; dim; poly; bern; hdim; rand
+    let p = { name; vars; deg; dim; poly; rand
             ; triangulation = []; edges = [] } in
     if name <> "" then Hashtbl.add polys name p;
     p

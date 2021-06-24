@@ -336,7 +336,8 @@ let init () =
   let reshape ~width ~height =
     window_width := width; window_height := height;
     window_ratio := (float width) /. (float height);
-    Gles3.viewport ~x:0 ~y:0 ~w:width ~h:height
+    Gles3.viewport ~x:0 ~y:0 ~w:width ~h:height;
+    updated := true;
   in
   Egl.set_reshape_callback reshape;
   (* Some initialisation of the OpenGL state. *)

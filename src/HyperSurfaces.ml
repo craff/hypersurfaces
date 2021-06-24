@@ -878,9 +878,9 @@ module Make(R:Field.SPlus) = struct
     in
 
     let print_total codim =
-      let x = match SimpSet.min_elt_opt to_do.(codim) with
+      let x = match SimpSet.max_elt_opt to_do.(codim) with
         | None   -> 0.0
-        | Some s -> s.o.f
+        | Some s -> to_float s.o.d
       in
       let (hd,tail) = if Debug.has_debug () then "", "\n" else "\r", "" in
       eprintf "%s%6.3f%% %06d/%06d pts:%2d=%2d+%2d+%2d+%2d, codim: %d/%d, worst:%5.2e%s%!"

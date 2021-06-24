@@ -1,25 +1,24 @@
-let e1(x,y) = 10 * x^2 + y^2 - 1;
-let e2(x,y) = x^2 + 10 * y^2 - 1;
-let p = zeros [expected=4] e1 e2;
+let p(x,y) = zeros [expected=4]
+  10 * x^2 + y^2 - 1
+  x^2 + 10 * y^2 - 1;
 display p p__t;
 display p;
 
-
-let e1(x,y) = 1000 * x^2 + y^2 - 1;
-let e2(x,y) = x^2 + 1000 * y^2 - 1;
-let p2 = zeros [expected=4] e1 e2;
+let p2(x,y) = zeros [expected=4]
+  1000 * x^2 + y^2 - 1
+  x^2 + 1000 * y^2 - 1;
 display p2 p2__t;
 display p2;
 
-let e1(x,y) = (x-0.99)^2 + y^2 - 1;
-let e2(x,y) = (x+0.991)^2 + y^2 - 1;
-let p3 = zeros [expected=2] e1 e2;
+let p3(x,y) = zeros [expected=2]
+  (x-0.99)^2 + y^2 - 1
+  (x+0.991)^2 + y^2 - 1;
 display p3 p3__t;
 display p3;
 
-let e1(x,y) = (x-0.999)^2 + y^2 - 1;
-let e2(x,y) = (x+0.9991)^2 + y^2 - 1;
-let p4 = zeros [expected=2] e1 e2;
+let p4(x,y) = zeros [expected=2]
+  (x-0.999)^2 + y^2 - 1
+  (x+0.9991)^2 + y^2 - 1;
 display p4 p4__t;
 display p4;
 

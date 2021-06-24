@@ -119,7 +119,7 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
   let degree p = List.fold_left (fun d m -> max d (monomial_degree m)) 0 p
 
   (** homogenisation *)
-  let homogeneisation p =
+  let homogeneise p =
     let rec an d1 d2 =
       if d1 <= d2 then one else of_int d1 *. an (d1 - 1) d2
     in
@@ -130,6 +130,20 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
           let d0 = monomial_degree m in
           let d' = d - d0 in
           (Array.append l [|d'|], c *. an d' 1 /. an d d0)) p), true)
+
+  (** increase polynomial dimension by one *)
+  let increase_dim p =
+    let cmp x y = compare y x in
+    List.sort cmp (List.map (fun (l,c) ->
+                       (Array.append l [|0|], c)) p)
+
+  (** homogeneisation of a list of polynomials *)
+  let homogeneise_many ps =
+    let ps = List.map (fun p -> homogeneise p) ps in
+    if List.exists snd ps then
+      List.map (fun (p,b) -> if b then p else increase_dim p) ps
+    else
+      List.map fst ps
 
   (** general code to subdivise in two the simplex domain of a polynomial
       along the direction i <-> j *)
@@ -583,7 +597,11 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
                     if n > 0 && b then raise Exit else true)
                 false l
       in
-      if not r then printf "%a\n%!" print_int_array l;
+      if not r then
+        begin
+          List.iter (fun (l,c) -> printf "(%a,%a) " print_int_array l print c) p;
+          printf "\n%a\n%!" (fun p -> print_polynome p) p;
+        end;
       r
     in
     Array.of_list (filter_map (fun (l,c) -> assert (count l); c) p)
@@ -657,10 +675,12 @@ module type B = sig
   val to_horner : polynomial -> t hf
   val to_horner_v : polynomial_v -> v hf
   val to_horner_m : polynomial_m -> m hf
-  val homogeneisation : polynomial -> polynomial * bool
+  val homogeneise : polynomial -> polynomial * bool
+  val homogeneise_many : polynomial list -> polynomial list
   val transform : t hf -> m -> m -> polynomial
   val subdivise : polynomial -> int -> int -> polynomial * polynomial
   val subdivise_v : polynomial_v -> int -> int -> polynomial_v * polynomial_v
+  val partial : polynomial -> int -> polynomial
 
   val gradient : polynomial -> polynomial_v
   val hessian  : polynomial -> polynomial_m
