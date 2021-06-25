@@ -52,10 +52,10 @@ type camera =
   }
 
 let camera =
-  { pos = [| 0.0;0.0;5.0 |]
+  { pos = [| 0.0;0.0;2.0 |]
   ; front = [| 0.0;0.0;-1.0 |]
   ; up = [| 0.0;1.0;0.0 |]
-  ; center = 5.0
+  ; center = 2.0
   ; rspeed = acos(-1.0) *. 1. /. 180. }
 
 let camera_right () = VF.(vp camera.front camera.up)
@@ -64,10 +64,10 @@ let set v1 v2 = Array.blit v2 0 v1 0 3
 
 let home () =
   updated := true;
-  set camera.pos [| 0.0;0.0;5.0 |];
+  set camera.pos [| 0.0;0.0;2.0 |];
   set camera.front [| 0.0;0.0;-1.0 |];
   set camera.up [| 0.0;1.0;0.0 |];
-  camera.center <- 5.0;
+  camera.center <- 2.0;
   camera.rspeed <- acos(-1.0) *. 1. /. 180.
 
 let camera_speed () = camera.center /. 20.0
@@ -364,124 +364,58 @@ module Make(R:Field.SPlus) = struct
 
   let zeroest x y = if abs_float x > abs_float y then y else x
 
+  let opp = Array.map (~-.)
   let split_segment f acc x1 x2 =
     let l = [Array.map R.to_float x1;Array.map R.to_float x2] in
-    let (lp, ln) = List.partition (fun x -> x.(3) >= epsilon) l in
-    let (lz, ln) = List.partition (fun x -> x.(3) > -.epsilon) ln in
+    let (lp, lz) = List.partition (fun x -> x.(3) > 0.) l in
+    let (ln, lz) = List.partition (fun x -> x.(3) < 0.) lz in
     match (lp,lz,ln) with
-    | [x1;x2],[],[] | [],[],[x1;x2] ->
+    | [x1;x2],[],[] | [x1],[x2],[] ->
        f acc x1 x2
-    | [x1],[x2],[]  | [],[x2],[x1] ->
-       let delta = if lp = [] then
-                     zeroest (-. epsilon) (0.5 *. x1.(3))
-                   else
-                     zeroest epsilon (0.5 *. x1.(3))
-       in
-       let lambda1 = delta /. x1.(3) in
-       let mu1 = 1. -. lambda1 in
-       let y1 = VF.comb lambda1 x1 mu1 x2 in
-       assert(mu1 >= 0. && mu1 <= 1. && lambda1 >= 0. && lambda1 <= 1.);
-       f acc x1 y1
+    | [],[],[x1;x2] | [],[x2],[x1] ->
+       f acc (opp x1) (opp x2)
+    | [], [x1;x2], [] ->
+       f (f acc x1 x2) (opp x1) (opp x2)
     | [x1], _, [x2] ->
-       let delta = zeroest epsilon (0.5 *. x1.(3)) in
-       let lambda1 = (delta -. x2.(3)) /. (x1.(3) -. x2.(3)) in
-       let mu1 = 1. -. lambda1 in
-       let y1 = VF.comb lambda1 x1 mu1 x2 in
-       assert(mu1 >= 0. && mu1 <= 1. && lambda1 >= 0. && lambda1 <= 1.);
-       let delta = zeroest (-.epsilon) (0.5 *. x2.(3)) in
-       let lambda2 = (delta -. x2.(3)) /. (x1.(3) -. x2.(3)) in
-       let mu2 = 1. -. lambda2 in
-       let y2 = VF.comb lambda2 x1 mu2 x2 in
-       assert(mu2 >= 0. && mu2 <= 1. && lambda2 >= 0. && lambda2 <= 1.);
-       f (f acc x1 y1) x2 y2
-    | _ -> acc
+       let lambda = -. x2.(3) /. (x1.(3) -. x2.(3)) in
+       let mu = 1. -. lambda in
+       let y1 = VF.comb lambda x1 mu x2 in
+       f (f acc x1 y1) (opp x2) (opp y1)
+    | _ -> assert false
 
   let split_triangle f acc x1 x2 x3 =
     let l = [Array.map R.to_float x1;Array.map R.to_float x2;Array.map R.to_float x3] in
-    let (lp, ln) = List.partition (fun x -> x.(3) >= epsilon) l in
-    let (lz, ln) = List.partition (fun x -> x.(3) > -.epsilon) ln in
+    let (lp, lz) = List.partition (fun x -> x.(3) > 0.) l in
+    let (ln, lz) = List.partition (fun x -> x.(3) < 0.) lz in
     match (lp,lz,ln) with
-    | [x1;x2;x3],[],[] | [],[],[x1;x2;x3] ->
+    | [x1;x2;x3],[],[] | [x1;x2], [x3], [] | [x1], [x2;x3], [] ->
        f acc x1 x2 x3
-    | [x1;x2],[x3],[] | [],[x3],[x1;x2] ->
-       let delta = if lp = [] then zeroest (-.epsilon) (0.5 *. x1.(3))
-                   else zeroest epsilon (0.5 *. x1.(3))
-       in
-       let lambda1 = delta /. x1.(3) in
-       let mu1 = 1. -. lambda1 in
-       let y1 = VF.comb lambda1 x1 mu1 x3 in
-       assert(mu1 >= 0. && mu1 <= 1. && lambda1 >= 0. && lambda1 <= 1.);
-       let delta = if lp = [] then zeroest (-.epsilon) (0.5 *. x2.(3))
-                   else zeroest epsilon (0.5 *. x2.(3))
-       in
-       let lambda2 = delta /. x2.(3) in
-       let mu2 = 1. -. lambda2 in
-       let y2 = VF.comb lambda2 x2 mu2 x3 in
-       assert(mu2 >= 0. && mu2 <= 1. && lambda2 >= 0. && lambda2 <= 1.);
-       f (f acc x1 x2 y1) x2 y1 y2
-    | [x1],[x2;x3],[] | [],[x2;x3],[x1] ->
-       let delta = if lp = [] then zeroest (-.epsilon) (0.5 *. x1.(3))
-                   else zeroest epsilon (0.5 *. x1.(3))
-       in
-       let lambda2 = delta /. x1.(3) in
-       let mu2 = 1. -. lambda2 in
-       let y2 = VF.comb lambda2 x1 mu2 x2 in
-       assert(mu2 >= 0. && mu2 <= 1. && lambda2 >= 0. && lambda2 <= 1.);
-       let lambda3 = delta /. x1.(3) in
-       let mu3 = 1. -. lambda3 in
-       let y3 = VF.comb lambda3 x1 mu3 x3 in
-       assert(mu3 >= 0. && mu3 <= 1. && lambda3 >= 0. && lambda3 <= 1.);
-       f acc x1 y2 y3
+    | [],[],[x1;x2;x3] | [], [x1], [x2;x3] | [], [x1;x2], [x3] ->
+       f acc (opp x1) (opp x2) (opp x3)
+    | [],[x1;x2;x3],[] ->
+       f (f acc x1 x2 x3) (opp x1) (opp x2) (opp x3)
     | [x1],[x3],[x2] ->
-       let delta = zeroest epsilon (0.5 *. x1.(3)) in
-       let lambda1 = delta /. x1.(3) in
+       let lambda = -. x2.(3) /. (x1.(3) -. x2.(3)) in
+       let mu = 1. -. lambda in
+       let y1 = VF.comb lambda x1 mu x2 in
+       f (f acc x1 y1 x3) x2 (opp y1) x3
+    | [x1;x2], _, [x3] ->
+       let lambda1 = -. x3.(3) /. (x1.(3) -. x3.(3)) in
        let mu1 = 1. -. lambda1 in
        let y1 = VF.comb lambda1 x1 mu1 x3 in
-       assert(mu1 >= 0. && mu1 <= 1. && lambda1 >= 0. && lambda1 <= 1.);
-       let delta = zeroest (-.epsilon) (0.5 *. x2.(3)) in
-       let lambda2 = delta /. x2.(3) in
+       let lambda2 = -. x3.(3) /. (x2.(3) -. x3.(3)) in
        let mu2 = 1. -. lambda2 in
        let y2 = VF.comb lambda2 x2 mu2 x3 in
-       assert(mu2 >= 0. && mu2 <= 1. && lambda2 >= 0. && lambda2 <= 1.);
-       let delta = zeroest (epsilon) (0.5 *. x1.(3)) in
-       let lambda13 = (delta -. x2.(3)) /. (x1.(3) -. x2.(3)) in
-       let mu13 = 1. -. lambda13 in
-       let y13 = VF.comb lambda13 x1 mu13 x2 in
-       assert(mu13 >= 0. && mu13 <= 1. && lambda13 >= 0. && lambda13 <= 1.);
-       let delta = zeroest (-.epsilon) (0.5 *. x2.(3)) in
-       let lambda23 = (delta -. x2.(3)) /. (x1.(3) -. x2.(3)) in
-       let mu23 = 1. -. lambda23 in
-       let y23 = VF.comb lambda23 x1 mu23 x2 in
-       assert(mu23 >= 0. && mu23 <= 1. && lambda23 >= 0. && lambda23 <= 1.);
-       f (f acc x1 y1 y13) x2 y2 y23
-    | [x1;x2], _, [x3] | [x3], _, [x1;x2] ->
-       let eps = if List.length lp = 2 then epsilon else -. epsilon in
-       let delta = zeroest eps (0.5 *. x1.(3)) in
-       (**  mu1 * x3 + (1 - mu1) * x1 = delta (si List.length lp = 2) *)
-       let mu1 = (delta -. x1.(3)) /. (x3.(3) -. x1.(3)) in
-       let lambda1 = 1. -. mu1 in
+       f (f (f acc x1 x2 y2) x1 y1 y2) (opp y1) (opp y2) (opp x3)
+    | [x3], _, [x1;x2] ->
+       let lambda1 = -. x3.(3) /. (x1.(3) -. x3.(3)) in
+       let mu1 = 1. -. lambda1 in
        let y1 = VF.comb lambda1 x1 mu1 x3 in
-       assert(mu1 >= 0. && mu1 <= 1. && lambda1 >= 0. && lambda1 <= 1.);
-       let delta = zeroest eps (0.5 *. x2.(3)) in
-       (**  mu2 * x3 + (1 - mu2) * x2 = delta (si List.length lp = 2) *)
-       let mu2 = (delta -. x2.(3)) /. (x3.(3) -. x2.(3)) in
-       let lambda2 = 1. -. mu2 in
+       let lambda2 = -. x3.(3) /. (x2.(3) -. x3.(3)) in
+       let mu2 = 1. -. lambda2 in
        let y2 = VF.comb lambda2 x2 mu2 x3 in
-       assert(mu2 >= 0. && mu2 <= 1. && lambda2 >= 0. && lambda2 <= 1.);
-       let delta = zeroest (-.eps) (0.5 *. x3.(3)) in
-       (**  mu13 * x3 + (1 - mu13) * x1 = delta (si List.length lp = 2) *)
-       let mu13 = (delta -. x1.(3)) /. (x3.(3) -. x1.(3)) in
-       let lambda13 = 1. -. mu13 in
-       let y13 = VF.comb lambda13 x1 mu13 x3 in
-       assert(mu13 >= 0. && mu13 <= 1. && lambda13 >= 0. && lambda13 <= 1.);
-       let delta = zeroest (-.eps) (0.5 *. x3.(3)) in
-       (**  mu23 * x3 + (1 - mu23) * x2 = delta (si List.length lp = 2) *)
-       let mu23 = (delta -. x2.(3)) /. (x3.(3) -. x2.(3)) in
-       let lambda23 = 1. -. mu23 in
-       let y23 = VF.comb lambda23 x2 mu23 x3 in
-       assert(mu23 >= 0. && mu23 <= 1. && lambda23 >= 0. && lambda23 <= 1.);
-       f (f (f acc x1 x2 y1) x2 y1 y2) x3 y13 y23
-    | _ -> acc
+       f (f (f acc (opp x1) (opp x2) (opp y2)) (opp x1) (opp y1) (opp y2)) y1 y2 x3
+    | _ -> assert false
 
   let mk_points_from_polyhedron ?(color=[|0.;0.;0.;1.|]) name p =
     let tbl = Hashtbl.create 1001 in
@@ -515,9 +449,9 @@ module Make(R:Field.SPlus) = struct
     let vert = create_float_bigarray (Hashtbl.length tbl * 3) in
     Hashtbl.iter (fun x i ->
         let setv i x = Bigarray.Genarray.set vert [|i|] x in
-        setv (3*i+0) (x.(0)/.x.(3));
-        setv (3*i+1) (x.(1)/.x.(3));
-        setv (3*i+2) (x.(2)/.x.(3))) tbl;
+        setv (3*i+0) (x.(0)/.(x.(3) +. 1.));
+        setv (3*i+1) (x.(1)/.(x.(3) +. 1.));
+        setv (3*i+2) (x.(2)/.(x.(3) +. 1.))) tbl;
     let obj =
       mk_object vert vert elem color Matrix.idt gl_points
     in
@@ -559,9 +493,12 @@ module Make(R:Field.SPlus) = struct
     let vert = create_float_bigarray (Hashtbl.length tbl * 3) in
     Hashtbl.iter (fun x i ->
         let setv i x = Bigarray.Genarray.set vert [|i|] x in
-        setv (3*i+0) (x.(0)/.x.(3));
-        setv (3*i+1) (x.(1)/.x.(3));
-        setv (3*i+2) (x.(2)/.x.(3))) tbl;
+        let d = x.(3) +. 1. in
+        setv (3*i+0) (x.(0)/.d);
+        setv (3*i+1) (x.(1)/.d);
+        setv (3*i+2) (x.(2)/.d)
+      ) tbl;
+
     let obj =
       mk_object vert vert elem color Matrix.idt gl_lines
     in
@@ -590,9 +527,12 @@ module Make(R:Field.SPlus) = struct
         sete (3*i+0) (3*i+0);
         sete (3*i+1) (3*i+1);
         sete (3*i+2) (3*i+2);
-        let a = [| x.(0)/.x.(3); x.(1)/.x.(3); x.(2)/.x.(3)|] in
-        let b = [| y.(0)/.y.(3); y.(1)/.y.(3); y.(2)/.y.(3)|] in
-        let c = [| z.(0)/.z.(3); z.(1)/.z.(3); z.(2)/.z.(3)|] in
+        let dx = x.(3) +. 1. in
+        let a = [| x.(0)/.dx; x.(1)/.dx; x.(2)/.dx|] in
+        let dy = y.(3) +. 1. in
+        let b = [| y.(0)/.dy; y.(1)/.dy; y.(2)/.dy|] in
+        let dz = z.(3) +. 1. in
+        let c = [| z.(0)/.dz; z.(1)/.dz; z.(2)/.dz|] in
         setv (9*i+0) a.(0); setv (9*i+1) a.(1); setv (9*i+2) a.(2);
         setv (9*i+3) b.(0); setv (9*i+4) b.(1); setv (9*i+5) b.(2);
         setv (9*i+6) c.(0); setv (9*i+7) c.(1); setv (9*i+8) c.(2);
