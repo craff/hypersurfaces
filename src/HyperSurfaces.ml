@@ -67,7 +67,6 @@ module Make(R:Field.SPlus) = struct
     let dim = List.hd dims in
     if not (List.for_all ((=) dim) dims) then failwith "inhomogeneous equations";
     let codim = List.length p0 in
-    let sdim = dim - codim in
     let dp0 = List.map2 (fun p d -> ( pre_eval ( *. ) p
                                     , pre_eval ( **.) (gradient p)
                                     , pre_eval ( ***. ) (hessian p), d)) p0 deg in
@@ -377,30 +376,53 @@ module Make(R:Field.SPlus) = struct
     in
 
     let constant_sign p =
+      let l = plane p in
+      let deg = degree p in
       let ap = ref true in
       let an = ref true in
-      let nz = ref 0    in
-      List.iter (fun (_,c) ->
-          let t = cmp c zero in
-          if t < 0 then ap := false;
-          if t > 0 then an := false;
-          if t = 0 then incr nz;
-        ) p;
-      (!an || !ap) && !nz <= sdim
+      let fn c =
+        if c <=. zero then ap := false;
+        if c >=. zero then an := false;
+      in
+      Array.iter fn l;
+      if not (!an || !ap) then None else
+      if deg = 1 then Some !ap else
+      let al = Array.map abs l in
+      let x0 = Array.make (Array.length al) one in
+      for i = 1 to Array.length x0 - 1 do
+        x0.(i) <- zero;
+        let fi = of_int i in
+        for j = 0 to i-1 do
+          x0.(i) <- x0.(i) +. x0.(j) *. al.(j) /. (al.(i) *. fi)
+        done;
+      done;
+      let s = ref x0.(0) in
+      for i = 1 to Array.length x0 - 1 do
+        x0.(i) <- powf x0.(i) (one /. of_int (deg - 1));
+        s:= !s +. x0.(i)
+      done;
+      for i = 0 to Array.length x0 - 1 do
+        x0.(i) <- x0.(i) /. !s
+      done;
+      let m = ref zero in
+      for i = 0 to Array.length x0 - 1 do
+        m := !m +. al.(i) *. powf x0.(i) (of_int deg)
+      done;
+      let m = !m in
+(*      printf "minimum of %a^%d at %a is %a\n%!"
+        print_vector al deg print_vector x0 print m;*)
+      if !ap then
+        if List.for_all (fun (_,c) -> -. c <. m) p
+        then Some true else None
+      else
+        if List.for_all (fun (_,c) -> c <. m) p
+        then Some false else None
     in
 
-    let constant_sign2 (l, p) =
-      let ap = ref true in
-      let an = ref true in
-      let nz = ref 0 in
-      let fn (_,c) =
-        let t = cmp c zero in
-        if t < 0 then ap := false;
-        if t > 0 then an := false;
-        if t = 0 then incr nz;
-      in
-      List.iter fn p; List.iter fn l;
-      (!an || !ap) && !nz <= sdim
+    let constant_sign2 (l,p) =
+      match constant_sign l, constant_sign p with
+      | Some b1, Some b2 -> b1 = b2
+      | _ -> false
     in
 
     let is_vertex m =

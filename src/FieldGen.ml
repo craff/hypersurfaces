@@ -33,6 +33,7 @@ module type SMin = sig
   val exact : bool
   val cos : t -> t
   val ln  : t -> t
+  val exp : t -> t
 end
 
 (** Complete field signature, with a few extra functions *)
@@ -40,6 +41,7 @@ module type S = sig
   include SMin
   (** power function, in O(ln n) *)
   val pow : t -> int -> t
+  val powf : t -> t -> t
 
   type stop_cond =
     { precision : t      (** |x - y| <= value *)
@@ -89,6 +91,8 @@ module Make(R:SMin) = struct
         if n land 0x1 = 0 then q2 else q2 *. x
     in
     fn n
+
+  let powf x y = exp (y *. ln x)
 
   type stop_cond =
     { precision : t      (** |x - y| <= value *)
