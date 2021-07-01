@@ -233,7 +233,7 @@ module Parse(R:Field.SPlus) = struct
         Let_poly(name,vars,p)
     ; "let" (name::ident) ((vars,__) :: params) '=' "random" (deg::poly [] Sum) ';' =>
         Let_rand(name,vars,deg)
-    ; "let" (name::ident) ((vars,()) >: params) '=' "zeros" (opts::options)
+    ; "let" (name::ident)  '=' "zeros" ((vars,()) >: params) (opts::options)
         (pols:: ~+ (poly vars Sum)) ';' =>
         Let_surf(name, opts, vars, pols)
     ; "let" (name::ident) '=' "zeros" (opts::options)
