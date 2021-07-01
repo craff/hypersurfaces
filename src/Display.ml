@@ -52,10 +52,10 @@ type camera =
   }
 
 let camera =
-  { pos = [| 0.0;0.0;2.0 |]
+  { pos = [| 0.0;0.0;5.0 |]
   ; front = [| 0.0;0.0;-1.0 |]
   ; up = [| 0.0;1.0;0.0 |]
-  ; center = 2.0
+  ; center = 5.0
   ; rspeed = acos(-1.0) *. 1. /. 180. }
 
 let camera_right () = VF.(vp camera.front camera.up)
@@ -64,10 +64,10 @@ let set v1 v2 = Array.blit v2 0 v1 0 3
 
 let home () =
   updated := true;
-  set camera.pos [| 0.0;0.0;2.0 |];
+  set camera.pos [| 0.0;0.0;5.0 |];
   set camera.front [| 0.0;0.0;-1.0 |];
   set camera.up [| 0.0;1.0;0.0 |];
-  camera.center <- 2.0;
+  camera.center <- 5.0;
   camera.rspeed <- acos(-1.0) *. 1. /. 180.
 
 let camera_speed () = camera.center /. 20.0
@@ -146,6 +146,8 @@ let hide_all_objects () =
   updated := true;
   !restore
 
+let proj_coef = ref (1. /. 3.)
+
 (* Initialise the main window. *)
 module Init() = struct
 let window_width  : int ref   = ref 400 (* Window width.  *)
@@ -157,8 +159,8 @@ let camera_mat () =
 
 let projection () =
   Matrix.perspective 45.0 !window_ratio
-    (camera.center /. 30.0)
-    (camera.center *. 30.0)
+    (camera.center /. 20.0)
+    (camera.center *. 20.0)
 
 let _ =
   Egl.initialize ~width:!window_width ~height:!window_height "test_gles"
@@ -449,9 +451,10 @@ module Make(R:Field.SPlus) = struct
     let vert = create_float_bigarray (Hashtbl.length tbl * 3) in
     Hashtbl.iter (fun x i ->
         let setv i x = Bigarray.Genarray.set vert [|i|] x in
-        setv (3*i+0) (x.(0)/.(x.(3) +. 1.));
-        setv (3*i+1) (x.(1)/.(x.(3) +. 1.));
-        setv (3*i+2) (x.(2)/.(x.(3) +. 1.))) tbl;
+        let d = x.(3) +. !proj_coef in
+        setv (3*i+0) (x.(0)/.d);
+        setv (3*i+1) (x.(1)/.d);
+        setv (3*i+2) (x.(2)/.d)) tbl;
     let obj =
       mk_object vert vert elem color Matrix.idt gl_points
     in
@@ -493,7 +496,7 @@ module Make(R:Field.SPlus) = struct
     let vert = create_float_bigarray (Hashtbl.length tbl * 3) in
     Hashtbl.iter (fun x i ->
         let setv i x = Bigarray.Genarray.set vert [|i|] x in
-        let d = x.(3) +. 1. in
+        let d = x.(3) +. !proj_coef in
         setv (3*i+0) (x.(0)/.d);
         setv (3*i+1) (x.(1)/.d);
         setv (3*i+2) (x.(2)/.d)
@@ -527,11 +530,11 @@ module Make(R:Field.SPlus) = struct
         sete (3*i+0) (3*i+0);
         sete (3*i+1) (3*i+1);
         sete (3*i+2) (3*i+2);
-        let dx = x.(3) +. 1. in
+        let dx = x.(3) +. !proj_coef in
         let a = [| x.(0)/.dx; x.(1)/.dx; x.(2)/.dx|] in
-        let dy = y.(3) +. 1. in
+        let dy = y.(3) +. !proj_coef in
         let b = [| y.(0)/.dy; y.(1)/.dy; y.(2)/.dy|] in
-        let dz = z.(3) +. 1. in
+        let dz = z.(3) +. !proj_coef in
         let c = [| z.(0)/.dz; z.(1)/.dz; z.(2)/.dz|] in
         setv (9*i+0) a.(0); setv (9*i+1) a.(1); setv (9*i+2) a.(2);
         setv (9*i+3) b.(0); setv (9*i+4) b.(1); setv (9*i+5) b.(2);
