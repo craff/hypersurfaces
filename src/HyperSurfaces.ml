@@ -80,22 +80,25 @@ module Make(R:Field.SPlus) = struct
           let n = eval p c in
           acc +. n *. n) zero dp0
     in
+    let forbidden = ref [] in
     let single_critical =
       List.map (fun (_,dp,hp,_) ->
          let module F = struct
              let dim = dim
              let fun_min = epsilon2
-             let fun_good = of_float param.Args.crit_limit
-             let min_prog_coef = sqrt (of_int 2)
+             let fun_good = of_float param.Args.crit_limit *. epsilon
+             let min_prog_coef = of_float 1.414
              let min_prog_int = 2 * dim
              let lambda_min = epsilon2
              let eval c = fst (eval_tgrad dp c)
              let grad c = fst3 (eval_thess hp c)
              let dist2 = dist2
              let stat = solver1_stat
+             let forbidden = []
            end
          in
          let module S = Solve(F) in
+         forbidden := S.solutions :: ! forbidden;
          (Single, chr_solve1 S.solve)
         ) dp0
     in
@@ -107,11 +110,12 @@ module Make(R:Field.SPlus) = struct
              let dim0 = dim in
              let module F = struct
                let dim = dim + codim
-               let fun_min = epsilon2
-               let fun_good = of_float param.Args.crit_limit
-               let min_prog_coef = sqrt (of_int 2)
+               let fun_min = epsilon2 *. epsilon2
+               let fun_good = of_float param.Args.crit_limit *. epsilon
+               let min_prog_coef = of_float 1.414
                let min_prog_int = 2 * dim
                let lambda_min = epsilon2
+               let forbidden = !forbidden
                let dist2 c1 c2 =
                  let r = ref zero in
                  for i = 0 to dim0 - 1 do
@@ -177,6 +181,7 @@ module Make(R:Field.SPlus) = struct
            end
          in
          let module S = Solve(F) in
+         forbidden := S.solutions :: !forbidden;
          let solve proj a x =
            let proj' x =
              let x' = proj (Array.sub x 0 dim) in
@@ -205,17 +210,18 @@ module Make(R:Field.SPlus) = struct
       List.map (fun (_,dp,hp,_) ->
           let module F = struct
               let dim = dim
-              let fun_min = epsilon2
+              let fun_min = epsilon2 *. epsilon2
               let fun_good = inf
-              let min_prog_coef = sqrt (of_int 2)
-              let min_prog_int = 2 * dim
+              let min_prog_coef = of_float 10.0
+              let min_prog_int = 2*dim
               let lambda_min = epsilon2
+              let forbidden = !forbidden
               let eval c =
                 let p = penal c in
                 let n = fst (eval_tgrad dp c) in
                 p **. n
               let grad c = fst3 (eval_thess hp c)
-              let dist2 _ _ = assert false
+              let dist2 = dist2
               let stat = solver3_stat
             end
           in
@@ -264,10 +270,7 @@ module Make(R:Field.SPlus) = struct
                 let (fc1,c1) = solve proj (one /. of_int 1000) x in
                 (*                printf "fc1: %a %a\n%!" print fc1 print_ty ty;*)
                 let pc = eval_prod c1 in
-                if fc1 <. of_float param.Args.crit_limit then
-                  (ty,pc,c1,fc1)::acc
-                else
-                  acc
+                (ty,pc,c1,fc1)::acc
               with Not_found -> acc
                   | _ -> assert false) acc lm) [] single_critical
     in
@@ -533,7 +536,7 @@ module Make(R:Field.SPlus) = struct
         let rs2 =
           if critical then
             let radius2 = dist2 (to_vec s.s.(0)) c0 in
-            radius2 *. of_float 1e-12 /. of_int (param.crit * param.crit)
+            radius2 *. of_float 1e-10 /. of_int (param.crit * param.crit)
           else -. one
         in
         let fn best (ty,solve) c0 =
@@ -541,27 +544,31 @@ module Make(R:Field.SPlus) = struct
             (*if not critical then printf "solve %a %a ==> " print_vector s.c print_vector c0;*)
             let proj =
               if critical then (*project_circle s.c 0.95*)
-                fun c ->
+                (fun c ->
                   let c = normalise c in
                   let d = c *.* s.o.c in
                   if d <. of_float 0.9 then raise Not_found;
-                  c
+                  c)
               else
-                let cen =
-                  (((norm s.o.c -. one) *. of_float 0.9 +. one) /. norm s.o.c) **. s.o.c
-                in
+                let coef = ((norm s.o.c -. one) *. of_float 0.9 +. one) /. norm s.o.c in
+                assert (coef >. zero);
+                let cen = coef **. s.o.c in
                 project_circle cen 0.05
             in
             let (fc1,c1) = solve proj rs2 c0 in
             assert(fc1 >=. zero);
             let (b1,b2) = visible_v s c1 in
             (*if not critical then printf "fc1: %a %a %b %b\n%!" print fc1 print_ty ty b1 b2;*)
-            if not b1 || not b2 || (critical && fc1 >=. of_float param.Args.crit_limit) then
+            if not b1 || not b2 then
               (
-                assert critical;
-                Vector.sol_log "reject %b %b %b" b1 b2 (fc1 >. epsilon); raise Not_found);
+                Vector.sol_log "reject %b %b %b" b1 b2 (fc1 >. epsilon);
+                raise Not_found
+              );
             let p2 = eval_prod c1 in
-            select best (s, p2, c1, c1 *.* s.o.c, fc1, ty)
+            let md2 = Array.fold_left (fun md2 x ->
+                          let d2 = min (dist2 x c1) (dist2 (opp x) c1) in min md2 d2) inf s.m
+            in
+            select best (s, p2, c1, md2, fc1, ty)
           with Not_found -> (*printf "NF\n%!";*) best
         in
         List.iter (fun solve ->
@@ -571,9 +578,7 @@ module Make(R:Field.SPlus) = struct
             in
             List.iter (fun c -> best := fn !best solve c) lm) allp
       in
-      Vector.sol_log "begin iter";
       List.iter kn sd;
-      Vector.sol_log "end iter";
       let (s, c, ty) = match !best with
         | None -> Vector.sol_log "keep nothing"; raise Not_found
         | Some (s, _, c, sc, fc, ty) ->
@@ -852,6 +857,24 @@ module Make(R:Field.SPlus) = struct
       List.iter re_add_neighbour added)
     in
 
+    let tmp_object = ref None in
+
+    let display_current () =
+      let edges = Hashtbl.fold (fun _ l acc ->
+                      match l with
+                      | [] -> assert false
+                      | (i,j,s)::_ -> [|s.m.(i); s.m.(j)|]::acc)
+                    trs.by_edge []
+      in
+      (match !tmp_object with
+       | None -> ()
+       | Some o -> Display.rm_object o);
+      let o = D.mk_lines_from_polyhedron "tmp_build" edges in
+      o.visible <- true;
+      tmp_object := Some o;
+      if !Args.progw then (printf "WAIT\n%!"; Display.wait ());
+    in
+
     let test codim =
       let ls = to_do.(codim) in
       to_do.(codim) <- SimpSet.empty;
@@ -881,6 +904,7 @@ module Make(R:Field.SPlus) = struct
                     let (s,c,ty) = search_penal_critical s.o.c sd in
                     ajoute s c ty
                   with Not_found ->
+                    Vector.sol_log "take center";
                     let c = normalise v in
                     let c = Simp.mkv c in
                     ajoute s c Center
@@ -905,24 +929,6 @@ module Make(R:Field.SPlus) = struct
     let erase_total () =
       let str = String.make 79 ' ' in
       eprintf "\r%s\r" str
-    in
-
-    let tmp_object = ref None in
-
-    let display_current () =
-      let edges = Hashtbl.fold (fun _ l acc ->
-                      match l with
-                      | [] -> assert false
-                      | (i,j,s)::_ -> [|s.m.(i); s.m.(j)|]::acc)
-                    trs.by_edge []
-      in
-      (match !tmp_object with
-       | None -> ()
-       | Some o -> Display.rm_object o);
-      let o = D.mk_lines_from_polyhedron "tmp_build" edges in
-      o.visible <- true;
-      tmp_object := Some o;
-      if !Args.progw then Display.wait ();
     in
 
     while not (Array.for_all SimpSet.is_empty to_do) do

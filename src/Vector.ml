@@ -899,6 +899,7 @@ module Make(R:S) = struct
                         value is less than fun_good *)
 
     val stat : solver_stats (** solver stats *)
+    val forbidden : (t*v) list ref list
   end
 
   let project_circle s coef c =
@@ -945,7 +946,8 @@ module Make(R:S) = struct
       (** optimal step should be
           (-. (r *.* dx) /. d2) **. dx
           but the following is much better ... do not know why *)
-      let steepest = (if d2 <= zero then -.one else -. norm2 r /. d2) **. dx in
+      let q = norm2 r /. d2 in
+      let steepest = (if d2 <= zero then -.one else -. q) **. dx in
       (** newton direction as usual *)
       let newton = solve h (-. one **. r) in
       (steepest, newton)
@@ -967,6 +969,11 @@ module Make(R:S) = struct
         if not (fc <. inf) then raise Not_found;
         assert (fc >=. zero || (printf "%a %a\n%!" print fc print_vector c; false));
         try (** search for existing solution near enough *)
+          if List.exists (fun ptr ->
+                 List.exists
+                   (fun (_,c') -> F.dist2 c c' < rs2 || F.dist2 c (opp c') < rs2)
+                   !ptr) F.forbidden
+          then raise Not_found;
           let ls =
             List.find_all
               (fun (_,c') -> F.dist2 c c' < rs2 || F.dist2 c (opp c') < rs2)
@@ -990,17 +997,18 @@ module Make(R:S) = struct
                (!best_fc',!best_c')
           in
           update_loop_stats false steps;
-          assert (fc' <. F.fun_good);
           let c' = if F.dist2 c c' < rs2 then c' else opp c' in
           sol_log "abort at step %3d, fc: %a, c: %a"
             steps print fc' print_vector c';
           (fc',c')
         with Exit -> loop steps c fc nd sd lambda
       and loop steps c fc nd sd lambda =
-
           (* other stopping conditions *)
           let fc1 = try Previous.get prev with Not_found -> inf in
+          let q = norm2 nd in
+          (*printf "steps: %d %a %a %a %a %a\n%!" steps print fc print fc1 print epsilon2 print (fc1 /. fc) print q;*)
           if lambda <. F.lambda_min || fc1 /. fc <. F.min_prog_coef
+                                                      || q < F.fun_min
           then
             begin
               update_loop_stats true steps;
@@ -1011,17 +1019,18 @@ module Make(R:S) = struct
                   let m = F.grad c in
                   printf "\t %a (%a)\n%!" print_matrix m print (det m);
                 end;*)
-              sol_log "ends at %4d, fc: %a, c: %a, lambda: %a"
-                steps print fc print_vector c print lambda;
-              if fc <. F.fun_good then
+              sol_log "ends at %4d, fc: %a, c: %a, lambda: %a, q: %a"
+                steps print fc print_vector c print lambda print q;
+              if q >. F.fun_good then
                 begin
-                  if rs2 >. zero then
-                    begin
-                      sol_log "%d solutions" (1 + List.length !solutions);
-                      solutions := (fc,c) :: !solutions;
-                    end
-                end
-              else F.stat.nb_bad <- F.stat.nb_bad + 1;
+                  F.stat.nb_bad <- F.stat.nb_bad + 1;
+                  raise Not_found;
+                end;
+              if rs2 >. zero then
+                begin
+                  sol_log "%d solutions" (1 + List.length !solutions);
+                  solutions := (fc,c) :: !solutions;
+                end;
               (fc,c)
             end
           else
@@ -1195,12 +1204,14 @@ module type V = sig
     val fun_min : t
     val fun_good : t
     val stat : solver_stats
+    val forbidden : (t * v) list ref list
   end
 
   val project_circle : v -> float -> v -> v
 
   module Solve(F:Fun) : sig
     val solve : (v -> v) -> t -> v -> (t*v)
+    val solutions : (t * v) list ref
   end
 
   module type FunMin = sig
