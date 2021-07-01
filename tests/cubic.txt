@@ -15,16 +15,16 @@ let c(x,y) = pt1(x,y)*pt2(x,y)*pt3(x,y) + 0.1 * s(x,y);
 let c = zeros c;
 display c c__t;
 
-let p1 = zeros c pt1;
+let p1 = zeros [expected=3] c pt1;
 display p1__t p1 c;
 
-let p2 = zeros c pt2;
+let p2 = zeros [expected=3] c pt2;
 display p2__t p2 c;
 
-let p3 = zeros c pt3;
+let p3 = zeros [expected=3] c pt3;
 display p3__t p3 c;
 
-let pty(x,y,tx) = x;
+let pty(x,y) = x;
 
-let p4 = zeros c pty;
+let p4 = zeros [expected=3] c pty;
 display p4__t p4 c;

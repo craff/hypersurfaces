@@ -254,8 +254,10 @@ module Parse(R:Field.SPlus) = struct
 end
 
 let%parser main =
-  (let module P = Parse(Field.Float) in P.cmds) => ()
-  ; "precision" ((n,()) >: (n::INT => (n,()))) ';'
-      (let module P = Parse(Field.Gmp) in
-       Field.Gmp.set_prec n;
-       P.cmds) => ()
+  match !Args.precision with
+  | Args.Double ->
+     let module P = Parse(Field.Float) in P.cmds
+  | Args.Gmp n ->
+     let module P = Parse(Field.Gmp) in
+     Field.Gmp.set_prec n;
+     P.cmds

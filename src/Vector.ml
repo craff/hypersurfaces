@@ -793,8 +793,7 @@ module Make(R:S) = struct
                 exit_zih step true;
               end;
         in
-        (** it too many steps, we stop assuming zero in hull, currently do not
-           appends on examples. *)
+        (** if too many steps, we stop assuming zero in hull.  *)
         if step > 20 * dim * nb then
           begin
             zih_log "too long %d, stops" step;

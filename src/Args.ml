@@ -8,6 +8,8 @@ let progw  = ref false
 let dbname = ref None
 let vname = ref ""
 let defs = ref []
+type precision = Double | Gmp of int
+let precision = ref Double
 
 let debug_string = ref ""
 
@@ -26,7 +28,7 @@ let default_parameters =
   ; subd = 15
   ; dprec = 1e3
   ; crit  = 3
-  ; crit_limit = 1e-15
+  ; crit_limit = 10.0
   ; check = false
   ; topo = Ask_Nbc
   ; expected = None}
@@ -92,6 +94,12 @@ let spec =
     , Arg.Tuple [Arg.String (fun s -> vname := s)
                ; Arg.Float (fun f -> defs := (!vname, f) :: !defs)]
     , "Define a variable with a float value from the command line")
+  ; ( "--double"
+    , Arg.Unit (fun () -> precision := Double)
+    , "Use double for computation")
+  ; ( "--gmp"
+    , Arg.Int (fun n -> precision := Gmp n)
+    , "Use gmp with given precision for computation")
   ; ( "--init-rand"
     , Arg.Unit (fun () -> Random.self_init ())
     , "initialize the random generator")

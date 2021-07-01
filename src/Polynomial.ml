@@ -562,7 +562,7 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
           begin
             if not !first then fprintf ch " + ";
             first := false;
-            fprintf ch "%a%a" print c
+            fprintf ch "%a%a" print (c *. multinomial l)
               (print_monomial vars) l;
           end) p
 
