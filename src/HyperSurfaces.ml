@@ -55,6 +55,7 @@ module Make(R:Field.SPlus) = struct
 
   let triangulation param p0 =
 
+    let unsafe = ref [] in
     let restore_objects =
       if !Args.prog then Display.hide_all_objects ()
       else (fun () -> ())
@@ -586,12 +587,15 @@ module Make(R:Field.SPlus) = struct
     in
 
     let search_single_critical sd =
+      Vector.sol_log "start search critical";
       search_points true single_critical sd
     in
     let search_multi_critical sd =
+      Vector.sol_log "start search multi critical";
       search_points true multi_critical sd
     in
     let search_penal_critical c sd =
+      Vector.sol_log "start search penal";
       search_points false (penal_critical c) sd
     in
 
@@ -671,10 +675,17 @@ module Make(R:Field.SPlus) = struct
              kn (subd-1) s1 l1 p1 dp1; kn (subd-1) s2 l2 p2 dp2
            end
       in
-      if List.for_all (fun (_,s) -> assert(s.k <> Removed);
-                                    s.o.codim <= codim) sd
-      then
-        hn param.Args.subd s.m l p dp
+      let adone = List.exists (fun (_,s) -> assert(s.k <> Removed);
+                                            s.o.codim > codim) sd
+      in
+      if not adone then
+        begin
+          let too_hard = List.exists (fun (_,s) ->
+                             s.o.d < of_float param.safe *. epsilon &&
+                               (unsafe := s :: !unsafe; true)) sd
+          in
+          if not too_hard then hn param.Args.subd s.m l p dp
+        end
     in
 
     let count_common s s' =
@@ -707,7 +718,6 @@ module Make(R:Field.SPlus) = struct
 
     let decision codim s =
       try
-        if List.exists constant_sign s.o.p then NonZero else
           let fn (_,vs) = decision_face codim vs s in
           let size vs =
             let m = Array.to_list s.m in
@@ -745,7 +755,8 @@ module Make(R:Field.SPlus) = struct
       count_point ty;
       rm trs s;
       to_do.(s.o.codim) <- SimpSet.remove s to_do.(s.o.codim);
-      decomp_log "adding center %a" print_vector (to_vec x);
+      decomp_log "adding center %a to %a (%a => %a)" print_vector (to_vec x)
+        print_simplex s print_vector s.o.c print (s.o.c *.* (to_vec x));
       let rec rml acc k = function
         | [] -> (None, List.rev acc)
         | (_,_,k' as c)::l -> if k = k' then (Some c, List.rev_append acc l)
@@ -1090,7 +1101,8 @@ module Make(R:Field.SPlus) = struct
       | Some t -> max param.topo (Topology.min_demand t)
     in
     let topo = topology topo_ask ctrs in
-    eprintf "   topology: %a\n%!" Topology.print topo;
+    let nb_unsafe = List.length !unsafe in
+    eprintf "   topology: %a (unsafe: %d)\n%!" Topology.print topo nb_unsafe;
     begin
       let open Args in
       match param.expected with
@@ -1108,7 +1120,7 @@ module Make(R:Field.SPlus) = struct
     in
 
     restore_objects ();
-    (List.map (Array.map to_vec) all, edges, dim, topo)
+    (List.map (Array.map to_vec) all, edges, dim, topo, !unsafe = [])
 
   let triangulation param p0 =
     let r =

@@ -35,10 +35,10 @@ module Parse(R:Field.SPlus) = struct
     | Let_surf(name, opts, vars, pols) ->
        let dim = List.length vars in
        let ps = B.homogeneise_many (List.map (to_bernstein dim vars) pols) in
-       let (ts, es, dim, topo) =
+       let (ts, es, dim, topo, safe) =
          H.triangulation opts ps
        in
-       if !Args.dbname <> None then
+       if safe && !Args.dbname <> None then
          begin
            let rand p = match p with
              | App(p,_) -> p.rand | _ -> false
@@ -170,7 +170,7 @@ module Parse(R:Field.SPlus) = struct
 
   let%parser option =
       "subd" "=" (p::INT) => (fun opt -> Args.{ opt with subd = p })
-    ; "rmax" "=" (p::FLOAT) => (fun opt -> Args.{ opt with rmax = p })
+    ; "safe" "=" (p::FLOAT) => (fun opt -> Args.{ opt with safe = p })
     ; "delauney" "prec" "=" (p::FLOAT) => (fun opt -> Args.{ opt with dprec = p })
     ; "nb critical" "=" (p::INT) => (fun opt -> Args.{ opt with crit = p })
     ; "limit critical" "=" (p::FLOAT) => (fun opt -> Args.{ opt with crit_limit = p })

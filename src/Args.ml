@@ -14,7 +14,7 @@ let precision = ref Double
 let debug_string = ref ""
 
 type parameters =
-  { mutable rmax : float
+  { mutable safe : float
   ; mutable subd : int
   ; mutable dprec : float
   ; mutable crit : int
@@ -24,7 +24,7 @@ type parameters =
   ; mutable check : bool }
 
 let default_parameters =
-  { rmax = 0.99
+  { safe = 1e4
   ; subd = 15
   ; dprec = 1e3
   ; crit  = 3
@@ -58,9 +58,9 @@ let spec =
   ; ( "--progress-wait"
     , Arg.(Tuple [Set prog; Set progw])
     , "show building of triangulation and stop at each step")
-  ; ( "--rmax"
-    , Arg.Float (fun p -> default_parameters.rmax <- p)
-    , "maximum distance to center when optimizing vertex position")
+  ; ( "--safe"
+    , Arg.Float (fun p -> default_parameters.safe <- p)
+    , "minimum determinant required for safety")
   ; ( "--delauney-prec"
     , Arg.Float (fun p -> default_parameters.dprec <- p)
     , "minimum visibility to compensate for numerical errors in delauney triangulation")
