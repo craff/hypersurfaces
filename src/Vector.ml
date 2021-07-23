@@ -586,6 +586,7 @@ module Make(R:S) = struct
   (** exception and function to exit the procedure. the function updates
       the statistics *)
   exception ExitZih of bool
+  exception NoIndex
 
   let exit_zih ?(abort=false) step r =
     zih_steps.nb_call <- zih_steps.nb_call + 1;
@@ -612,12 +613,6 @@ module Make(R:S) = struct
        have [v2 = 0] with [r]'s coef non negative and summing to one *)
       (** previous descent direction *)
       let pr = Array.make nb zero in
-      (** there appears to be very rare cycle slowing down convergence where
-          the value cancelled by a linear step become again positive in the
-          next dim conjugate steps, and is recancelled again, preventing other
-          indices to be cancelled. So we remember the last indice cancelled
-          by a linear step to avoid that cycle. *)
-      let last_cancel = ref (-1) in
 
       (** first kind of steps:
           we will update [r] with [r = set_one (r + alpha(delta_i + beta pr))]
@@ -634,18 +629,25 @@ module Make(R:S) = struct
       let conjugate_step step v v2 =
         let dir_i = ref (-1) in
         let dir_s = ref zero in
-
+        let stop = ref true in
+        let sigma = ref zero in
+        for j = 0 to nb-1 do
+          sigma := !sigma +. pr.(j)
+        done;
+        let sigma = !sigma in
         for i = 0 to nb - 1 do
           let s = m.(i) *.* v in
-          zih_log "  %a %a" print s print_vector v;
-          if s <=. !dir_s && i <> !last_cancel then
+          (*zih_log "  %a %a %a" print r.(i) print s print_vector m.(i);*)
+          if s <=. zero then stop := false;
+          if s <=. !dir_s then
             begin
               dir_s := s;
-              dir_i := i
+              dir_i := i;
             end
         done;
         let i = !dir_i in
-        if i < 0 then (zih_log "false"; exit_zih step false);
+        if !stop then (zih_log "false"; exit_zih step false);
+        if i < 0 then raise NoIndex;
         (** value of interest, see the article *)
         let p = m **- pr in
         let p2 = norm2 p in
@@ -653,11 +655,7 @@ module Make(R:S) = struct
         let w = m.(i) in
         let pw = p *.* w in
         let vw = !dir_s in
-        let sigma = ref zero in
-        for j = 0 to nb-1 do
-          sigma := !sigma +. pr.(j)
-        done;
-        let sigma = !sigma in
+        assert (vw <=. zero || (printf "%d\n%!" i; false) );
         (** function computing [alpha] and [f]: the new [norm v2] from [beta] *)
         let find_alpha beta =
           let w2 = beta *. beta *. p2 +. of_int 2 *. beta *. pw +. one in
@@ -703,44 +701,40 @@ module Make(R:S) = struct
       in
 
       (** second kind of steps *)
-      let linear_step step v _v2 =
-        (** we selecœ<t indices with [r.(i) > 0] *)
+      let linear_step step v v2 =
+        (** we select indices with [r.(i) > 0] *)
         let sel = ref [] in
         for i = 0 to nb - 1 do
-          if r.(i) >. zero then sel := i :: !sel;
+          if r.(i) >. zero then sel := (i, r.(i) *. (m.(i) *.* v)) :: !sel;
         done;
-        let sel = Array.of_list !sel in
-        (** matrix, adding one to have the linear constraint that coefficient
-           sum to zero *)
-        let ms = Array.map (fun k -> Array.append m.(k) [|one|]) sel in
-        let b = Array.append v [|zero|] in
+        let cmp (_,x) (_,y) = compare y x in
+        sel := List.sort cmp !sel;
+        let s = min dim (List.length !sel) in
+        let nsel = Array.make s 0 in
+        let ms = Array.init s (fun k -> match !sel with
+                                         | [] -> assert false
+                                         | (i,_) :: l -> sel := l; nsel.(k) <- i; m.(i))
+        in
         (** computing vector s such that [m **- s] is nearest to v
             and sum to zero. We will move [r] is direction [-s] *)
         let s =
-          (** the system to solve depend upon the size of the selection *)
-          if Array.length sel > dim then
-            begin
-              let mm v = ms **- (ms *** v) in
-              let t = irm_cg mm b in
-              ms *** t
-            end
-          else
-            begin
-              let mm v = ms *** (ms **- v) in
-              let t = irm_cg mm (ms *** b) in
-              t
-            end
+          let mm v = ms *** (ms **- v) in
+          irm_cg mm (ms *** v)
         in
-        (** we update [r = r - alpha s], computing [alpha <= 1] maximum
+        let c = ms **- s in
+        let d = Array.fold_left ( +. ) zero s in
+        let cv = c *.* v in
+        let c2 = norm2 c in
+        let alpha = ref ((d *. v2 -. cv) /. (c2 -. d *. cv)) in
+        (** we update [r = r + alpha s], computing [alpha] maximum
             to keep r positive. *)
-        let alpha = ref one in
         let cancel = ref (-1) in
         Array.iteri (fun i k ->
-            if !alpha *. s.(i) >. r.(k) then
+            if -. !alpha *. s.(i) >. r.(k) then
               begin
-                alpha := r.(k) /. s.(i);
+                alpha := -. r.(k) /. s.(i);
                 cancel := k
-              end) sel;
+              end) nsel;
         let alpha = !alpha in
         let cancel = !cancel in
         (** if cancel = -1, then alpha = 1 and if [Array.length sel > dim],
@@ -748,11 +742,12 @@ module Make(R:S) = struct
         let r = Array.copy r in
         Array.iteri (fun i k ->
             if k = cancel then (r.(k) <- zero)
-            else r.(k) <- r.(k) -. alpha *. s.(i)) sel;
+            else r.(k) <- r.(k) +. alpha *. s.(i)) nsel;
+        set_one r;
         let nv = m **- r in
         let nv2 = norm2 nv in
         zih_log "lin step: %d, alpha: %a, cancel: %d, sel: %a, norm = %a"
-          step print alpha cancel print_int_list (Array.to_list sel) print nv2;
+          step print alpha cancel print_int_array nsel print nv2;
         (r, cancel, nv, nv2)
       in
 
@@ -768,31 +763,36 @@ module Make(R:S) = struct
                     the previous descent direction. This appears to be better
                     than resetting pr to zero completely. *)
                 if cancel <> -1 then pr.(cancel) <- zero;
-                last_cancel := cancel;
                 Array.blit nr 0 r 0 nb;
                 (nv,nv2)
               end
             else
               begin
-                last_cancel := -1;
                 (** linear steps are not always descent steps, so we do not
-                   stop if the are rejected *)
+                    stop if they are rejected *)
                 zih_log "reject linear step %a >= %a" print nv2 print v2;
                 (v,v2)
               end
           else
-            let (nv,nv2) = conjugate_step step v v2 in
-            if (nv2 <. v2) then
-              (nv,nv2)
-            else
-              begin
-                (** conjugate steps are always descent step, so failure
-                    to descent while [m.(i) *.* v] is not always > 0
-                    means [v] ~ 0 up to numerical errors *)
-                zih_log "no progress %a >= %a, stops" print nv2 print v2;
-                exit_zih step true;
-              end;
+            try
+              let (nv,nv2) = conjugate_step step v v2 in
+              if (nv2 <. v2) then
+                (nv,nv2)
+              else
+                begin
+                  (** conjugate steps are always descent step, so failure
+                    to           descent while [m.(i) *.* v] is not always > 0
+                    means [v] ~  0 up to numerical errors *)
+                  zih_log "no progress %a >= %a, stops" print nv2 print v2;
+                  exit_zih step true;
+                end;
+            with NoIndex -> (v,v2)
         in
+        if v2 <. epsilon2 then
+          begin
+            zih_log "too small %d, stops" step;
+            exit_zih step true;
+          end;
         (** if too many steps, we stop assuming zero in hull.  *)
         if step > 20 * dim * nb then
           begin
