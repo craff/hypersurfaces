@@ -586,7 +586,6 @@ module Make(R:S) = struct
   (** exception and function to exit the procedure. the function updates
       the statistics *)
   exception ExitZih of bool
-  exception NoIndex
 
   let exit_zih ?(abort=false) step r =
     zih_steps.nb_call <- zih_steps.nb_call + 1;
@@ -627,8 +626,8 @@ module Make(R:S) = struct
           of r keeping r non negative and summing to one thanks to the use of
           set_one. *)
       let conjugate_step step v v2 =
-        let dir_i = ref (-1) in
-        let dir_s = ref zero in
+        let candidates = ref [] in
+        let nb_c = ref 0 in
         let stop = ref true in
         let sigma = ref zero in
         for j = 0 to nb-1 do
@@ -638,23 +637,22 @@ module Make(R:S) = struct
         for i = 0 to nb - 1 do
           let s = m.(i) *.* v in
           (*zih_log "  %a %a %a" print r.(i) print s print_vector m.(i);*)
-          if s <=. zero then stop := false;
-          if s <=. !dir_s then
+          if s <=. zero then
             begin
-              dir_s := s;
-              dir_i := i;
+              stop := false;
+              incr nb_c;
+              candidates := i :: !candidates
             end
         done;
-        let i = !dir_i in
         if !stop then (zih_log "false"; exit_zih step false);
-        if i < 0 then raise NoIndex;
+        let i = List.nth !candidates (Random.int !nb_c) in
         (** value of interest, see the article *)
         let p = m **- pr in
         let p2 = norm2 p in
         let pv = p *.* v in
         let w = m.(i) in
         let pw = p *.* w in
-        let vw = !dir_s in
+        let vw = m.(i) *.* v in
         assert (vw <=. zero || (printf "%d\n%!" i; false) );
         (** function computing [alpha] and [f]: the new [norm v2] from [beta] *)
         let find_alpha beta =
@@ -705,34 +703,29 @@ module Make(R:S) = struct
         (** we select indices with [r.(i) > 0] *)
         let sel = ref [] in
         for i = 0 to nb - 1 do
-          if r.(i) >. zero then sel := (i, r.(i) *. (m.(i) *.* v)) :: !sel;
+          if r.(i) >. zero then sel := i :: !sel;
         done;
-        let cmp (_,x) (_,y) = compare y x in
-        sel := List.sort cmp !sel;
-        let s = min dim (List.length !sel) in
-        let nsel = Array.make s 0 in
-        let ms = Array.init s (fun k -> match !sel with
-                                         | [] -> assert false
-                                         | (i,_) :: l -> sel := l; nsel.(k) <- i; m.(i))
-        in
+        let nsel = Array.of_list !sel in
+        let ms = Array.map (fun i -> Array.append (r.(i) **. m.(i)) [|r.(i)|]) nsel in
+        let vs = Array.append v [|zero|] in
         (** computing vector s such that [m **- s] is nearest to v
             and sum to zero. We will move [r] is direction [-s] *)
         let s =
-          let mm v = ms *** (ms **- v) in
-          irm_cg mm (ms *** v)
+          if Array.length nsel > dim then
+            let mm v = ms **- (ms *** v) in
+            ms *** (irm_cg mm vs)
+          else
+            let mm v = ms *** (ms **- v) in
+            irm_cg mm (ms *** vs)
         in
-        let c = ms **- s in
-        let d = Array.fold_left ( +. ) zero s in
-        let cv = c *.* v in
-        let c2 = norm2 c in
-        let alpha = ref ((d *. v2 -. cv) /. (c2 -. d *. cv)) in
+        let alpha = ref (one) in
         (** we update [r = r + alpha s], computing [alpha] maximum
             to keep r positive. *)
         let cancel = ref (-1) in
         Array.iteri (fun i k ->
-            if -. !alpha *. s.(i) >. r.(k) then
+            if !alpha *. s.(i) >. one then
               begin
-                alpha := -. r.(k) /. s.(i);
+                alpha := one /. s.(i);
                 cancel := k
               end) nsel;
         let alpha = !alpha in
@@ -742,51 +735,51 @@ module Make(R:S) = struct
         let r = Array.copy r in
         Array.iteri (fun i k ->
             if k = cancel then (r.(k) <- zero)
-            else r.(k) <- r.(k) +. alpha *. s.(i)) nsel;
+            else r.(k) <- r.(k) *. (one -. alpha *. s.(i))) nsel;
         set_one r;
         let nv = m **- r in
         let nv2 = norm2 nv in
-        zih_log "lin step: %d, alpha: %a, cancel: %d, sel: %a, norm = %a"
-          step print alpha cancel print_int_array nsel print nv2;
+        zih_log "lin step: %d, alpha: %a, cancel: %d, sel: %a"
+          step print alpha cancel print_int_array nsel;
         (r, cancel, nv, nv2)
       in
 
       let rec fn step v v2 =
+(*        zih_log "step: %d\n\tr: %a\n\tm.v: %a" step
+           print_vector r print_vector (m *** v);*)
         let (v,v2) =
-          (** one linear step for dim conjugate steps. *)
-          if step mod (dim + 1) = 0 then
-            let (nr, cancel, nv, nv2) = linear_step step v v2 in
-            if (nv2 <. v2) then
-              begin
-                (** pr is set to zero for the cancelled index to force avoid
-                    this indice to be updated by the next conjugate step due to
-                    the previous descent direction. This appears to be better
-                    than resetting pr to zero completely. *)
-                if cancel <> -1 then pr.(cancel) <- zero;
-                Array.blit nr 0 r 0 nb;
-                (nv,nv2)
-              end
-            else
-              begin
-                (** linear steps are not always descent steps, so we do not
-                    stop if they are rejected *)
-                zih_log "reject linear step %a >= %a" print nv2 print v2;
-                (v,v2)
-              end
+          (** one linear step and one conjugate steps. *)
+          let (nr, cancel, nv, nv2) = linear_step step v v2 in
+          if (nv2 <. v2) then
+            begin
+              (** pr is set to zero for the cancelled index to force avoid
+                  this indice to be updated by the next conjugate step due to
+                  the previous descent direction. This appears to be better
+                  than resetting pr to zero completely. *)
+              if cancel <> -1 then pr.(cancel) <- zero;
+              Array.blit nr 0 r 0 nb;
+              (nv,nv2)
+            end
           else
-            try
-              let (nv,nv2) = conjugate_step step v v2 in
-              if (nv2 <. v2) then
-                (nv,nv2)
-              else
-                begin
-                  (** conjugate steps are always descent step, so failure
-                    to           descent while [m.(i) *.* v] is not always > 0
-                    means [v] ~  0 up to numerical errors *)
-                  zih_log "no progress %a >= %a, stops" print nv2 print v2;
-                  exit_zih step true;
-                end;
-            with NoIndex -> (v,v2)
+            begin
+              (** linear steps are not always descent steps, so we do not
+                  stop if they are rejected *)
+              zih_log "reject linear step %a >= %a" print nv2 print v2;
+              (v,v2)
+            end
+        in
+        let (v,v2) =
+          let (nv,nv2) = conjugate_step step v v2 in
+          if (nv2 <. v2) then
+            (nv,nv2)
+          else
+            begin
+              (** conjugate steps are always descent step, so failure
+                to descent while [m.(i) *.* v] is not always > 0
+                means [v] ~ 0 up to numerical errors *)
+              zih_log "no progress %a >= %a, stops" print nv2 print v2;
+              exit_zih step true;
+            end;
         in
         if v2 <. epsilon2 then
           begin
