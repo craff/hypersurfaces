@@ -567,6 +567,8 @@ module Make(R:S) = struct
       mutable sum : int
     }
 
+  let stop_cond = { precision = zero; max_steps = 50 }
+
   (** initial stats and reset*)
   let zih_steps = { nb_call = 0; nb_abort = 0; max = 0; sum = 0 }
   let reset_zih () =
@@ -667,7 +669,6 @@ module Make(R:S) = struct
           (alpha, f)
         in
         (** computation of best beta by trichotomie *)
-        let stop_cond = { default_stop_cond with max_steps = 50 } in
         let f beta = snd (find_alpha beta) in
         let beta =
           if pv >. zero then
