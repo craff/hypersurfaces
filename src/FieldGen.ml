@@ -70,6 +70,7 @@ module type S = sig
       number of computation of [f] te reach a given precision
    *)
   val tricho : ?safe:bool -> ?stop_cond:stop_cond -> (t -> t) -> t -> t -> t
+  val secant : ?safe:bool -> ?stop_cond:stop_cond -> (t -> t) -> t -> t -> t
 
   (** least float such that [one + epsilon != one] *)
   val epsilon : t
@@ -140,6 +141,56 @@ module Make(R:SMin) = struct
     | _ -> invalid_arg "digho same sign"
 
   let g = (sqrt (of_int 5) -. one) /. of_int 2
+
+  let secant ?(safe=true) ?(stop_cond=default_stop_cond) f beta0 beta2 =
+    let beta0, beta2 =
+      if beta2 >. beta0 then (beta0, beta2) else (beta2, beta0)
+    in
+    let steps = ref 0 in
+    let rec fn beta0 f0 beta1 f1 beta2 f2 =
+(*      printf "%d: %a %a %a %a %a %a\n%!" !steps print beta0 print f0
+        print beta1 print f1
+        print beta2 print f2;*)
+      if !steps >= stop_cond.max_steps
+         || abs ((f0 -. f1) /. f0) <=. stop_cond.precision
+         || abs ((f2 -. f1) /. f0) <=. stop_cond.precision
+      then beta1 else
+        let d1 = (f1 -. f0) /. (beta1 -. beta0) in
+        let d2 = (f2 -. f1) /. (beta2 -. beta1) in
+        let x = (d1 /. (d1 -. d2)) *. (beta2 -. beta0) +. beta0 in
+        let (x,f) =
+          if x >. beta0 && x <. beta2 && abs (x -. beta1) >. of_float 1e-4 *. (beta2 -. beta0) then (x, f x)
+          else
+            let x =
+              if beta2 -. beta1 > beta1 -. beta0 then
+                (beta1 +. beta2) /. of_int 2
+              else
+                (beta0 +. beta1) /. of_int 2
+            in
+            (x,f x)
+        in
+        incr steps;
+        if x <. beta1 then
+          if f <. f1 then
+            fn beta0 f0 x f beta1 f1
+          else
+            fn x f beta1 f1 beta2 f2
+        else if f <. f1 then
+          fn beta1 f1 x f beta2 f2
+        else
+          fn beta0 f0 beta1 f1 x f
+    in
+    let beta1 = (beta0 +. beta2) /. of_int 2 in
+    let f0 = f beta0 in
+    let f1 = f beta1 in
+    let f2 = f beta2 in
+    let beta = fn beta0 f0 beta1 f1 beta2 f2 in
+    if safe then beta else
+      begin
+        let f = f beta in
+        if f <. f0 && f <. f2 then beta
+        else if f0 <. f2 then beta0 else beta1
+      end
 
   let tricho ?(safe=true) ?(stop_cond=default_stop_cond) f beta0 beta3 =
     let steps = ref 0 in
