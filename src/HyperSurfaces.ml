@@ -632,14 +632,21 @@ module Make(R:Field.SPlus) = struct
 (*      let vsf = Array.map (fun b -> if b then 1 else 0) vs in
         printf "decision for %a,%a\n%!"
         print_matrix s.m print_int_array vsf;*)
+      let (sd,gd) = all_gradients vs s in
+      let adone = List.exists (fun (_,s) -> assert(s.k <> Removed);
+                                            s.o.codim > codim) sd
+      in
+      if not adone then
+      let too_hard = List.exists (fun (_,s) ->
+                         s.o.d < of_float param.safe *. epsilon &&
+                           (unsafe := s :: !unsafe; true)) sd
+      in
+      if not too_hard then
       let p = sub s.o.p vs in
       let len = Array.length vs in
       let nb_vs = dim - codim in
       let l = List.map first_deg p in
-      let lp = List.combine l p in
-      if not (List.exists constant_sign2 lp) then
       let dp = sub_v (List.map Lazy.force s.o.dp) vs in
-      let (sd,gd) = all_gradients vs s in
       let rec kn subd s l p dp =
         let lp = List.combine l p in
         let cst = List.exists constant_sign2 lp in
@@ -657,9 +664,9 @@ module Make(R:Field.SPlus) = struct
           | dp::dps, gd::gds ->
              let dp = List.map snd dp in
              let new_points = dp @ gd in
-             let opp_new = List.map opp new_points in
              (match fn (new_points @ points) dps gds with
-              | None -> fn (opp_new @ points) dps gds
+              | None -> let new_points = List.map opp new_points in
+                        fn (new_points @ points) dps gds
               | r    -> r)
           | _ -> assert false
         in
@@ -702,17 +709,8 @@ module Make(R:Field.SPlus) = struct
              kn (subd-1) s1 l1 p1 dp1; kn (subd-1) s2 l2 p2 dp2
            end
       in
-      let adone = List.exists (fun (_,s) -> assert(s.k <> Removed);
-                                            s.o.codim > codim) sd
-      in
-      if not adone then
-        begin
-          let too_hard = List.exists (fun (_,s) ->
-                             s.o.d < of_float param.safe *. epsilon &&
-                               (unsafe := s :: !unsafe; true)) sd
-          in
-          if not too_hard then hn param.Args.subd s.m l p dp
-        end
+      let _dt = kn param.Args.subd s.m l p dp in
+      ()
     in
 
     let count_common s s' =
