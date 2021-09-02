@@ -63,7 +63,7 @@ module Parse(R:Field.SPlus) = struct
              if dim = 1 then
                [D.mk_points_from_polyhedron name ts]
              else if dim = 2 then
-               [D.mk_lines_from_polyhedron name ts]
+               [D.mk_lines_from_polyhedron ~lwidth:2.0 name ts]
              else if dim = 3 then
                [D.mk_triangles_from_polyhedron name ts]
              else []

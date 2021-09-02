@@ -14,16 +14,17 @@ type gl_object =
   ; col  : float array
   ; view : float array
   ; shape : shape
+  ; lwidth : float
   ; uid  : int
   ; mutable visible : bool
   }
 
 let mk_object =
   let c = ref 0 in
-  (fun vert norm elem col view shape ->
+  (fun ?(lwidth=1.0) vert norm elem col view shape ->
     let uid = !c in
     incr c;
-    { vert; norm; elem; col; view; uid; shape; visible=false })
+    { vert; norm; elem; col; view; uid; shape; lwidth; visible=false })
 
 let wait, restart =
   let c = Condition.create () in
@@ -163,7 +164,16 @@ let projection () =
     (camera.center *. 20.0)
 
 let _ =
-  Egl.initialize ~width:!window_width ~height:!window_height "test_gles"
+  let open Egl in
+  let config = { red_size = 0
+               ; green_size = 0
+               ; blue_size = 0
+               ; alpha_size = 0
+               ; depth_size = 8
+               ; stencil_size = 0
+               ; samples = 8 }
+  in
+  initialize ~width:!window_width ~height:!window_height ~config "Hyper"
 
 (* Shader programs for lines *)
 let lines_prg : unit Shaders.program =
@@ -248,7 +258,7 @@ let draw_triangle_object cam proj obj =
 let draw_object cam proj (_,obj) =
   if obj.visible then match obj.shape with
   | x when x = gl_triangles -> draw_triangle_object cam proj obj
-  | x when x = gl_lines -> draw_line_object cam proj obj
+  | x when x = gl_lines -> Gles3.line_width obj.lwidth; draw_line_object cam proj obj
   | x when x = gl_points -> draw_point_object cam proj obj
   | _ -> assert false
 
@@ -461,7 +471,7 @@ module Make(R:Field.SPlus) = struct
     add_object name obj;
     obj
 
-  let mk_lines_from_polyhedron ?(color=[|0.;0.;0.;1.|]) name p =
+  let mk_lines_from_polyhedron ?(lwidth=1.0) ?(color=[|0.;0.;0.;1.|]) name p =
     let tbl = Hashtbl.create 1001 in
     let count = ref 0 in
     let (size, p) = List.fold_left (fun (j,acc) a ->
@@ -503,7 +513,7 @@ module Make(R:Field.SPlus) = struct
       ) tbl;
 
     let obj =
-      mk_object vert vert elem color Matrix.idt gl_lines
+      mk_object ~lwidth vert vert elem color Matrix.idt gl_lines
     in
     add_object name obj;
     obj
