@@ -26,16 +26,25 @@ let cubic1 = zeros [expected=2] cubic1; display cubic1 cubic1__t;
 display cubic1;
 
 let q1(x,y) = (x^2+y^2-1)^2 + 1/2 * x * y * (x-y) * (x+y);
-let q1 = zeros [expected=4] q1; display q1 q1__t;
+let q1 = zeros [expected=4, subd=0] q1; display q1 q1__t;
+
+let q1b(x,y) = (x^2+y^2-1)^2 + 1/20 * x * y * (x-y) * (x+y);
+let q1b = zeros [expected=4, subd=6] q1b; display q1b q1b__t;
 
 let q2(x,y) = (x^2+y^2-1)^2 + 1/200 * x * y * (x-y) * (x+y);
-let q2 = zeros [expected=4] q2; display q2 q2__t;
+let q2 = zeros [expected=4, subd=10] q2; display q2 q2__t;
 
 let q3(x,y) = (x^2+y^2-1)^2 + 1/2000 * x * y * (x-y) * (x+y);
-let q3 = zeros [expected=4] q3; display q3 q3__t;
+let q3 = zeros [expected=4,subd=14] q3; display q3 q3__t;
 
 let q4(x,y) = (x^2+y^2-1)^2 + 1/20000 * x * y * (x-y) * (x+y);
-let q4 = zeros [subd=20,expected=4] q4; display q4 q4__t;
+let q4 = zeros [subd=17,expected=4] q4; display q4 q4__t;
+
+let q5(x,y) = (x^2+y^2-1)^2 + 1/200000 * x * y * (x-y) * (x+y);
+let q5 = zeros [subd=20,expected=4] q5; display q5 q5__t;
+
+let q6(x,y) = (x^2+y^2-1)^2 + 1/2000000 * x * y * (x-y) * (x+y);
+let q6 = zeros [subd=24,expected=4] q6; display q6 q6__t;
 
 let e5(x,y) = 500  * (x-1)^2 + (y-1)^2 - 1;
 let e5 = zeros [expected=1] e5; display e5 e5__t;
