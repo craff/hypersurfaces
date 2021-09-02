@@ -513,14 +513,14 @@ module Make(R:S) = struct
     let b = Array.make d one in
     solve m b
 
-  (** same as above when the number of points if lower than the
+  (** same as above when the number of points is lower than the
       dimention of the ambiant space *)
   let lcenter m =
     let d = Array.length m in
     if d = Array.length m.(0) then center m else
       let b = Array.make d one in
-      let tm = transpose m in
-      tm *** solve (m **** tm) b
+      let f v = m *** (m **- v) in
+      m **- irm_cg f b
 
   (** Coordinate: compute the coordinates of v is the basis given
       by the lines of matrix m *)
