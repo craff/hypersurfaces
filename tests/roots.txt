@@ -14,7 +14,7 @@ let p(x) = x * (x + 1e-6) * (x - 1e-6) * (x + 2e-6) * (x - 2e-6);
 let p = zeros [expected=5,nb critical=20,limit zih=2] p;
 
 let p(x) = (x + 1e-12) * (x + 1e-6) * (x - 1e-6) * (x + 2e-6) * (x - 2e-6);
-let p = zeros [expected=5,no certificate,limit zih=2] p;
+let p = zeros [expected=5,limit zih=2] p;
 
 let p(x) = x * (x + 1e-5) * (x - 1e-5) * (x + 2e-5) * (x - 2e-5) * (x + 3e-5) * (x - 3e-5);
 let p = zeros [expected=7,limit zih=4] p;

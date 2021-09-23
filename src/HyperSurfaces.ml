@@ -887,9 +887,11 @@ module Make(R:Field.SPlus) = struct
             let old = s'.o.codim in
             if codim < old then
               begin
-                to_do.(old) <- SimpSet.remove s' to_do.(old);
+                if old < dim then
+                  to_do.(old) <- SimpSet.remove s' to_do.(old);
                 s'.o.codim <- codim;
-                to_do.(codim) <- SimpSet.add s' to_do.(codim);
+                if codim < dim then
+                  to_do.(codim) <- SimpSet.add s' to_do.(codim);
                 total := Stdlib.(!total -. float (old - codim) *. s'.o.f);
               end) l
       done;
@@ -936,7 +938,8 @@ module Make(R:Field.SPlus) = struct
       total := Stdlib.(!total -. float s.o.codim *. s.o.f);
       count_point ty;
       rm trs s;
-      to_do.(s.o.codim) <- SimpSet.remove s to_do.(s.o.codim);
+      if s.o.codim < dim then
+        to_do.(s.o.codim) <- SimpSet.remove s to_do.(s.o.codim);
       decomp_log "adding center %a to %a (%a => %a)" print_vector (to_vec x)
         print_simplex s print_vector s.o.c print (s.o.c *.* (to_vec x));
       let rec rml acc k = function
@@ -976,7 +979,8 @@ module Make(R:Field.SPlus) = struct
                   let l   = ref l   in
                   total := Stdlib.(!total -. float s'.o.codim *. s'.o.f);
                   rm trs s';
-                  to_do.(s'.o.codim) <- SimpSet.remove s' to_do.(s'.o.codim);
+                  if s'.o.codim < dim then
+                    to_do.(s'.o.codim) <- SimpSet.remove s' to_do.(s'.o.codim);
                   Array.iteri (fun k _ ->
                       if k <> j then
                         begin
@@ -1064,7 +1068,7 @@ module Make(R:Field.SPlus) = struct
         | NonZero | NonDege ->
            total := Stdlib.(!total +. s.o.f);
            s.o.codim <- s.o.codim + 1;
-           if s.o.codim <= dim - 1 then
+           if s.o.codim < dim then
              to_do.(s.o.codim) <- SimpSet.add s to_do.(s.o.codim);
         | Depend(v,_,sd) ->
            assert (s.k = Active);

@@ -328,6 +328,9 @@ module Make(R:S) = struct
   (** solve a linear system with Gauss pivot (partial principal for now) *)
   let solve mat vector =
     let dim = Array.length vector in
+    assert (dim > 0);
+    assert (Array.length mat = dim);
+    assert (Array.length mat.(0) = dim);
     let pivot = ref (-1, -1, zero, zero) in
     let update_pivot i j x =
       let a = abs x in
