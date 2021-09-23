@@ -1,0 +1,5 @@
+
+let p(x,y,z,t) = (x - 2) * (x^2 + y^2 + z^2 + t^2 - 1);
+
+let p = zeros [limit zih=0.9] p;
+display p;

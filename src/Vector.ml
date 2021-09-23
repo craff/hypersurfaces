@@ -6,6 +6,7 @@ let Debug.{ log = zih_log } = Debug.new_debug "hull" 'h'
 let Debug.{ log = tri_log } = Debug.new_debug "triangulation" 'z'
 let Debug.{ log = sol_log } = Debug.new_debug "solve" 's'
 let Debug.{ log = min_log } = Debug.new_debug "minimise" 'm'
+let Debug.{ log = ame_log } = Debug.new_debug "ameliorate" 'a'
 
 (** Functor with linear algebra code for the given field *)
 module Make(R:S) = struct
@@ -325,21 +326,28 @@ module Make(R:S) = struct
       Exit -> false
 
   (** solve a linear system with Gauss pivot (partial principal for now) *)
-  let solve_unsafe mat vector =
+  let solve mat vector =
     let dim = Array.length vector in
+    let pivot = ref (-1, -1, zero, zero) in
+    let update_pivot i j x =
+      let a = abs x in
+      let (_,_,b,_) = !pivot in
+      if a >. b then pivot := (i,j,a,x)
+    in
+    let get_pivot () =
+      let r = !pivot in pivot := (-1,-1,zero,zero); r
+    in
+    let mat = Array.init dim (fun i ->
+                  Array.init dim (fun j ->
+                      let x = mat.(i).(j) in
+                      update_pivot i j x; x))
+    in
+    let vector = Array.copy vector in
 
+    let perm = ref [] in
     for i = 0 to dim - 2 do
       (*Printf.printf "%d %a %a\n%!" i print_matrix mat print_vector vector;*)
-      let pivot_i, _, pivot_val =
-        let r = ref (-1, zero, zero) in
-        for j = i to dim - 1 do
-	  let v = mat.(j).(i) in
-          let av = abs v in
-          let (_,aw,_) = !r in
-	  if av >. aw then r := (j, av, v)
-        done;
-        !r
-      in
+      let pivot_i, pivot_j, _, pivot_val = get_pivot () in
       (*Printf.printf "pivot: %d %a\n%!" pivot_i print pivot_val;*)
       if pivot_i < 0 then raise Not_found;
       if pivot_i <> i then
@@ -351,11 +359,22 @@ module Make(R:S) = struct
           vector.(pivot_i) <- vector.(i);
           vector.(i) <- v;
         end;
+      if pivot_j <> i then
+        begin
+          perm := (i,pivot_j)::!perm;
+          for k = 0 to dim - 1 do
+            let v = mat.(k).(pivot_j) in
+            mat.(k).(pivot_j) <- mat.(k).(i);
+            mat.(k).(i) <- v
+          done
+        end;
       for j = i+1 to dim-1 do
         let v = mat.(j).(i) in
         mat.(j).(i) <- zero;
         for k = i+1 to dim-1 do
-	  mat.(j).(k) <- mat.(j).(k) -. v *. mat.(i).(k) /. pivot_val
+          let x = mat.(j).(k) -. v *. mat.(i).(k) /. pivot_val in
+          update_pivot j k x;
+	  mat.(j).(k) <- x
         done;
         vector.(j) <- vector.(j) -. v *. vector.(i) /. pivot_val
       done;
@@ -374,18 +393,18 @@ module Make(R:S) = struct
       r.(i) <- r.(i) /. mat.(i).(i)
     done;
 
+    List.iter (fun (j1, j2) ->
+        let v = r.(j1) in
+        r.(j1) <- r.(j2);
+        r.(j2) <- v) !perm;
+
     (*Printf.printf "FINAL %a %a\n%!" print_matrix mat print_vector r;*)
     r
-
-  let solve mat0 vector0 =
-    let mat = Array.map Array.copy mat0 in
-    let vector = Array.copy vector0 in
-    solve_unsafe mat vector
 
   let solve_transpose mat0 vector0 =
     let mat = transpose mat0 in
     let vector = Array.copy vector0 in
-    solve_unsafe mat vector
+    solve mat vector
 
   (** solves m x = y for m symmetric positive definite (spd)
       remark: if m is invertible tm * m is spd. If the matrix is
@@ -511,7 +530,7 @@ module Make(R:S) = struct
   let center m =
     let d = Array.length m in
     let b = Array.make d one in
-    solve m b
+    try solve m b with Not_found -> assert false
 
   (** same as above when the number of points is lower than the
       dimention of the ambiant space *)
@@ -527,6 +546,11 @@ module Make(R:S) = struct
   let pcoord v m =
     try solve (transpose m) v
     with Not_found -> assert false
+
+  (** Barycentric corrdinates *)
+  let bcoord v m =
+    let v = Array.append v [|one|] in
+    pcoord v m
 
   (** transform a linear form v given for basis m1 to basis m2 *)
   let transform v m1 m2 =
@@ -559,6 +583,68 @@ module Make(R:S) = struct
       r.(j) <- r.(j) /. !s;
     done
 
+  (** Take a vector [v] and a matrix [m] such that [m.(i) *.* v > 0] and
+      maximise the min of [m.(i) *.* v] under the constraint [norm2 v = 1].
+   *)
+  let ameliorate v m =
+    ame_log "start ameliorate";
+    assert (not (Array.exists (fun v -> norm2 v <=. zero) m));
+    let nb = Array.length m in
+    let dim = Array.length m.(0) in
+    if (nb <= 0) then v else
+    let v = normalise v in
+
+    let value v =
+      let best = ref inf in
+      Array.iter (fun w -> let s = v *.* w in if s <. !best then best := s) m;
+      !best
+    in
+
+    let direction v goal =
+      let values = Array.init nb (fun i -> (m.(i) *.* v, i)) in
+      let cmp (x,_) (y,_) = cmp x y in
+      Array.sort cmp values;
+      let size = ref 1 in
+      while !size < dim && !size < nb - 1 &&
+              fst values.(!size) <=. goal do incr size done;
+      let size = !size in
+      ame_log "size: %d dim:%d nb:%d" size dim nb;
+      let mm = Array.init (size+1) (fun i ->
+                   if i = 0 then v else m.(snd values.(i - 1))) in
+      let mm' = transpose mm in
+      let b = Array.init (size+1) (fun i ->
+                  if i = 0 then zero else (goal -. fst values.(i-1))) in
+      ame_log "solving with %a = %a" print_matrix mm print_vector b;
+      mm' *** (solve (mm **** mm') b)
+    in
+
+    let linear_search v d =
+      let fn l =
+        let w = normalise (comb one v l d) in
+        -. value w
+      in
+      let stop_cond = { default_stop_cond with max_steps = 15 } in
+      tricho ~safe:false ~stop_cond fn zero (of_int 10)
+    in
+
+    let rec loop v f step =
+      try
+        ame_log "loop: %a %a" print f print step;
+        let goal = f +. step in
+        let d = direction v goal in
+        ame_log "d: %a (%a %b)" print_vector d print (norm2 d) (norm2 d <=. zero);
+        let l = linear_search v d in
+        ame_log "l: %a" print l;
+        let step' = step *. l in
+        let v' = normalise (comb one v l d) in
+        let f' = value v' in
+        if f' >. f then loop v' f' step' else v
+      with Not_found -> v
+    in
+
+    let f0 = value v in
+    loop v f0 f0
+
   (** structure to store statistics about zero in hull test *)
   type zih_steps = {
       mutable nb_call : int;
@@ -587,7 +673,7 @@ module Make(R:S) = struct
 
   (** exception and function to exit the procedure. the function updates
       the statistics *)
-  exception ExitZih of bool
+  exception ExitZih of vector option
 
   let exit_zih ?(abort=false) step r =
     zih_steps.nb_call <- zih_steps.nb_call + 1;
@@ -597,12 +683,14 @@ module Make(R:S) = struct
     raise (ExitZih r)
 
   (** main zero in hull test function, can provide an initial position *)
-  let zih ?r0 m0 = try
+  let zih ?r0 zlim m0 = try
       (** normalise and transform the list m0 into a matrix *)
       let m0 = List.sort_uniq compare m0 in
       let nb = List.length m0 in
-      let m = Array.make nb [||] in
-      List.iteri (fun i v -> m.(i) <- normalise v) m0;
+      let m0 = Array.of_list m0 in
+      (** if a vector is nul, we exit immediately *)
+      if Array.exists (fun v -> norm v <=. zlim) m0 then exit_zih 0 None;
+      let m = Array.map normalise m0 in
       zih_log "zih: %a" print_matrix m;
       let dim = Array.length m.(0) in
       (** initial position *)
@@ -639,14 +727,22 @@ module Make(R:S) = struct
         for i = 0 to nb - 1 do
           let s = m.(i) *.* v in
           (*zih_log "  %a %a %a" print r.(i) print s print_vector m.(i);*)
-          if s <=. zero then
+          if s <=. zero  then
             begin
               stop := false;
               incr nb_c;
               candidates := i :: !candidates
             end
         done;
-        if !stop then (zih_log "false"; exit_zih step false);
+        if !stop then
+          begin
+            zih_log "false";
+            let v = ameliorate v m0 in
+            let e = if Array.exists (fun w -> v *.* w < zlim) m0 then None
+                    else Some v
+            in
+            exit_zih step e
+          end;
         let i = List.nth !candidates (Random.int !nb_c) in
         (** value of interest, see the article *)
         let p = m **- pr in
@@ -779,19 +875,19 @@ module Make(R:S) = struct
                 to descent while [m.(i) *.* v] is not always > 0
                 means [v] ~ 0 up to numerical errors *)
               zih_log "no progress %a >= %a, stops" print nv2 print v2;
-              exit_zih step true;
+              exit_zih step None;
             end;
         in
         if v2 <. epsilon2 then
           begin
             zih_log "too small %d, stops" step;
-            exit_zih step true;
+            exit_zih step None;
           end;
         (** if too many steps, we stop assuming zero in hull.  *)
         if step > 20 * dim * nb then
           begin
             zih_log "too long %d, stops" step;
-            exit_zih ~abort:true step true;
+            exit_zih ~abort:true step None;
           end;
         fn (step+1) v v2
       in
@@ -802,9 +898,9 @@ module Make(R:S) = struct
       fn 0 v v2
     with ExitZih b -> b
 
-  let pih ?r0 x m =
+  let pih ?r0 zlim x m =
     let m = List.map (fun v -> v --- x) m in
-    zih ?r0 m
+    zih ?r0 zlim m
 
   (** Quick test for zih*)
   module Test = struct
@@ -814,7 +910,7 @@ module Make(R:S) = struct
       ; Array.map of_int [|0;0;-1|]
       ]
 
-    let _ = assert (exact || not (zih a))
+    let _ = assert (exact || (zih zero a <> None))
 
     let a =
       [ Array.map of_int [|1;0;0|]
@@ -823,7 +919,7 @@ module Make(R:S) = struct
       ; Array.map of_int [|-1;1;1|]
       ]
 
-    let _ = assert (exact || zih a)
+    let _ = assert (exact || (zih zero a = None))
   end
 
   (** General equation solver using a mixture of steepest descent and newton
@@ -937,14 +1033,20 @@ module Make(R:S) = struct
       let h = F.grad c in
       let dx = of_int 2 **. (h **- r) in
       let d2 = norm2 dx in
-      (** optimal step should be
-          (-. (r *.* dx) /. d2) **. dx
-          but the following is much better ... do not know why *)
-      let q = norm2 r /. d2 in
-      let steepest = (if d2 <= zero then -.one else -. q) **. dx in
+      let r2 = norm2 r in
+      (** optimal step:
+          f(x + l dx)^2 = f(x)^2 + 2 l f(x) f'(x) dx + ...
+                        = r^2 + l d2 + ...
+          zero pour l = - d2 /. r2 *)
+      let q = -. r2 /. d2 in
+      let steepest = (if d2 <= zero then -.one else q) **. dx in
       (** newton direction as usual *)
       let newton = solve h (-. one **. r) in
       (steepest, newton)
+
+    let stop_cond = { default_stop_cond with
+                      max_steps = match precision with
+                                    None -> 100 | Some n -> n}
 
     (** [solve rs2 c0] start the solver from [c0]. It reuses an existing
        solution if it reaches a point [x] s.t. [dist2 x s < rs2] for an existing
@@ -998,11 +1100,11 @@ module Make(R:S) = struct
         with Exit -> loop steps c fc nd sd lambda
       and loop steps c fc nd sd lambda =
           (* other stopping conditions *)
-          let fc1 = try Previous.get prev with Not_found -> inf in
-          let q = norm2 nd in
+        let fc1 = try Previous.get prev with Not_found -> inf in
+        let q = norm2 nd in
           (*printf "steps: %d %a %a %a %a %a\n%!" steps print fc print fc1 print epsilon2 print (fc1 /. fc) print q;*)
-          if lambda <. F.lambda_min || fc1 /. fc <. F.min_prog_coef
-                                                      || q < F.fun_min
+          if lambda <. F.lambda_min || (fc1 /. fc <. F.min_prog_coef)
+                                                      || q <. F.fun_min
           then
             begin
               update_loop_stats true steps;
@@ -1013,8 +1115,8 @@ module Make(R:S) = struct
                   let m = F.grad c in
                   printf "\t %a (%a)\n%!" print_matrix m print (det m);
                 end;*)
-              sol_log "ends at %4d, fc: %a, c: %a, lambda: %a, q: %a"
-                steps print fc print_vector c print lambda print q;
+              sol_log "ends at %4d, fc: %a, c: %a, lambda: %a"
+                steps print fc print_vector c print lambda;
               if q >. F.fun_good then
                 begin
                   F.stat.nb_bad <- F.stat.nb_bad + 1;
@@ -1032,7 +1134,6 @@ module Make(R:S) = struct
               (** given [lambda], we search the best [t] by trichotomie
                   for c = c + lambda (t nd + (1 - t) sd)
                 high precision is very important here *)
-              let stop_cond = { default_stop_cond with max_steps = 60 } in
               let f nd t =
                 let d = comb t nd (one -. t) sd in
                 let c' = project (comb one c lambda d) in
@@ -1060,7 +1161,7 @@ module Make(R:S) = struct
                   (** progress, do to next step, try a bigger lambda *)
                   Previous.add fc' prev;
                   let (sd,nd) = descent c' in
-                  loop_eq (steps + 1) c' fc' nd sd (min one (lambda *. of_int 20))
+                  loop_eq (steps + 1) c' fc' nd sd one
                 end
               else
                 (** no progress, try a smaller lambda *)
@@ -1068,8 +1169,11 @@ module Make(R:S) = struct
             end
       in
       (** initial call to the loop *)
-      let c0 = project c0 in
+      let c0 = try project c0
+               with Not_found -> failwith "solve start out of domain"
+      in
       let fc0 = norm2 (F.eval c0) in
+      sol_log "starting solve at %a => %a" print_vector c0 print fc0;
       Previous.add fc0 prev;
       let (sd,nd) = descent c0 in
       loop_eq 0 c0 fc0 nd sd one
@@ -1172,13 +1276,14 @@ module type V = sig
   val center : m -> v
   val lcenter : m -> v
   val pcoord : v -> m -> v
+  val bcoord : v -> m -> v
   val transform : v -> m -> m -> v
 
   val solve : m -> v -> v
   val solve_cg : m -> v -> v
 
-  val zih : ?r0:vector -> vector list -> bool
-  val pih : ?r0:vector -> vector -> vector list -> bool
+  val zih : ?r0:vector -> t -> vector list -> vector option
+  val pih : ?r0:vector -> t -> vector -> vector list -> vector option
   val print_zih_stats : formatter -> unit
 
   type solver_stats

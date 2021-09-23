@@ -36,6 +36,7 @@ module FloatMin =
     let of_float x = x  [@@inlined always]
     let of_string = float_of_string
     let to_string = Format.sprintf "%.13H"
+    let to_q = Q.of_float
     let print ch = fprintf ch "%.18e"
     let exact = false
     let cos = cos
@@ -78,6 +79,10 @@ module GmpMin = struct
   let of_float x = of_float x mode
   let of_string x = of_string x mode
   let to_string x = to_string x
+  let to_q x =
+    let r = Mpfrf.to_mpqf x in
+    let r = Mpqf.to_string r in
+    Q.of_string r
   let print ch x = fprintf ch "%s" (to_string x)
   let exact = false
   let cos x =
@@ -139,11 +144,12 @@ module QMin =
     let of_float = of_float
     let of_string = of_string
     let to_string = to_string
+    let to_q x = x
     let print ch x = fprintf ch "%s" (to_string x)
     let exact = true
     let cos _ = failwith "cos not available"
     let ln _  = failwith "ln not available"
-    let exp _  = failwith "ln not available"
+    let exp _  = failwith "exp not available"
   end
 
 module Q = struct

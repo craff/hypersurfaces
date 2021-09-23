@@ -8,19 +8,19 @@ let p(x) = x * (x + 1) * (x - 1);
 let p = zeros [expected=3] p;
 
 let p(x) = x * (x + 1e-6) * (x - 1e-6);
-let p = zeros [expected=3,subd=20] p;
+let p = zeros [expected=3,limit zih=2] p;
 
 let p(x) = x * (x + 1e-6) * (x - 1e-6) * (x + 2e-6) * (x - 2e-6);
-let p = zeros [expected=5] p;
+let p = zeros [expected=5,nb critical=20,limit zih=2] p;
 
 let p(x) = (x + 1e-12) * (x + 1e-6) * (x - 1e-6) * (x + 2e-6) * (x - 2e-6);
-let p = zeros [expected=5] p;
+let p = zeros [expected=5,no certificate,limit zih=2] p;
 
 let p(x) = x * (x + 1e-5) * (x - 1e-5) * (x + 2e-5) * (x - 2e-5) * (x + 3e-5) * (x - 3e-5);
-let p = zeros [expected=7] p;
+let p = zeros [expected=7,limit zih=4] p;
 
 let p(x) = x * (x + 1e-6) * (x - 1e-6) * (x + 2e-6) * (x - 2e-6) * (x + 3e-6) * (x - 3e-6);
-let p = zeros [expected=7] p;
+let p = zeros [expected=7,limit zih=4] p;
 
 let p(x) = (x-10) * (x - 100) * (x - 1000) * (x - 10000);
 let p = zeros [expected=4] p;
@@ -29,4 +29,4 @@ let p(x) = (x-10) * (x - 100) * (x - 1000) * (x - 10000) * (x - 1000000);
 let p = zeros [expected=5] p;
 
 let p(x) = (x-10) * (x - 100) * (x - 1000) * (x - 10000) * (x - 1000000) * (x - 10000000);
-let p = zeros [expected=6] p;
+let p = zeros [expected=6,limit zih=2] p;

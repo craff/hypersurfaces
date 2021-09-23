@@ -1,5 +1,6 @@
 open Printing
 open Topology
+open Lib
 
 let table_log = Debug.new_debug "table" 't'
 let table_tst = table_log.tst
@@ -137,6 +138,14 @@ module Make(R:Field.SPlus) = struct
       | []       -> (0, [])
       | (i,p)::r -> (i, List.map (fun (j,q) -> (j, p = q)) r)
 
+  let facet_key s vs =
+    let r = ref [] in
+    Array.iteri (fun j v -> if vs.(j) then r := (v.uid,v.p) :: !r) s;
+    let r = List.sort (fun (i,_) (j,_) -> compare i j) !r in
+    match r with
+      | []       -> (0, [])
+      | (i,p)::r -> (i, List.map (fun (j,q) -> (j, p = q)) r)
+
   type 'a triangulation =
     { dim       : int
     ; dirs      : (int * int) list
@@ -149,6 +158,17 @@ module Make(R:Field.SPlus) = struct
     ; has_e_tbl : bool
     ; has_f_tbl : bool
     }
+
+  let map fn tr =
+    let all = hashtbl_map (fun s -> { s with o = fn s.o }) tr.all
+    in
+    let update s = try Hashtbl.find all s.suid with Not_found -> assert false in
+    let by_vertex = hashtbl_map (List.map (fun (n,s) -> (n, update s))) tr.by_vertex in
+    let by_edge = hashtbl_map (List.map (fun (n,m,s) -> (n, m, update s))) tr.by_edge in
+    let by_face = hashtbl_map (List.map (fun (n,s) -> (n, update s))) tr.by_face in
+    { dim = tr.dim; dirs = tr.dirs; all; by_vertex; by_edge; by_face
+    ; nb = tr.nb; has_v_tbl = tr.has_v_tbl; has_e_tbl = tr.has_e_tbl; has_f_tbl = tr.has_f_tbl }
+
 
   let all_dirs d =
     let res = ref [] in
@@ -522,21 +542,26 @@ module Make(R:Field.SPlus) = struct
       in
       V.normalise c1
     in
-    let rec kn k c l =
+    let rec kn nbp k c l =
       if List.length l = dim - 1 then
         begin
           incr tot;
           let l = (k - c) :: l in
-          (*assert (in_simplex s c1);*)
-          let c1 = app l in
-          lm := c1 :: !lm
+          let nbp = if k = c then nbp else nbp + 1 in
+          if nbp > 1 then
+            begin
+              (*assert (in_simplex s c1);*)
+              let c1 = app l in
+              lm := c1 :: !lm
+            end
         end
       else
         for i = 0 to k - c do
-          kn k (c+i) (i::l)
+          let nbp = if i = 0 then nbp else nbp + 1 in
+          kn nbp k (c+i) (i::l)
         done
     in
-    kn nb 0 [];
+    kn 0 nb 0 [];
     (*printf "%d/%d\n%!" (List.length !lm) !tot;*)
     !lm
 

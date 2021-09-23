@@ -24,11 +24,11 @@ let s1 = zeros s1;
 
 let q0(x,y,z) = pt1(x,y,z)*pt2(x,y,z)*pt3(x,y,z)*pt4(x,y,z) + 0.05;
 
-let ps = zeros [subd=20,nb critical=6] q0 s1bis;
+let ps = zeros [subd=20,nb critical=6,limit zih=0.9] q0 s1bis;
 display ps ps__t;
 
 let q1(x,y,z) = 0.5* s1(x,y,z)^2 + q0(x,y,z);
 let ds = zeros [expected=(10*2),nb critical=6] q1;
 
 display ds;
-display ds ds__t;
+display ds ds2 ds__t;

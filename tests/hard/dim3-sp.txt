@@ -1,0 +1,5 @@
+
+let p(x,y,z) = (z + 2) * (x^2 + y^2 + z^2 - 1);
+
+let p = zeros [subd=20] p;
+display p;

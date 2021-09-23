@@ -2,7 +2,7 @@
 for i = 1 to NB do
   let p1 (x,y,z,t,u,v) = random D1;
 
-  let p(x,y,z,t,u,v) = zeros p1(x,y,z,t,u,v);
+  let p = zeros p1;
   stats 7 D1;
   display p;
 done;

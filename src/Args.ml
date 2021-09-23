@@ -19,19 +19,27 @@ type parameters =
   ; mutable dprec : float
   ; mutable crit : int
   ; mutable crit_limit : float
+  ; mutable pos_limit : float
+  ; mutable zih_limit : float
   ; mutable topo : Topology.topo_ask
   ; expected : Topology.topology option
-  ; mutable check : bool }
+  ; mutable check : bool
+  ; mutable certif : bool
+  ; mutable project : (int * float) option }
 
 let default_parameters =
-  { safe = 1e4
+  { safe = 0.95
   ; subd = 15
-  ; dprec = 1e3
+  ; dprec = 0.80
   ; crit  = 3
-  ; crit_limit = 10.0
+  ; crit_limit = 0.90
+  ; pos_limit = 1.00
   ; check = false
+  ; certif = true
+  ; zih_limit = 1.00
   ; topo = Ask_Nbc
-  ; expected = None}
+  ; expected = None
+  ; project = None }
 
 let spec =
   [ ( "-c"
@@ -70,12 +78,21 @@ let spec =
   ; ( "--nb-critical"
     , Arg.Int (fun p -> default_parameters.crit <- p)
     , "number of critical point candidates in a simplex")
-  ; ( "--lim-critical"
+  ; ( "--limit-critical"
     , Arg.Float (fun p -> default_parameters.crit_limit <- p)
     , "value to consider of point to be critical")
-  ; ( "--check"
-    , Arg.Bool (fun p -> default_parameters.check <- true)
+  ; ( "--limit-positive"
+    , Arg.Float (fun p -> default_parameters.pos_limit <- p)
+    , "value to consider of point to be critical")
+  ; ( "--limit-zih"
+    , Arg.Float (fun p -> default_parameters.zih_limit <- p)
+    , "value to consider of point to be critical")
+  ; ( "--check-triangulation"
+    , Arg.Bool (fun p -> default_parameters.check <- p)
     , "check some coherence propereties of the final triangulation")
+  ; ( "--check-certificate"
+    , Arg.Bool (fun p -> default_parameters.certif <- p)
+    , "do not check the topology with exact rational arithmetic")
   ; ( "--topo-components"
     , Arg.Unit (fun () -> default_parameters.topo <- Ask_Nbc)
     , "compute only the number of connected components of each variety")

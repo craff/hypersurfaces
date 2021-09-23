@@ -28,6 +28,7 @@ module type SMin = sig
   val of_float : float -> t
   val of_string : string -> t
   val to_string : t -> string
+  val to_q : t -> Q.t
   val print : formatter -> t -> unit
   (** true is computation are exact, for rational for instance *)
   val exact : bool
@@ -39,9 +40,17 @@ end
 (** Complete field signature, with a few extra functions *)
 module type S = sig
   include SMin
+
+  val precision : int option (* number of bits *)
+  val small : float -> t (* number using pourcentage of the precision *)
   (** power function, in O(ln n) *)
   val pow : t -> int -> t
   val powf : t -> t -> t
+  val ball_integrals : (t array -> t) -> int -> int -> t
+  val ball_integrals1 : t array -> (t array -> t array) -> int -> int -> t array
+  val ball_integrals2 : t array array -> (t array -> t array array) -> int -> int -> t array array
+  val rk4 : ?debug:(t -> t -> unit) -> (t -> t -> t) -> t -> t -> t -> int -> t
+  val rk4_1 : ?debug:(t -> t array -> unit) -> (t -> t array -> t array) -> t -> t -> t array -> int -> t array
 
   type stop_cond =
     { precision : t      (** |x - y| <= value *)
@@ -95,6 +104,20 @@ module Make(R:SMin) = struct
 
   let powf x y = exp (y *. ln x)
 
+  let precision =
+    let rec fn n x =
+      if one +. x =. one then n
+      else fn (n+1) (x /. of_int 2)
+    in
+    if exact then None else Some (fn 0 one)
+
+  let small p =
+    match precision with
+    | None -> zero
+    | Some n ->
+       let e = Stdlib.(int_of_float (ceil (p *. float n) )) in
+       one /. pow (of_int 2) e
+
   type stop_cond =
     { precision : t      (** |x - y| <= value *)
     ; max_steps : int    (** maximum number of steps *)
@@ -116,6 +139,86 @@ module Make(R:SMin) = struct
 
   let default_stop_cond = { precision = zero
                           ; max_steps = max_int }
+
+  let ball_integrals zero addf f dim nb =
+    let nf = of_int nb in
+    let s = ref zero in
+    let rec fn acc dx r i =
+      let nb = to_int (nf *. r +. of_float 0.999999999999) in
+      let h = of_int nb in
+      if i = 0 then
+        for j = -nb+1 to nb do
+          let x = (of_int j -. one /. of_int 2) /. h in
+          let dx = (dx *. r) /. h in
+          let pt = Array.of_list (x *. r :: acc) in
+          let fx = f pt in
+          s := addf !s dx fx
+        done
+      else
+        for j = -nb+1 to nb do
+          let x0 = (of_int j -. one) /. h in
+          let x  = (of_int j -. one /. of_int 2) /. h in
+          let x1 = (of_int j) /. h in
+          let y  = sqrt (one -. x*.x) in
+          let dt = abs (x1 -. x0) *. r in
+          let acc = (x *. r) :: acc in
+          let dx = dx *. dt in
+          let r = y *. r in
+          fn acc dx r (i-1)
+        done
+    in
+    fn [] one one (dim-1);
+    !s
+
+  let ball_integrals1 zero f dim nb =
+    let addf v1 x v2 = Array.map2 (fun a b -> a +. x*. b) v1 v2 in
+    ball_integrals zero addf f dim nb
+
+  let ball_integrals2 zero f dim nb =
+    let addf v1 x v2 = Array.map2 (fun a b -> a +. x*. b) v1 v2 in
+    let addm m1 x m2 = Array.map2 (fun a b -> addf a x b) m1 m2 in
+    ball_integrals zero addm f dim nb
+
+  let ball_integrals f dim nb =
+    let addf v1 x v2 = v1 +. x*.v2 in
+    ball_integrals zero addf f dim nb
+
+  let rk4 debug addf f t0 t1 x0 nb =
+    let h = (t1 -. t0) /. of_int nb in
+    let rk4_step t0 x0 =
+      let h2 = h /. of_int 2 in
+      let k1 = f(t0) (x0) in
+      let k2 = f(t0 +. h2) (addf x0 h2 k1) in
+      let k3 = f(t0 +. h2) (addf x0 h2 k2) in
+      let k4 = f(t0 +. h) (addf x0 h k3) in
+      addf x0 (h /. of_int 6) (addf (addf k1 one k4)
+                                 (of_int 2)
+                                 (addf k2 one k3))
+    in
+    let x = ref x0 in
+    for i = 0 to nb - 1 do
+      let t = t0 +. of_int i *. h in
+      (*debug t !x;*)
+      x := rk4_step t !x;
+    done;
+    debug t1 !x;
+    !x
+
+  let rk4_1 ?(debug=fun _ _ -> ()) t0 t1 x0 nb =
+    let addf v1 x v2 = Array.map2 (fun a b -> a +. x*. b) v1 v2 in
+    rk4 debug addf t0 t1 x0 nb
+
+  let rk4 ?(debug=fun _ _ -> ()) t0 t1 x0 nb =
+    let addf x1 x x2 = x1 +. x*.x2 in
+    rk4 debug addf t0 t1 x0 nb
+  (*
+  let _ =
+    let f _ = one in
+    let x1 = ball_integrals f 1 1000 in
+    let x2 = ball_integrals f 2 1000 in
+    let x3 = ball_integrals f 3 100 in
+    printf "TEST: %a, %a, %a\n%!" print x1 print x2 print x3
+      *)
 
   let digho ?(stop_cond=default_stop_cond) f x y =
     let fx = f x and fy = f y in

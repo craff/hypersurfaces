@@ -1,0 +1,13 @@
+let c1(x,y) = 0.999*x^2 + y^2 - 1;
+let c2(x,y) = 0.9991*x^2 + y^2 - 0.99;
+let c3(x,y) = 0.9992*x^2 + y^2 - 0.98;
+let c4(x,y) = 0.9993*x^2 + y^2 - 0.97;
+
+let cc = zeros(x,y) (c1(x,y) * c2(x,y));
+display cc cc__t;
+
+let ccc = zeros(x,y) (c1(x,y) * c2(x,y) * c3(x,y));
+display ccc ccc__t;
+
+let cccc = zeros(x,y) (c1(x,y) * c2(x,y) * c3(x,y) * c4(x,y));
+display cccc cccc__t;
