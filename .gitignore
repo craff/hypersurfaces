@@ -1,3 +1,5 @@
 *~
 .merlin
 _build
+.hyper.db
+hypersurfaces.install
