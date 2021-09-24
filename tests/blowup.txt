@@ -1,0 +1,5 @@
+
+let p(x,y) = (x^2 + y^2 - 1) * y + 0.5 * (x^2+y^2);
+let p = zeros(x,y)
+  DIFF(p(x,y),x)
+  DIFF(p(x,y),y);
