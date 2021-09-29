@@ -40,6 +40,7 @@ module FloatMin =
     let print ch = fprintf ch "%.18e"
     let exact = false
     let cos = cos
+    let sin = sin
     let ln = log
     let exp = exp
   end
@@ -88,6 +89,10 @@ module GmpMin = struct
   let cos x =
     let r = Mpfr.init () in
     ignore (Mpfr.cos r (_mpfr x) mode);
+    _mpfrf r
+  let sin x =
+    let r = Mpfr.init () in
+    ignore (Mpfr.sin r (_mpfr x) mode);
     _mpfrf r
   let ln x =
     let r = Mpfr.init () in
@@ -148,6 +153,7 @@ module QMin =
     let print ch x = fprintf ch "%s" (to_string x)
     let exact = true
     let cos _ = failwith "cos not available"
+    let sin _ = failwith "sin not available"
     let ln _  = failwith "ln not available"
     let exp _  = failwith "exp not available"
   end
@@ -157,4 +163,5 @@ module Q = struct
   include F
   module V = Vector.Make [@inlined always] (F)
   module B = Polynomial.Make (F) [@inlined always] (V)
+
 end

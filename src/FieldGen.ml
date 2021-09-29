@@ -33,6 +33,7 @@ module type SMin = sig
   (** true is computation are exact, for rational for instance *)
   val exact : bool
   val cos : t -> t
+  val sin : t -> t
   val ln  : t -> t
   val exp : t -> t
 end

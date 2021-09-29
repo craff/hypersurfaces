@@ -4,3 +4,10 @@ let e3(x,y,z) = 1/2 * x^2 + 1/2 * y^2 + 2 * z^2 - 1;
 let p = zeros [expected=(8*1)] e1 e2 e3;
 display p p__t;
 display p;
+
+let e1(x,y,z) = x^2+y^2-1;
+let e2(x,y,z) = x^2+z^2-1.2;
+let e3(x,y,z) = y^2+z^2-1.2;
+let p = zeros [expected=(8*1)] e1 e2 e3;
+display p p__t;
+display p;

@@ -118,6 +118,16 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
   let unsafe_degree p = match p with [] -> 0 | m::_ -> monomial_degree m
   let degree p = List.fold_left (fun d m -> max d (monomial_degree m)) 0 p
 
+  let vars p =
+    let dim = dim p in
+    let res = Array.make dim false in
+    List.iter (fun (a,_) ->
+        Array.iteri (fun i x -> if x > 0 then res.(i) <- true) a) p;
+    res
+
+  let use_all_vars p =
+    Array.for_all (fun x -> x) (vars p)
+
   (** homogenisation *)
   let homogeneise p =
     let rec an d1 d2 =
@@ -231,6 +241,20 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
       done
     done;
     !r
+
+  (** multinomial coefficient *)
+  let qmultinomial : int array -> Q.t = fun l ->
+    let d = ref (Q.of_int (Array.fold_left (+) 0 l)) in
+    let r = ref Q.one in
+    for i = 0 to Array.length l - 2 do
+      for k = 1 to l.(i) do
+        let open Q in
+        r := !r * !d / of_int k;
+        d := !d - one
+      done
+    done;
+    !r
+
 
   let dimension p =
     let d = degree p in
@@ -543,18 +567,21 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
       end
 
   (** third version, unlimited ! *)
-  let print_monomial vars ch l =
+  let print_monomial times vars ch l =
     Array.iteri (fun i e ->
         if e <> 0 then
-          if e > 1 then fprintf ch "%s^%d" vars.(i) e
-          else  fprintf ch "%s" vars.(i)) l
+          begin
+            if times then fprintf ch "*";
+            if e > 1 then fprintf ch "%s^%d" vars.(i) e
+            else  fprintf ch "%s" vars.(i)
+          end) l
 
   let mkvars vars p =
     match vars with
       | Some v -> v
       | None -> Array.init (unsafe_dim p) (fun i -> "X" ^ string_of_int i)
 
-  let print_polynome ?vars ch p =
+  let print_polynome ?(times=false) ?(q=false) ?vars ch p =
     let vars = mkvars vars p in
     let first = ref true in
     List.iter (fun (l,c) ->
@@ -562,8 +589,12 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
           begin
             if not !first then fprintf ch " + ";
             first := false;
-            fprintf ch "%a%a" print (c *. multinomial l)
-              (print_monomial vars) l;
+            if q then
+              fprintf ch "%s%a" (Q.to_string (Q.mul (R.to_q c) (qmultinomial l)))
+                (print_monomial times vars) l
+            else
+              fprintf ch "%a%a" print (c *. multinomial l)
+                (print_monomial times vars) l;
           end) p
 
   let print_gradient ?vars ch p =
@@ -575,7 +606,7 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
             if not !first then fprintf ch " + ";
             first := false;
             fprintf ch "%a %a" print_vector c
-              (print_monomial vars) l;
+              (print_monomial false vars) l;
           end) p
 
   let print_hessian ?vars ch p =
@@ -587,7 +618,7 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
             if not !first then fprintf ch " + ";
             first := false;
             fprintf ch "%a %a" print_matrix c
-              (print_monomial vars) l;
+              (print_monomial false vars) l;
           end) p
 
   let plane : R.t p -> R.t array = fun p ->
@@ -644,7 +675,8 @@ module type B = sig
   type polynomial_m = m p
   type 'a hf
 
-  val print_polynome : ?vars:string array -> formatter -> polynomial -> unit
+  val print_polynome : ?times:bool -> ?q:bool -> ?vars:string array
+                       -> formatter -> polynomial -> unit
   val print_gradient : ?vars:string array -> formatter -> polynomial_v -> unit
   val print_hessian  : ?vars:string array -> formatter -> polynomial_m -> unit
 
@@ -656,6 +688,7 @@ module type B = sig
   val norm : polynomial -> t
   val normalise : polynomial -> polynomial
   val random : bool -> int -> int -> polynomial
+  val use_all_vars : 'a p -> bool
 
   val cst : int -> 'a -> 'a p
   val var_power : int -> int -> int -> int array

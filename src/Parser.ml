@@ -20,6 +20,10 @@ module Parse(R:Field.SPlus) = struct
   | Display  of string list
   | For      of string * polynomial * polynomial * polynomial * cmd list
   | Stats    of int * polynomial list
+  | Timings  of bool * int * int
+
+  let times = true
+  let q = true
 
   let expand_short_surf names =
     let p name =
@@ -39,7 +43,7 @@ module Parse(R:Field.SPlus) = struct
     | Let_poly(name,vars0,p) ->
        let p = P.mk false name vars0 p in
        let vars = Array.of_list vars0 in
-       printf "%s = %a\n%!" name (B.print_polynome ~vars) (to_bernstein p.dim vars0 p.poly)
+       printf "%s = %a\n%!" name (B.print_polynome ~times ~q ~vars) (to_bernstein p.dim vars0 p.poly)
     | Let_rand(name,vars0,deg) ->
        let deg = eval_cst deg in
        let dim = List.length vars0 in
@@ -47,17 +51,32 @@ module Parse(R:Field.SPlus) = struct
        let pb = of_bernstein vars0 p in
        let p = P.mk true name vars0 pb in
        let vars = Array.of_list vars0 in
-       printf "%s = %a\n%!" name (B.print_polynome ~vars) (to_bernstein p.dim vars0 p.poly)
+       printf "%s = %a\n%!" name (B.print_polynome ~times ~q ~vars) (to_bernstein p.dim vars0 p.poly)
     | Let_short_surf(name, opts, names) ->
        let (vars, pols) = expand_short_surf names in
        run_cmd (Let_surf(name, opts, vars, pols))
     | Let_surf(name, opts, vars, pols) ->
        let dim = List.length vars in
        let ps = B.homogeneise_many (List.map (to_bernstein dim vars) pols) in
-       let (ts, ps, es, dim, topo, safe) =
+       let (ts, ps, es, dim, ctrs, safe,time) =
          H.triangulation opts ps
        in
-       if safe && !Args.dbname <> None then
+       let topo_ask =
+         match opts.expected with
+         | None -> opts.topo
+         | Some t -> max opts.topo (Topology.min_demand t)
+       in
+       let topo = H.Simp.topology topo_ask ctrs in
+       eprintf "   topology: %a (safe: %b)\n%!" Topology.print topo safe;
+       begin
+         let open Args in
+         match opts.expected with
+         | None -> ()
+         | Some t -> if not (Topology.agree t topo) then
+                       failwith (sprintf "wrong topology %a"
+                                   Topology.print t)
+       end;
+       if safe && !Args.dbname <> None && opts.certif = true then
          begin
            let rand p = match p with
              | App(p,_) -> p.rand | _ -> false
@@ -66,13 +85,12 @@ module Parse(R:Field.SPlus) = struct
            let pds = List.map fn pols in
            let pds = List.map (fun p -> ((p.vars, p.poly), p.deg, p.rand)) pds in
            let nbc = List.length topo in
-           let topo_s = Topology.to_string topo in
            let rec pr_poly () (vars, p) = P.to_str pid vars p
            and pid (p:P.poly_rec) =
-             let pid = Db.insert_polynomial pr_poly (p.vars, p.poly) p.deg p.dim p.rand in
+             let pid = Db.insert_polynomial pr_poly (p.vars, p.poly) p.deg (p.dim-1) p.rand in
              sprintf "P%Ld" pid
            in
-           Db.insert_variety pr_poly pds dim nbc topo_s;
+           Db.insert_variety pr_poly pds (dim-1) nbc topo time opts;
            printf "variety inserted in database\n%!";
          end;
        let os =
@@ -129,10 +147,12 @@ module Parse(R:Field.SPlus) = struct
     | Stats(dim,degs) ->
        if !Args.dbname <> None then
          begin
-           printf "stats\n%!";
            let degs = List.map (fun p -> R.to_int (eval_cst p)) degs in
            Db.stats dim degs
          end
+    | Timings(css,dim,codim) ->
+       if !Args.dbname <> None then
+         Db.timings ~css dim codim
 
   (** Parses a float in base 10. [".1"] is as ["0.1"]. *)
   let float_lit : R.t Lex.t =
@@ -205,10 +225,12 @@ module Parse(R:Field.SPlus) = struct
     ; "limit" "critical" "=" (p::FLOAT) => (fun opt -> Args.{ opt with crit_limit = p })
     ; "limit" "positive" "=" (p::FLOAT) => (fun opt -> Args.{ opt with pos_limit = p })
     ; "limit" "zih" "=" (p::FLOAT) => (fun opt -> Args.{ opt with zih_limit = p })
+    ; "limit" "singular" "=" (p::FLOAT) => (fun opt -> Args.{ opt with sing_limit = Some p
+                                                                     ; certif = false })
     ; "expected" "=" (l::Topology.parse) => (fun opt -> Args.{ opt with expected = l})
     ; "project" "=" (p::INT) (e::FLOAT) =>  (fun opt -> Args.{ opt with project = Some(p,e) })
-    ; "check" "certificate" (p::bool) =>  (fun opt -> Args.{ opt with certif = p })
-    ; "check" "triangulation" (p::bool) =>  (fun opt -> Args.{ opt with check = p })
+    ; "check" "certificate" "=" (p::bool) =>  (fun opt -> Args.{ opt with certif = p })
+    ; "check" "triangulation" "=" (p::bool) =>  (fun opt -> Args.{ opt with check = p })
     ; "project" "=" (p::INT) (e::FLOAT) =>  (fun opt -> Args.{ opt with project = Some(p,e) })
 
   let%parser rec options_aux =
@@ -290,7 +312,8 @@ module Parse(R:Field.SPlus) = struct
         (cmds :: ~+ cmd) "done" ';' =>
         For(name,first,last,step,cmds)
     ; "stats" (dim::INT) (degs :: ~+ (poly [] Sum)) ';' => Stats(dim,degs)
-
+    ; "timings" (css::(() => false ; "css" => true))
+        (dim::INT) (codim::INT) ';' => Timings(css,dim,codim)
   let%parser cmds = (~* ((c::cmd) => run_cmd c)) => ()
 
 end

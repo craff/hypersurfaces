@@ -11,6 +11,15 @@ let print_int_array ch l =
   let f ch = fprintf ch "%d" in
   print_array f ch l
 
+let print_array_np fn ch v =
+  Array.iteri (fun i x ->
+      if i <> 0 then fprintf ch ", ";
+      fn ch x) v
+
+let print_int_array_np ch l =
+  let f ch = fprintf ch "%d" in
+  print_array_np f ch l
+
 let print_int_matrix ch l =
   print_array print_int_array ch l
 

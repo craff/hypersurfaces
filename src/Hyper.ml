@@ -8,7 +8,7 @@ let _ =
   let files = Args.files in
   Debug.set_debugs !Args.debug_string;
   let parse fn =
-    printf "reading %S\n%!" fn;
+    eprintf "reading %S\n%!" fn;
     Grammar.parse_file Parser.main blank fn
   in
   List.iter

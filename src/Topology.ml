@@ -54,17 +54,22 @@ let to_string t =
     else
       sprintf "%d*%a" nb fn t
   in
-  String.concat "," (List.mapi gn t)
+  "(" ^ String.concat "," (List.mapi gn t) ^ ")"
 
 let print ch t = fprintf ch "%s" (to_string t)
+
+let rm_trailing_zero l =
+  let rec fn = function 0::l -> fn l | _ -> l in
+  List.rev (fn (List.rev l))
 
 let%parser rec betti =
     (n::INT)                => [n]
   ; (n::INT) ',' (l::betti) => n::l
 
 let%parser topo_one =
-    (n::INT)           => Euler n
-  ; '(' (l::betti) ')' => Betti l
+    '?'                => Any
+  ; (n::INT)           => Euler n
+  ; '(' (l::betti) ')' => Betti (rm_trailing_zero l)
 
 let%parser rec topo_mul =
     (n:: ~? [1] ((n::INT) '*' => n)) (t::topo_one) => (t, n)
@@ -79,7 +84,37 @@ let%parser parse =
   ; '(' ')'  => Some[]
   ; '(' (l:: topo_list) ')' => Some (List.sort compare2 l)
 
+let blank = Pacomb.Regexp.blank_regexp "[ \t]*"
+
+let of_string str =
+  let open Pacomb in
+  try
+    match Grammar.parse_string parse blank str with
+    | None -> failwith "Topology.of_string: blank string"
+    | Some t -> t
+  with e ->
+    let msg = sprintf "Topology.of_string: %s" (Printexc.to_string e) in
+    failwith msg
+
 let _ = assert (Any < Euler 0 && Euler 0 < Betti [])
+
+let better_one t1 t2 = match (t1,t2) with
+  | (Any, _) -> false
+  | (_  , Any) -> true
+  | (Euler _, _) -> false
+  | (_, Euler _) -> true
+  | (Betti _, Betti _) -> false
+
+let rec better ts1 ts2 =
+  match (ts1, ts2) with
+  | [], [] -> false
+  | ((t1,n1)::ts1, (t2,n2)::ts2) ->
+     if better_one t1 t2 then
+       if n1 = n2 then better ts1 ts2
+       else if n1 < n2 then better ts1 ((t2,n2-n1)::ts2)
+       else better ((t1,n1-n2)::ts1) ts2
+     else false
+  | (_, _) -> false
 
 let agree_one t1 t2 =
   match (t1, t2) with
@@ -87,7 +122,7 @@ let agree_one t1 t2 =
   | (Euler n, Euler m) -> n = m
   | (Euler n, Betti l) | (Betti l, Euler n) ->
      alt_sum l = n
-  | (Betti l, Betti l') -> l = l'
+  | (Betti l, Betti l') -> rm_trailing_zero l = rm_trailing_zero l'
 
 let rec agree ts1 ts2 =
   match (ts1, ts2) with

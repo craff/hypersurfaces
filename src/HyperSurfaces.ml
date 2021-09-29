@@ -30,6 +30,7 @@ module Make(R:Field.SPlus) = struct
     | NZ of (bool array * vector) list
     | SG of int
     | DV of int * int * cert * cert
+    | SING
 
   type point_type =
     | Single
@@ -63,6 +64,8 @@ module Make(R:Field.SPlus) = struct
     ; ql : Q.t array list lazy_t
     ; qdp : Q.B.polynomial_v list lazy_t
     }
+
+  exception Zero
 
   let fst3 (x,_,_) = x
 
@@ -125,7 +128,7 @@ module Make(R:Field.SPlus) = struct
              let module F = struct
                let dim = dim + codim
                let fun_min = epsilon2 *. epsilon2
-               let fun_good = of_float param.Args.crit_limit *. epsilon
+               let fun_good = small param.Args.crit_limit
                let min_prog_coef = of_int 2
                let min_prog_int = 10*dim
                let lambda_min = epsilon2
@@ -278,7 +281,7 @@ module Make(R:Field.SPlus) = struct
           let lm =
             List.flatten (
                 List.map
-                  (fun s -> pts_in_simplex s param.Args.crit) ls)
+                  (fun s -> pts_in_simplex true s param.Args.crit) ls)
           in
           List.fold_left (fun acc x ->
               try
@@ -373,7 +376,10 @@ module Make(R:Field.SPlus) = struct
       let m = Array.map to_vec s in
       let qm = lazy (Array.map (Array.map to_q) m) in
       let p = List.map (fun p -> Poly.transform p s0 m) hp0 in
-      let l = List.map plane p in
+      let l = List.map (fun p ->
+                  let l = plane p in
+                  Array.mapi (fun i c -> if abs c <. epsilon then zero else c) l) p
+      in
       let dp = lazy (List.map (fun p -> gradient p) p) in
       let qp = lazy (let lazy qm = qm in
                      List.map (fun p -> Q.B.transform p qs0 qm) qhp0) in
@@ -623,7 +629,7 @@ module Make(R:Field.SPlus) = struct
         let rs2 =
           if critical then
             let radius2 = dist2 (to_vec s.s.(0)) c0 in
-            radius2 *. of_float 1e-10 /. of_int (param.crit * param.crit)
+            radius2 *. of_float 1e-10
           else -. one
         in
         let fn best (ty,solve) c0 =
@@ -660,8 +666,9 @@ module Make(R:Field.SPlus) = struct
           with Not_found -> (*printf "NF\n%!";*) best
         in
         List.iter (fun solve ->
+            let nb = param.Args.crit in
             let lm =
-              if critical then pts_in_simplex s.m (param.Args.crit)
+              if critical && nb > 1 then pts_in_simplex false s.m nb
               else [s.o.c]
             in
             List.iter (fun c -> best := fn !best solve c) lm) allp
@@ -700,6 +707,11 @@ module Make(R:Field.SPlus) = struct
 
     let zlim = small param.zih_limit in
 
+    let slim = match param.sing_limit with
+      | None -> zero
+      | Some x -> small x
+    in
+
     let decision_face codim vs (s as s0) =
       let (sd,gd) = all_gradients vs s in
       let adone = List.exists (fun (_,s) -> assert(s.k <> Removed);
@@ -728,22 +740,20 @@ module Make(R:Field.SPlus) = struct
         (*        printf "cst: %b, subd: %d %a\n%!" cst subd print_matrix s;*)
         let rec fn acc signs points dps gds =
           match (dps, gds) with
-          | [dp], [gd] ->
-             let dp = List.map snd dp in
-             let new_points = dp @ gd in
-             let all = new_points @ points in
-             let signs = Array.of_list (List.rev (true::signs)) in
+          | [], [] ->
              begin
-               match zih zlim all with
-               | None   -> face_log "test zih: true"; InL all
+               let signs = Array.of_list (List.rev signs) in
+               match zih zlim points with
+               | None   -> face_log "test zih: true"; InL points
                | Some v -> face_log "test zih: false";
                            InR ((signs, v)::acc)
              end
           | dp::dps, gd::gds ->
              let dp = List.map snd dp in
              let new_points = dp @ gd in
+             let new_points = List.filter (fun g -> not (norm2 g <. slim)) new_points in
              (match fn acc (true::signs) (new_points @ points) dps gds with
-              | InR acc ->
+              | InR acc when dps <> [] ->
                  let new_points = List.map opp new_points in
                  fn acc (false::signs) (new_points @ points) dps gds
               | r    -> r)
@@ -793,7 +803,15 @@ module Make(R:Field.SPlus) = struct
              DV (i,j,c1,c2)
            end
       in
-      let cert = kn param.Args.subd s.m l p dp in
+      if codim = 0 && List.exists (Array.for_all ((=.) zero)) s.o.l then
+        raise Zero;
+      let cert =
+        if codim > 0 &&
+             List.exists (List.for_all (fun (_,g) -> norm2 g <. slim)) dp then
+          SING
+        else
+          kn param.Args.subd s.m l p dp
+      in
       let key = facet_key s.s vs in
       Hashtbl.replace certs key (s,cert,ref false)
     in
@@ -809,11 +827,12 @@ module Make(R:Field.SPlus) = struct
       let dp = qsub_v (Lazy.force s.o.qdp) vs in
       let rec kn subd s (l: Q.B.polynomial list) p dp cert =
         match cert with
+        | SING -> ()
         | SG i ->
            let ((l,p) as lp) = List.nth l i, List.nth p i in
            if not (qconstant_sign2 lp) then
              begin
-               eprintf "%a\n" (Q.B.print_polynome ?vars:None) Q.B.(l ** p);
+               eprintf "%a\n" (Q.B.print_polynome ~times:false ~q:false ?vars:None) Q.B.(l ** p);
                failwith "bad certificate: polynomials not of constant signs"
              end;
         | NZ ls ->
@@ -916,6 +935,7 @@ module Make(R:Field.SPlus) = struct
         NonDege
       with
       | Zih (v,all,sd) -> Depend (v,all,(true,s)::sd)
+      | Zero -> Depend(s.o.c,[],[true,s])
       | e -> eprintf "got except: %s\n%!" (Printexc.to_string e);
                 assert false
     in
@@ -1080,7 +1100,7 @@ module Make(R:Field.SPlus) = struct
                  assert (List.for_all (fun (_,s) -> s.k = Active) sd);
                  let (s,c,ty) = search_single_critical sd in
                  assert (s.k = Active);
-                 (try ajoute s c ty with Not_found -> assert false)
+                 ajoute s c ty;
                with Not_found -> try
                  assert (List.for_all (fun (_,s) -> s.k = Active) sd);
                  let (s,c,ty) = search_multi_critical sd in
@@ -1467,22 +1487,8 @@ module Make(R:Field.SPlus) = struct
       (print_solver_stats ~name:"solver1") solver1_stat
       (print_solver_stats ~name:"solver2") solver2_stat
       (print_solver_stats ~name:"solver3") solver3_stat;
-    let topo_ask =
-      match param.expected with
-      | None -> param.topo
-      | Some t -> max param.topo (Topology.min_demand t)
-    in
-    let topo = topology topo_ask ctrs in
+
     let nb_unsafe = List.length !unsafe in
-    eprintf "   topology: %a (unsafe: %d)\n%!" Topology.print topo nb_unsafe;
-    begin
-      let open Args in
-      match param.expected with
-      | None -> ()
-      | Some t -> if not (Topology.agree t topo) then
-                    failwith (sprintf "wrong topology %a"
-                                Topology.print t)
-    end;
 
     let edges = Hashtbl.fold (fun _ l acc ->
                     match l with
@@ -1533,10 +1539,10 @@ module Make(R:Field.SPlus) = struct
         eprintf "unsafe cells present: not checking certificate\n%!";
 
     (List.map (Array.map to_vec) all, List.map (Array.map to_vec) !ptrs
-     , edges, dim, topo, nb_unsafe = 0)
+     , edges, dim, ctrs, nb_unsafe = 0)
 
   let triangulation param p0 =
-    let r =
+    let (all,ptrs,edges,dim,ctrs,unsafe) =
       try
         Chrono.add_time total_chrono (triangulation param) p0
       with Not_found as e ->
@@ -1544,6 +1550,7 @@ module Make(R:Field.SPlus) = struct
         eprintf "Uncaught exception %s\n%!" (Printexc.to_string e);
         exit 1
     in
+    let r = (all,ptrs,edges,dim,ctrs,unsafe,Chrono.get_cumul total_chrono) in
     Chrono.iter (fun n t tc c -> printf "   %10s: %8.3fs (%8.3fs self) for %6d call(s)\n%!" n tc t c);
     Chrono.reset_all ();
     r

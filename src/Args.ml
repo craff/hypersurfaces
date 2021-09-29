@@ -21,6 +21,7 @@ type parameters =
   ; mutable crit_limit : float
   ; mutable pos_limit : float
   ; mutable zih_limit : float
+  ; mutable sing_limit : float option
   ; mutable topo : Topology.topo_ask
   ; expected : Topology.topology option
   ; mutable check : bool
@@ -37,6 +38,7 @@ let default_parameters =
   ; check = false
   ; certif = true
   ; zih_limit = 1.00
+  ; sing_limit = None
   ; topo = Ask_Nbc
   ; expected = None
   ; project = None }
@@ -80,13 +82,17 @@ let spec =
     , "number of critical point candidates in a simplex")
   ; ( "--limit-critical"
     , Arg.Float (fun p -> default_parameters.crit_limit <- p)
-    , "value to consider of point to be critical")
+    , "value to consider points to be critical")
   ; ( "--limit-positive"
     , Arg.Float (fun p -> default_parameters.pos_limit <- p)
-    , "value to consider of point to be critical")
+    , "value to consider as zero when checking same sign")
   ; ( "--limit-zih"
     , Arg.Float (fun p -> default_parameters.zih_limit <- p)
-    , "value to consider of point to be critical")
+    , "value to consider gradient tu be zero in the zero in hull test")
+  ; ( "--sing-limit"
+    , Arg.Float (fun p -> default_parameters.sing_limit <- Some p;
+                          default_parameters.certif <- false)
+    , "value to consider to eliminate samll gradient and accept singularities")
   ; ( "--check-triangulation"
     , Arg.Bool (fun p -> default_parameters.check <- p)
     , "check some coherence propereties of the final triangulation")
@@ -103,9 +109,7 @@ let spec =
     , Arg.Unit (fun () -> default_parameters.topo <- Ask_Betti)
     , "compute only the number of connected components of each variety")
   ; ( "--db"
-    , Arg.Tuple [Arg.String (fun s -> printf "Set db: %s\n%!" s;
-                                      dbname := Some s)
-               ; Arg.Unit (fun () -> default_parameters.topo <- Ask_Betti)]
+    , Arg.String (fun s -> dbname := Some s)
     , "DB name to store result")
   ; ( "-D"
     , Arg.Tuple [Arg.String (fun s -> vname := s)
