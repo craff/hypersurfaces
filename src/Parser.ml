@@ -190,8 +190,12 @@ module Parse(R:Field.SPlus) = struct
     if n <= 0 then l else mul_cons (n-1) m (m::l)
 
   let%parser bool =
-      "0" "false" => false
-    ; "1" "true"  => true
+      "0"     => false
+    ; "false" => false
+    ; "False" => false
+    ; "1"     => true
+    ; "true"  => true
+    ; "True"  => true
 
   let%parser option =
       "subd" "=" (p::INT) => (fun opt -> Args.{ opt with subd = p })
@@ -217,7 +221,10 @@ module Parse(R:Field.SPlus) = struct
 
   let%parser float = Grammar.term ~name:"float" float_lit
 
-  let%parser ident = (v:: RE("[a-zA-Z_'][a-zA-Z0-9_']*"))           => if v = "zeros" then Lex.give_up () else v
+  let%parser ident =
+    (v:: RE("[a-zA-Z_'][a-zA-Z0-9_']*"))           =>
+      if v = "zeros" || v = "cos" || v = "sin" || v = "sqrt"
+      then Lex.give_up () else v
 
   let%parser ne_params  =
      '(' (x::ident) (l:: ~* ( ',' (v::ident) => v )) ')' => (x::l, ())
@@ -235,7 +242,9 @@ module Parse(R:Field.SPlus) = struct
     | Pow  -> "W"
 
   let%parser fname =
-    "cos" => { name = "cos"; eval = R.cos }
+      "cos" => { name = "cos"; eval = R.cos }
+    ; "sin" => { name = "sin"; eval = R.sin }
+    ; "sqrt" => { name = "sqrt"; eval = R.sqrt }
 
   (* for printing, we provide a function to convert priorities to string *)
   let poly vars =
@@ -254,7 +263,7 @@ module Parse(R:Field.SPlus) = struct
       ; (p=Prod) (x::poly Prod) '/' (y::float)     => Pro(Cst R.(one /. y),x)
       ; (p=Sum)  (x::poly Sum ) '+' (y::poly Prod) => P.Sum(x,y)
       ; (p=Sum)  (x::poly Sum ) '-' (y::poly Prod) => Sub(x,y)
-      ; (f::fname) '(' (x::poly Sum) ')'           => Fun(f,x)
+      ; (p=Atom) (f::fname) '(' (x::poly Sum) ')'           => Fun(f,x)
 
     and args =
         () => []
