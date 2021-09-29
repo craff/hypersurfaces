@@ -410,7 +410,7 @@ module Make(R:Field.SPlus) = struct
        let lambda = -. x2.(3) /. (x1.(3) -. x2.(3)) in
        let mu = 1. -. lambda in
        let y1 = VF.comb lambda x1 mu x2 in
-       f (f acc x1 y1 x3) x2 (opp y1) x3
+       f (f acc x1 y1 x3) (opp x2) (opp y1) (opp x3)
     | [x1;x2], _, [x3] ->
        let lambda1 = -. x3.(3) /. (x1.(3) -. x3.(3)) in
        let mu1 = 1. -. lambda1 in
