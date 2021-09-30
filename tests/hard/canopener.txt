@@ -1,3 +1,3 @@
 let s1(x,y,z) = ((x+0.35)^2*(1-x^2) - y^2)^2 + z^2 - 0.00531441;
-let s1 = zeros [safe=0.03] s1; display s1 s1__t;
+let s1 = zeros [limit singular=1, limit zero =1] s1; display s1 s1__t;
 display s1;

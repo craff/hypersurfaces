@@ -11,16 +11,19 @@ module Parse(R:Field.SPlus) = struct
 
   open P
 
+  type pset = Args.parameters -> Args.parameters
+
   type cmd =
     Let_poly of string * string list * polynomial
   | Let_rand of string * string list * polynomial
-  | Let_surf of string * Args.parameters * string list * polynomial list
+  | Let_surf of string * pset * string list * polynomial list
   | Let_short_surf
-             of string * Args.parameters * string list
+             of string * pset * string list
   | Display  of string list
   | For      of string * polynomial * polynomial * polynomial * cmd list
   | Stats    of int * polynomial list
   | Timings  of bool * int * int
+  | Set      of pset
 
   let times = true
   let q = true
@@ -39,11 +42,13 @@ module Parse(R:Field.SPlus) = struct
     let ps = List.map (fun p -> App(p,pvs)) ps in
     (vars, ps)
 
-  let rec run_cmd = function
+  let rec run_cmd opts = function
+    | Set(fn_opts) -> fn_opts opts
     | Let_poly(name,vars0,p) ->
        let p = P.mk false name vars0 p in
        let vars = Array.of_list vars0 in
-       printf "%s = %a\n%!" name (B.print_polynome ~times ~q ~vars) (to_bernstein p.dim vars0 p.poly)
+       printf "%s = %a\n%!" name (B.print_polynome ~times ~q ~vars) (to_bernstein p.dim vars0 p.poly);
+       opts
     | Let_rand(name,vars0,deg) ->
        let deg = eval_cst deg in
        let dim = List.length vars0 in
@@ -51,11 +56,13 @@ module Parse(R:Field.SPlus) = struct
        let pb = of_bernstein vars0 p in
        let p = P.mk true name vars0 pb in
        let vars = Array.of_list vars0 in
-       printf "%s = %a\n%!" name (B.print_polynome ~times ~q ~vars) (to_bernstein p.dim vars0 p.poly)
-    | Let_short_surf(name, opts, names) ->
+       printf "%s = %a\n%!" name (B.print_polynome ~times ~q ~vars) (to_bernstein p.dim vars0 p.poly);
+       opts
+    | Let_short_surf(name, fn_opts, names) ->
        let (vars, pols) = expand_short_surf names in
-       run_cmd (Let_surf(name, opts, vars, pols))
-    | Let_surf(name, opts, vars, pols) ->
+       run_cmd opts (Let_surf(name, fn_opts, vars, pols))
+    | Let_surf(name, fn_opts, vars, pols) ->
+       let opts = fn_opts opts in
        let dim = List.length vars in
        let ps = B.homogeneise_many (List.map (to_bernstein dim vars) pols) in
        let (ts, ps, es, dim, ctrs, safe,time) =
@@ -128,10 +135,11 @@ module Parse(R:Field.SPlus) = struct
            end
          else []
        in
-       ()
+       opts
     | Display(names) ->
        Display.display names;
-       if not (!Args.cont) then Display.wait ()
+       if not (!Args.cont) then Display.wait ();
+       opts
     | For(name,first,last,step,cmds) ->
        let first = eval_cst first in
        let last = eval_cst last in
@@ -140,19 +148,21 @@ module Parse(R:Field.SPlus) = struct
        let i = ref first in
        while (!i <=. last) do
          let _ = P.mk false name [] (Cst !i) in
-         List.iter run_cmd cmds;
+         List.iter (fun c -> ignore (run_cmd opts c)) cmds;
          P.rm name;
          i := !i +. step;
-       done
+       done;
+       opts
     | Stats(dim,degs) ->
        if !Args.dbname <> None then
          begin
            let degs = List.map (fun p -> R.to_int (eval_cst p)) degs in
            Db.stats dim degs
-         end
+         end;
+       opts
     | Timings(css,dim,codim) ->
-       if !Args.dbname <> None then
-         Db.timings ~css dim codim
+       if !Args.dbname <> None then Db.timings ~css dim codim;
+       opts
 
   (** Parses a float in base 10. [".1"] is as ["0.1"]. *)
   let float_lit : R.t Lex.t =
@@ -224,9 +234,13 @@ module Parse(R:Field.SPlus) = struct
     ; "nb" "critical" "=" (p::INT) => (fun opt -> Args.{ opt with crit = p })
     ; "limit" "critical" "=" (p::FLOAT) => (fun opt -> Args.{ opt with crit_limit = p })
     ; "limit" "positive" "=" (p::FLOAT) => (fun opt -> Args.{ opt with pos_limit = p })
+    ; "limit" "zero" "=" (p::FLOAT) => (fun opt -> Args.{ opt with zero_limit = if p <= 0. then None else Some p })
     ; "limit" "zih" "=" (p::FLOAT) => (fun opt -> Args.{ opt with zih_limit = p })
-    ; "limit" "singular" "=" (p::FLOAT) => (fun opt -> Args.{ opt with sing_limit = Some p
-                                                                     ; certif = false })
+    ; "limit" "singular" "=" (p::FLOAT) => (fun opt ->
+      if p <= 0. then
+                Args.{ opt with sing_limit = None }
+      else
+        Args.{ opt with sing_limit = Some p; certif = false })
     ; "expected" "=" (l::Topology.parse) => (fun opt -> Args.{ opt with expected = l})
     ; "project" "=" (p::INT) (e::FLOAT) =>  (fun opt -> Args.{ opt with project = Some(p,e) })
     ; "check" "certificate" "=" (p::bool) =>  (fun opt -> Args.{ opt with certif = p })
@@ -238,8 +252,8 @@ module Parse(R:Field.SPlus) = struct
     ; (p1::options_aux) ',' (p2::option) => (fun p -> p2 (p1 p))
 
   let%parser options =
-      () => Args.default_parameters
-    ; '[' (p::options_aux) ']' => (p Args.default_parameters)
+      () => (fun opts -> opts)
+    ; '[' (fn::options_aux) ']' => fn
 
   let%parser float = Grammar.term ~name:"float" float_lit
 
@@ -294,27 +308,31 @@ module Parse(R:Field.SPlus) = struct
     poly
 
   let%parser rec cmd =
-      "let" (name::ident) ((vars,()) >: params) '=' (p::poly vars Sum) ';' =>
+      "set" (opts::options) => Set opts
+    ; "let" (name::ident) ((vars,()) >: params) '=' (p::poly vars Sum) =>
         Let_poly(name,vars,p)
-    ; "let" (name::ident) ((vars,__) :: params) '=' "random" (deg::poly [] Sum) ';' =>
+    ; "let" (name::ident) ((vars,__) :: params) '=' "random" (deg::poly [] Sum) =>
         Let_rand(name,vars,deg)
     ; "let" (name::ident)  '=' "zeros" ((vars,()) >: ne_params) (opts::options)
-        (pols:: ~+ (poly vars Sum)) ';' =>
+        (pols:: ~+ (poly vars Sum)) =>
         Let_surf(name, opts, vars, pols)
     ; "let" (name::ident) '=' "zeros" (opts::options)
-        (names:: ~+ ident) ';' =>
+        (names:: ~+ ident) =>
         (Let_short_surf(name, opts, names))
-    ; "display" (names :: ~+ ident) ';' =>
+    ; "display" (names :: ~+ ident) =>
         Display(names)
     ; "for" (name::ident) "=" (first::poly [] Sum) "to" (last::poly [] Sum)
         (step:: ~? [Cst R.one] ("step" (x::poly [] Sum) => x))
         "do"
-        (cmds :: ~+ cmd) "done" ';' =>
+        (cmds :: ~+ cmd) "done" =>
         For(name,first,last,step,cmds)
-    ; "stats" (dim::INT) (degs :: ~+ (poly [] Sum)) ';' => Stats(dim,degs)
+    ; "stats" (dim::INT) (degs :: ~+ (poly [] Sum)) => Stats(dim,degs)
     ; "timings" (css::(() => false ; "css" => true))
-        (dim::INT) (codim::INT) ';' => Timings(css,dim,codim)
-  let%parser cmds = (~* ((c::cmd) => run_cmd c)) => ()
+        (dim::INT) (codim::INT) => Timings(css,dim,codim)
+
+  let%parser rec cmds =
+      () => !Args.default_parameters
+    ; (opts::cmds) (c::cmd) ';' => run_cmd opts c
 
 end
 

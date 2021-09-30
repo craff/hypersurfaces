@@ -372,13 +372,18 @@ module Make(R:Field.SPlus) = struct
     let n = List.length ls in
     let trs = empty_triangulation dim in
 
+    let nlim = match param.zero_limit with
+      | None -> zero
+      | Some x -> small x
+    in
+
     let mk ?(f=Stdlib.(1.0 /. float_of_int n)) s =
       let m = Array.map to_vec s in
       let qm = lazy (Array.map (Array.map to_q) m) in
       let p = List.map (fun p -> Poly.transform p s0 m) hp0 in
       let l = List.map (fun p ->
                   let l = plane p in
-                  Array.mapi (fun i c -> if abs c <. epsilon then zero else c) l) p
+                  Array.mapi (fun i c -> if abs c <. nlim then zero else c) l) p
       in
       let dp = lazy (List.map (fun p -> gradient p) p) in
       let qp = lazy (let lazy qm = qm in
@@ -838,11 +843,8 @@ module Make(R:Field.SPlus) = struct
         | NZ ls ->
            let rec fn signs points dps gds =
              match (dps, gds) with
-             | [dp], [gd] ->
-                let dp = List.map snd dp in
-                let new_points = dp @ gd in
-                let all = new_points @ points in
-                let signs = Array.of_list (List.rev (true::signs)) in
+             | [], [] ->
+                let signs = Array.of_list (List.rev signs) in
                 let v =
                   try
                     Array.map to_q (List.assoc signs ls)
@@ -856,13 +858,14 @@ module Make(R:Field.SPlus) = struct
                       failwith (sprintf "bad certificate: zero in hull (%e <= 0) (%a.%a)"
                                   (Q.to_float s)
                                   Field.Float.V.print_vector v
-                                  Field.Float.V.print_vector w)) all
+                                  Field.Float.V.print_vector w)) points
              | dp::dps, gd::gds ->
                 let dp = List.map snd dp in
                 let new_points = dp @ gd in
                 fn (true::signs) (new_points @ points) dps gds;
-                let new_points = List.map Q.V.opp new_points in
-                fn (false::signs) (new_points @ points) dps gds
+                if dps <> [] then
+                  let new_points = List.map Q.V.opp new_points in
+                  fn (false::signs) (new_points @ points) dps gds
              | _ -> assert false
            in
            fn [] [] dp gd

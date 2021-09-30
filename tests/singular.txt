@@ -1,39 +1,41 @@
+set [limit singular=1, limit zero=1];
+
 let f(x,y) = x*y;
-let f = zeros(x,y,t) [limit singular=1] f(x,y);
+let f = zeros(x,y,t) f(x,y);
 display f f__t;
 
-let g = zeros(x,y) [limit singular=1] (4*x^2 + y^2 - 1)*(x^2 + 4*y^2 - 1);
+let g = zeros(x,y) (4*x^2 + y^2 - 1)*(x^2 + 4*y^2 - 1);
 display g g__t;
 
-let q1 = zeros(x,y) [limit singular=1] ((x-1)^2 + 0.99*y^2 - 1)*((x+1)^2 + 0.99*y^2 - 1) ;
+let q1 = zeros(x,y) ((x-1)^2 + 0.99*y^2 - 1)*((x+1)^2 + 0.99*y^2 - 1) ;
 display q1;
 
-let q2 = zeros(x,y,z) [limit singular=1] ((x-1)^2 + 0.99*y^2 + 0.98*z^2 -
+let q2 = zeros(x,y,z) ((x-1)^2 + 0.99*y^2 + 0.98*z^2 -
 1)*((x+1)^2 + 0.99*y^2 + 0.98*z^2 - 1) ;
 display q2;
 
-let c = zeros(x,y) [limit singular=1] x^4 + y^3 - 2*x*y;
+let c = zeros(x,y) x^4 + y^3 - 2*x*y;
 display c c__t;
 
-let s = zeros(x,y,z,t) [limit singular=1] (x^2 + y^2 - z^2);
+let s = zeros(x,y,z,t) (x^2 + y^2 - z^2);
 display s;
 
 let t4(x,y,z) = x^4+2*x^2*y^2+2*x^2*z^2+y^4+2*y^2*z^2+z^4+8*x*y*z-10*x^2-10*y^2-10*z^2+25;
-let t4 = zeros [limit singular=1] t4;
+let t4 = zeros t4;
 display t4;
 
 let q1(x,y,z) = x^4+y^4+z^4-4*x^2-4*y^2*z^2-4*y^2-4*z^2*x^2-4*z^2-4*x^2*y^2+20.7846*x*y*z+1 ;
-let q1 = zeros [limit singular=1] q1;
+let q1 = zeros q1;
 display q1;
 
 let c8(x,y,z) =
 64*x^8-128*x^6+80*x^4-16*x^2+2+64*y^8-128*y^6+80*y^4-16*y^2+64*z^8-128*z^6+80*z^4-16*z^2;
-let c8 = zeros [limit singular=1] c8;
+let c8 = zeros c8;
 display c8;
 
 let phi = (1 + sqrt(5)) * 0.5;
 let b(x,y,z) = 4*(phi^2*x^2 - y^2)*(phi^2*y^2 - z^2)*(phi^2*z^2 - x^2)
              - (1+2*phi)*(x^2+y^2+z^2-1)^2;
 
-let b = zeros(x,y,z) [limit singular=1] b(x,y,z);
+let b = zeros(x,y,z) b(x,y,z);
 display b;

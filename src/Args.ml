@@ -14,27 +14,29 @@ let precision = ref Double
 let debug_string = ref ""
 
 type parameters =
-  { mutable safe : float
-  ; mutable subd : int
-  ; mutable dprec : float
-  ; mutable crit : int
-  ; mutable crit_limit : float
-  ; mutable pos_limit : float
-  ; mutable zih_limit : float
-  ; mutable sing_limit : float option
-  ; mutable topo : Topology.topo_ask
+  { safe : float
+  ; subd : int
+  ; dprec : float
+  ; crit : int
+  ; crit_limit : float
+  ; pos_limit : float
+  ; zero_limit : float option
+  ; zih_limit : float
+  ; sing_limit : float option
+  ; topo : Topology.topo_ask
   ; expected : Topology.topology option
-  ; mutable check : bool
-  ; mutable certif : bool
-  ; mutable project : (int * float) option }
+  ; check : bool
+  ; certif : bool
+  ; project : (int * float) option }
 
-let default_parameters =
+let default_parameters = ref
   { safe = 0.95
   ; subd = 15
   ; dprec = 0.80
   ; crit  = 3
   ; crit_limit = 0.90
   ; pos_limit = 1.00
+  ; zero_limit = None
   ; check = false
   ; certif = true
   ; zih_limit = 1.00
@@ -44,6 +46,7 @@ let default_parameters =
   ; project = None }
 
 let spec =
+  let p = default_parameters in
   [ ( "-c"
     , Arg.Set cont
     , "continue after display commands")
@@ -69,44 +72,51 @@ let spec =
     , Arg.(Tuple [Set prog; Set progw])
     , "show building of triangulation and stop at each step")
   ; ( "--safe"
-    , Arg.Float (fun p -> default_parameters.safe <- p)
+    , Arg.Float (fun x -> p := { !p with safe = x })
     , "minimum determinant required for safety")
   ; ( "--delauney-prec"
-    , Arg.Float (fun p -> default_parameters.dprec <- p)
+    , Arg.Float (fun x -> p := { !p with dprec = x})
     , "minimum visibility to compensate for numerical errors in delauney triangulation")
   ; ( "--subd"
-    , Arg.Int (fun p -> default_parameters.subd <- p)
+    , Arg.Int (fun n -> p := { !p with subd = n})
     , "number of subdivision to test a simplex")
   ; ( "--nb-critical"
-    , Arg.Int (fun p -> default_parameters.crit <- p)
+    , Arg.Int (fun n -> p := { !p with crit = n})
     , "number of critical point candidates in a simplex")
   ; ( "--limit-critical"
-    , Arg.Float (fun p -> default_parameters.crit_limit <- p)
+    , Arg.Float (fun x -> p := { !p with crit_limit = x})
     , "value to consider points to be critical")
+  ; ( "--limit-zero"
+    , Arg.Float (fun x -> p := { !p with
+                                 zero_limit = if x <= 0. then None else Some x})
+    , "value to consider as zero when checking same sign")
   ; ( "--limit-positive"
-    , Arg.Float (fun p -> default_parameters.pos_limit <- p)
+    , Arg.Float (fun x -> p := { !p with pos_limit = x})
     , "value to consider as zero when checking same sign")
   ; ( "--limit-zih"
-    , Arg.Float (fun p -> default_parameters.zih_limit <- p)
+    , Arg.Float (fun x -> p := { !p with zih_limit = x})
     , "value to consider gradient tu be zero in the zero in hull test")
   ; ( "--sing-limit"
-    , Arg.Float (fun p -> default_parameters.sing_limit <- Some p;
-                          default_parameters.certif <- false)
+    , Arg.Float (fun x -> p := if x <= 0. then
+                                 { !p with sing_limit = None }
+                               else
+                                 { !p with sing_limit = Some x;
+                                           certif = false})
     , "value to consider to eliminate samll gradient and accept singularities")
   ; ( "--check-triangulation"
-    , Arg.Bool (fun p -> default_parameters.check <- p)
+    , Arg.Bool (fun b -> p := { !p with check = b })
     , "check some coherence propereties of the final triangulation")
   ; ( "--check-certificate"
-    , Arg.Bool (fun p -> default_parameters.certif <- p)
+    , Arg.Bool (fun b -> p := { !p with certif = b})
     , "do not check the topology with exact rational arithmetic")
   ; ( "--topo-components"
-    , Arg.Unit (fun () -> default_parameters.topo <- Ask_Nbc)
+    , Arg.Unit (fun () -> p := { !p with topo = Ask_Nbc})
     , "compute only the number of connected components of each variety")
   ; ( "--topo-euler"
-    , Arg.Unit (fun () -> default_parameters.topo <- Ask_Euler)
+    , Arg.Unit (fun () -> p := { !p with topo = Ask_Euler})
     , "compute only the number of connected components of each variety")
   ; ( "--topo-betti"
-    , Arg.Unit (fun () -> default_parameters.topo <- Ask_Betti)
+    , Arg.Unit (fun () -> p := { !p with topo = Ask_Betti})
     , "compute only the number of connected components of each variety")
   ; ( "--db"
     , Arg.String (fun s -> dbname := Some s)

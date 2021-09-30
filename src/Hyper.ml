@@ -9,7 +9,7 @@ let _ =
   Debug.set_debugs !Args.debug_string;
   let parse fn =
     eprintf "reading %S\n%!" fn;
-    Grammar.parse_file Parser.main blank fn
+    ignore (Grammar.parse_file Parser.main blank fn)
   in
   List.iter
     (Pos.handle_exception ~error:(fun _ -> exit 1) parse)
@@ -17,5 +17,5 @@ let _ =
   if not !Args.batch then
     while true do
       let l = read_line () in
-      Grammar.parse_string Parser.main blank l
+      ignore (Grammar.parse_string Parser.main blank l)
     done
