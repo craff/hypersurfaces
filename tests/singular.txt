@@ -1,5 +1,9 @@
 set [limit singular=1, limit zero=1];
 
+let u(x,y,z) = x^2*y - z^2;
+let u = zeros [nb critical=6] u;
+display u u__t;
+
 let f(x,y) = x*y;
 let f = zeros(x,y,t) f(x,y);
 display f f__t;
