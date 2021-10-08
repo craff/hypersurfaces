@@ -12,7 +12,7 @@ depends: [
   "ocaml" { >= "4.04.0" }
   "dune"  { build & >= "1.2.0" }
   "pacomb" { build }
-  "gles3" "zarith" "mlgmpidl"
+  "gles3" "zarith" "mlgmpidl" "sqlite3"
 ]
 
 build: [ [ "dune" "build" "--release" "-p" name "-j" jobs ] ]
