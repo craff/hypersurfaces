@@ -1,8 +1,8 @@
 open Printing
 open Lib
 
-let Debug.{ log = decomp_log } = Debug.new_debug "decomposition" 'd'
-let Debug.{ log = face_log } = Debug.new_debug "face" 'f'
+let Debug.{ log = decomp_log; _ } = Debug.new_debug "decomposition" 'd'
+let Debug.{ log = face_log  ; _ } = Debug.new_debug "face" 'f'
 
 let solver1_chrono = Chrono.create "solver1"
 let solver2_chrono = Chrono.create "solver2"
@@ -99,7 +99,7 @@ module Make(R:Field.SPlus) = struct
     in
     let forbidden = ref [] in
     let single_critical =
-      List.map (fun (p,dp,hp,_) ->
+      List.map (fun (_,dp,hp,_) ->
          let module F = struct
              let dim = dim
              let fun_min = epsilon2
@@ -225,7 +225,7 @@ module Make(R:Field.SPlus) = struct
           let r = (nc0 -. one) /. denom in
           r *. r
       in
-      List.map (fun (p,dp,hp,_) ->
+      List.map (fun (_,dp,hp,_) ->
           let module F = struct
               let dim = dim
               let fun_min = epsilon2 *. epsilon2
@@ -372,7 +372,7 @@ module Make(R:Field.SPlus) = struct
     let n = List.length ls in
     let trs = empty_triangulation dim in
 
-    let nlim = match param.zero_limit with
+    let nlim = match param.Args.zero_limit with
       | None -> zero
       | Some x -> small x
     in
@@ -383,7 +383,7 @@ module Make(R:Field.SPlus) = struct
       let p = List.map (fun p -> Poly.transform p s0 m) hp0 in
       let l = List.map (fun p ->
                   let l = plane p in
-                  Array.mapi (fun i c -> if abs c <. nlim then zero else c) l) p
+                  Array.map (fun c -> if abs c <. nlim then zero else c) l) p
       in
       let dp = lazy (List.map (fun p -> gradient p) p) in
       let qp = lazy (let lazy qm = qm in
@@ -414,10 +414,10 @@ module Make(R:Field.SPlus) = struct
       Array.fold_left (fun n m -> if m > 0 then n+1 else n) 0 m = 1
     in
 
-    let plim = small param.pos_limit in
+    let plim = small param.Args.pos_limit in
 
     let positive p =
-      let fn (m,c) =
+      let fn (_,c) =
         if c <=. plim then raise Exit
       in
       try List.iter fn p; true with Exit -> false
@@ -470,7 +470,7 @@ module Make(R:Field.SPlus) = struct
     let qsub_v = sub_v Q.zero in
     let sub_v = sub_v zero in
 
-    let all_gradients vs {s; m; o = {l=l0}; } =
+    let all_gradients vs {s; m; o = {l=l0; _}; _ } =
       let l = ref [] in
       Array.iteri (fun i x -> if x then l := i :: !l) vs;
       let l = !l in
@@ -518,7 +518,7 @@ module Make(R:Field.SPlus) = struct
            l
       in
       let gd = ref (List.map (fun _ -> []) l0) in
-      List.iter (fun (opp,({o={l}; m=m'})) ->
+      List.iter (fun (opp,({o={l; _}; m=m'; _})) ->
          let l0 =
            List.map2 (fun deg l ->
                if deg mod 2 = 0 && opp then Array.map (~-.) l else l) deg l
@@ -529,7 +529,7 @@ module Make(R:Field.SPlus) = struct
       (ls,!gd)
     in
 
-    let qall_gradients vs {s; o = {ql= lazy l0;qm= lazy m}; } =
+    let qall_gradients vs {s; o = {ql= lazy l0;qm= lazy m ; _}; _} =
       let l = ref [] in
       Array.iteri (fun i x -> if x then l := i :: !l) vs;
       let l = !l in
@@ -577,7 +577,7 @@ module Make(R:Field.SPlus) = struct
            l
       in
       let gd = ref (List.map (fun _ -> []) l0) in
-      List.iter (fun (opp,({o={ql=lazy ql;qm=lazy m'}})) ->
+      List.iter (fun (opp,({o={ql=lazy ql;qm=lazy m'; _}; _})) ->
          let l0 =
            List.map2 (fun deg l ->
                if deg mod 2 = 0 && opp then Array.map Q.(~-.) l else l) deg ql
@@ -588,7 +588,7 @@ module Make(R:Field.SPlus) = struct
       (ls,!gd)
     in
 
-    let allowed_error = small param.dprec in
+    let allowed_error = small param.Args.dprec in
 
     let visible_v s x =
       let sg, x = if x *.* s.o.c <. zero then (false, opp x) else (true, x) in
@@ -706,13 +706,13 @@ module Make(R:Field.SPlus) = struct
 
     let open struct exception Zih of vector * vector list * (bool * simplicies) list end in
 
-    let is_small = R.pow (small param.safe) (dim-1) in
+    let is_small = R.pow (small param.Args.safe) (dim-1) in
 
     let certs = Hashtbl.create 1024 in
 
-    let zlim = small param.zih_limit in
+    let zlim = small param.Args.zih_limit in
 
-    let slim = match param.sing_limit with
+    let slim = match param.Args.sing_limit with
       | None -> zero
       | Some x -> small x
     in
@@ -870,7 +870,6 @@ module Make(R:Field.SPlus) = struct
            in
            fn [] [] dp gd
         | DV (i,j,c1,c2) ->
-           let open Q.B in
            assert (i >= 0 && j >= 0 && i <> j);
            (*                 printf "split %d %d\n%!" i j;*)
            let l1,l2 =
@@ -1075,7 +1074,7 @@ module Make(R:Field.SPlus) = struct
        | None -> ()
        | Some o -> Display.rm_object o);
       let o = D.mk_lines_from_polyhedron "tmp_build" edges in
-      o.visible <- true;
+      o.Display.visible <- true;
       tmp_object := Some o;
       if !Args.progw then (printf "WAIT\n%!"; Display.wait ());
     in
@@ -1083,7 +1082,7 @@ module Make(R:Field.SPlus) = struct
     let test codim =
       let ls = to_do.(codim) in
       to_do.(codim) <- SimpSet.empty;
-      let rec fn s =
+      let fn s =
         Thread.yield ();
         if s.k <> Removed && s.o.codim = codim then
         let d = Chrono.add_time test_chrono (decision codim) s in
@@ -1093,7 +1092,7 @@ module Make(R:Field.SPlus) = struct
            s.o.codim <- s.o.codim + 1;
            if s.o.codim < dim then
              to_do.(s.o.codim) <- SimpSet.add s to_do.(s.o.codim);
-        | Depend(v,_,sd) ->
+        | Depend(_,_,sd) ->
            assert (s.k = Active);
            if List.exists (fun (_,s) -> s.k = Removed) sd then
              to_do.(s.o.codim) <- SimpSet.add s to_do.(s.o.codim)
@@ -1189,9 +1188,9 @@ module Make(R:Field.SPlus) = struct
              assert (det m1 *. det m2 <. zero);
           | _ -> assert false) trs.by_face
     in
-    if param.check then check ();
+    if param.Args.check then check ();
 
-    let (nb, eps) = match param.project with
+    let (nb, eps) = match param.Args.project with
       | None -> (0, zero)
       | Some(nb,e) -> (nb, of_float e)
     in
@@ -1343,7 +1342,7 @@ module Make(R:Field.SPlus) = struct
 
     let ctrs = empty_triangulation ~has_v_tbl:false ~has_f_tbl:false dim in
 
-    Hashtbl.iter (fun k s -> add ctrs (mks s.o.l s.s)) trs.all;
+    Hashtbl.iter (fun _ s -> add ctrs (mks s.o.l s.s)) trs.all;
 
     let rec extract dim codim trs =
       let edge_value l =
@@ -1469,7 +1468,7 @@ module Make(R:Field.SPlus) = struct
             v
     in
     let ptrs = ref [] in
-    if param.project <> None then
+    if param.Args.project <> None then
       Hashtbl.iter (fun _ s ->
           let s = Array.map fn s.s in
           ptrs := s :: !ptrs) ctrs.all;
@@ -1535,10 +1534,10 @@ module Make(R:Field.SPlus) = struct
       eprintf "\rcertificate OK                                 \n%!"
     in
 
-    if param.certif && nb_unsafe = 0 then
+    if param.Args.certif && nb_unsafe = 0 then
       Chrono.add_time certif_chrono check_certif ()
     else
-      if param.certif then
+      if param.Args.certif then
         eprintf "unsafe cells present: not checking certificate\n%!";
 
     (List.map (Array.map to_vec) all, List.map (Array.map to_vec) !ptrs

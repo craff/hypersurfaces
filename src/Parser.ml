@@ -1,6 +1,5 @@
 open Printing
 open Pacomb
-open Db
 
 module Parse(R:Field.SPlus) = struct
 
@@ -69,6 +68,7 @@ module Parse(R:Field.SPlus) = struct
          H.triangulation opts ps
        in
        let topo_ask =
+         let open Args in
          match opts.expected with
          | None -> opts.topo
          | Some t -> max opts.topo (Topology.min_demand t)
@@ -83,7 +83,7 @@ module Parse(R:Field.SPlus) = struct
                        failwith (sprintf "wrong topology %a"
                                    Topology.print t)
        end;
-       if safe && !Args.dbname <> None && opts.certif = true then
+       if safe && !Args.dbname <> None && opts.Args.certif = true then
          begin
            let rand p = match p with
              | App(p,_) -> p.rand | _ -> false
@@ -211,10 +211,10 @@ module Parse(R:Field.SPlus) = struct
         in
         (R.of_string (Buffer.contents b), s0, n0)
     in
-    { n = "FLOAT"
-    ; c = Charset.from_string "-+0-9."
-    ; a = Lex.custom f
-    ; f }
+    Lex.{ n = "FLOAT"
+        ; c = Charset.from_string "-+0-9."
+        ; a = Lex.custom f
+        ; f }
 
   let rec mul_cons n m l =
     if n <= 0 then l else mul_cons (n-1) m (m::l)
@@ -263,10 +263,10 @@ module Parse(R:Field.SPlus) = struct
       then Lex.give_up () else v
 
   let%parser ne_params  =
-     '(' (x::ident) (l:: ~* ( ',' (v::ident) => v )) ')' => (x::l, ())
+     '(' (x::ident) (l:: ~* ( ',' (v::ident) => v )) ')' => x::l
 
   let%parser params  =
-      () => ([],())
+      () => []
     ; (l::ne_params) => l
 
   type p = Atom | Prod | Sum | Pow
@@ -283,50 +283,47 @@ module Parse(R:Field.SPlus) = struct
     ; "sqrt" => { name = "sqrt"; eval = R.sqrt }
 
   (* for printing, we provide a function to convert priorities to string *)
-  let poly vars =
-    let%parser [@print_param string_of_prio] rec poly p =
-        Atom < Pow < Prod < Sum
-      ; (p=Atom) (x :: float)                      => Cst(x)
-      ; (p=Atom) '(' (p::poly Sum) ')'             => p
-      ; (p=Atom) (v::ident) (args::args)           => Ref(v,args)
-      ; (p=Atom) "DIFF" "(" (p::poly Sum) "," (v::ident) ")"
-                                                   => Der(p,v)
-      ; (p=Pow) (x::poly Pow) '^' (n::INT)         => P.Pow(x, n)
-      ; (p=Prod) '-' (x::poly Pow)                 =>
-          (match x with Cst _ -> Lex.give_up ()
-                       | _ -> Pro(Cst R.(-. one), x))
-      ; (p=Prod) (x::poly Prod) '*' (y::poly Pow)  => Pro(x, y)
-      ; (p=Prod) (x::poly Prod) '/' (y::float)     => Pro(Cst R.(one /. y),x)
-      ; (p=Sum)  (x::poly Sum ) '+' (y::poly Prod) => P.Sum(x,y)
-      ; (p=Sum)  (x::poly Sum ) '-' (y::poly Prod) => Sub(x,y)
-      ; (p=Atom) (f::fname) '(' (x::poly Sum) ')'           => Fun(f,x)
+  let%parser [@print_param string_of_prio] rec poly p =
+      Atom < Pow < Prod < Sum
+    ; (p=Atom) (x :: float)                      => Cst(x)
+    ; (p=Atom) '(' (p::poly Sum) ')'             => p
+    ; (p=Atom) (v::ident) (args::args)           => Ref(v,args)
+    ; (p=Atom) "DIFF" "(" (p::poly Sum) "," (v::ident) ")"
+      => Der(p,v)
+    ; (p=Pow) (x::poly Pow) '^' (n::INT)         => P.Pow(x, n)
+    ; (p=Prod) '-' (x::poly Pow)                 =>
+        (match x with Cst _ -> Lex.give_up ()
+                    | _ -> Pro(Cst R.(-. one), x))
+    ; (p=Prod) (x::poly Prod) '*' (y::poly Pow)  => Pro(x, y)
+    ; (p=Prod) (x::poly Prod) '/' (y::float)     => Pro(Cst R.(one /. y),x)
+    ; (p=Sum)  (x::poly Sum ) '+' (y::poly Prod) => P.Sum(x,y)
+    ; (p=Sum)  (x::poly Sum ) '-' (y::poly Prod) => Sub(x,y)
+    ; (p=Atom) (f::fname) '(' (x::poly Sum) ')'  => Fun(f,x)
 
-    and args =
-        () => []
-      ; '(' (x::poly Sum) (l:: ~* ( ',' (y::poly Sum) => y )) ')' => x::l
-    in
-    poly
+  and args =
+    () => []
+    ; '(' (x::poly Sum) (l:: ~* ( ',' (y::poly Sum) => y )) ')' => x::l
 
   let%parser rec cmd =
       "set" (opts::options) => Set opts
-    ; "let" (name::ident) ((vars,()) >: params) '=' (p::poly vars Sum) =>
+    ; "let" (name::ident) (vars :: params) '=' (p::poly Sum) =>
         Let_poly(name,vars,p)
-    ; "let" (name::ident) ((vars,__) :: params) '=' "random" (deg::poly [] Sum) =>
+    ; "let" (name::ident) (vars :: params) '=' "random" (deg::poly Sum) =>
         Let_rand(name,vars,deg)
-    ; "let" (name::ident)  '=' "zeros" ((vars,()) >: ne_params) (opts::options)
-        (pols:: ~+ (poly vars Sum)) =>
+    ; "let" (name::ident)  '=' "zeros" (vars :: ne_params) (opts::options)
+        (pols:: ~+ (poly Sum)) =>
         Let_surf(name, opts, vars, pols)
     ; "let" (name::ident) '=' "zeros" (opts::options)
         (names:: ~+ ident) =>
         (Let_short_surf(name, opts, names))
     ; "display" (names :: ~+ ident) =>
         Display(names)
-    ; "for" (name::ident) "=" (first::poly [] Sum) "to" (last::poly [] Sum)
-        (step:: ~? [Cst R.one] ("step" (x::poly [] Sum) => x))
+    ; "for" (name::ident) "=" (first::poly Sum) "to" (last::poly Sum)
+        (step:: ~? [Cst R.one] ("step" (x::poly Sum) => x))
         "do"
         (cmds :: ~+ cmd) "done" =>
         For(name,first,last,step,cmds)
-    ; "stats" (dim::INT) (degs :: ~+ (poly [] Sum)) => Stats(dim,degs)
+    ; "stats" (dim::INT) (degs :: ~+ (poly Sum)) => Stats(dim,degs)
     ; "timings" (css::(() => false ; "css" => true))
         (dim::INT) (codim::INT) => Timings(css,dim,codim)
 

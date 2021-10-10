@@ -2,9 +2,7 @@ open Printing
 open Topology
 open Lib
 
-let table_log = Debug.new_debug "table" 't'
-let table_tst = table_log.tst
-let table_log fmt = table_log.log fmt
+let Debug.{ log = table_log; tst = table_tst } = Debug.new_debug "table" 't'
 
 module Make(R:Field.SPlus) = struct
   open R
@@ -223,7 +221,7 @@ module Make(R:Field.SPlus) = struct
   let print_face_key ch (i, l) =
     fprintf ch "%d" i;
     List.iter (fun (j,b) -> fprintf ch ", %s%d" (if b then "+" else "-") j) l
-  let add_f dim by_face s =
+  let add_f by_face s =
       Array.iteri (fun i _ ->
           let key = face_key s.s i in
           let l = try Hashtbl.find by_face key with Not_found -> [] in
@@ -235,7 +233,7 @@ module Make(R:Field.SPlus) = struct
             end;
           assert (List.length l <= 1);
           Hashtbl.replace by_face key ((i,s)::l)) s.s
-  let rm_f dim by_face s =
+  let rm_f by_face s =
       Array.iteri (fun i _ ->
           let key = face_key s.s i in
           let l = try Hashtbl.find by_face key with Not_found -> assert false in
@@ -255,7 +253,7 @@ module Make(R:Field.SPlus) = struct
       rm_s t.all s;
       if t.has_v_tbl then rm_v t.dim t.by_vertex s;
       if t.has_e_tbl then rm_e t.dirs t.by_edge s;
-      if t.has_f_tbl then rm_f t.dim t.by_face s
+      if t.has_f_tbl then rm_f t.by_face s
 
   let add t s =
     table_log "add simplex %a" print_simplex s;
@@ -263,7 +261,7 @@ module Make(R:Field.SPlus) = struct
     add_s t.all s;
     if t.has_v_tbl then add_v t.dim t.by_vertex s;
     if t.has_e_tbl then add_e t.dirs t.by_edge s;
-    if t.has_f_tbl then add_f t.dim t.by_face s
+    if t.has_f_tbl then add_f t.by_face s
 
   let mks ?t o s =
     let s = mks o s in
@@ -367,7 +365,7 @@ module Make(R:Field.SPlus) = struct
         let f1 = try Hashtbl.find trs.by_face (face_key s.s i)
                  with Not_found -> assert false in
         let s1 = match f1 with
-          | [(i1,s1);(i2,s2)] ->
+          | [(_,s1);(_,s2)] ->
              if s1.suid = s.suid then s2 else s1
           | _ -> assert false
         in
@@ -412,7 +410,7 @@ module Make(R:Field.SPlus) = struct
         Found e -> e
     in
     let merge (v1, v2) =
-      let (rev, (u1,u2,p as k)) = edge_key v1 v2 in
+      let (rev, k) = edge_key v1 v2 in
       let (v1, v2) = if rev then (v2,v1) else (v1,v2) in
       printf "remove faces\n%!";
       let faces = try Hashtbl.find trs.by_edge k with Not_found -> assert false in
@@ -477,7 +475,7 @@ module Make(R:Field.SPlus) = struct
               | [] -> ()
               | x::l ->
                  let sub_f = Array.of_list (List.rev_append acc l) in
-                 let index',row' = fn (codim + 1) sub_f in
+                 let _,row' = fn (codim + 1) sub_f in
                  row' := (index,s) :: !row';
                  gn (-s) (x::acc) l
             in

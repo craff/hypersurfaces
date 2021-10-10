@@ -350,4 +350,4 @@ module Make(R:SMin) = struct
                   r
 
   let epsilon2 = epsilon *. epsilon
-end
+end [@@inlined]

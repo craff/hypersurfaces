@@ -1,7 +1,7 @@
 open Sqlite3
 open Format
 
-let Debug.{ log = db_log } = Debug.new_debug "db" 'q'
+let Debug.{ log = db_log; _ } = Debug.new_debug "db" 'q'
 
 let create_polynomial = "
   CREATE TABLE IF NOT EXISTS polynomial (
@@ -45,8 +45,9 @@ let db () =
        let open Data in
        let step (m,v,n as acc) x =
          let x,c =
-           match x with FLOAT x -> (x,1) | INT x -> (Int64.to_float x,1)
-                        | _ -> (0.0,0)
+           match x with FLOAT x -> (x,1)
+                      | INT x -> (Int64.to_float x,1)
+                      | _ -> (0.0,0)
          in
          let n = n + c in
          if c > 0 then
@@ -72,7 +73,7 @@ let insert_polynomial to_str p deg dim rand =
               to_str p
   in
   let res = ref None in
-  let cb row headers =
+  let cb row _ =
     assert (Array.length row = 1);
     (* printf "got %s\n%!" row.(0);*)
     res := Some (Int64.of_string row.(0))
@@ -113,7 +114,7 @@ let insert_variety to_str ps dim nbc topo time opts =
         nb_pol pid_sel
     in
     let res = ref None in
-    let cb row headers =
+    let cb row _ =
       assert (Array.length row = 3);
       res := Some (int_of_string row.(0), row.(1), float_of_string row.(2))
     in
@@ -184,7 +185,7 @@ let timings ?(css=false) dim nb =
   in
   db_log "sql: %s" sql;
   let res = ref [] in
-  let cb row headers =
+  let cb row _ =
     res := row :: !res;
   in
   Rc.check (exec_not_null (db ()) ~cb sql);
@@ -229,7 +230,7 @@ let stats dim degs =
   db_log "sql: %s" sql;
   let total = ref 0 in
   let res = ref [] in
-  let cb row headers =
+  let cb row _ =
     res := row :: !res;
     total := !total + int_of_string row.(2);
   in

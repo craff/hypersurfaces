@@ -1,5 +1,3 @@
-open Format
-
 let batch = ref false
 let cont  = ref false
 let show  = ref false
@@ -41,7 +39,7 @@ let default_parameters = ref
   ; certif = true
   ; zih_limit = 1.00
   ; sing_limit = None
-  ; topo = Ask_Nbc
+  ; topo = Topology.Ask_Nbc
   ; expected = None
   ; project = None }
 
@@ -110,13 +108,13 @@ let spec =
     , Arg.Bool (fun b -> p := { !p with certif = b})
     , "do not check the topology with exact rational arithmetic")
   ; ( "--topo-components"
-    , Arg.Unit (fun () -> p := { !p with topo = Ask_Nbc})
+    , Arg.Unit (fun () -> p := { !p with topo = Topology.Ask_Nbc})
     , "compute only the number of connected components of each variety")
   ; ( "--topo-euler"
-    , Arg.Unit (fun () -> p := { !p with topo = Ask_Euler})
+    , Arg.Unit (fun () -> p := { !p with topo = Topology.Ask_Euler})
     , "compute only the number of connected components of each variety")
   ; ( "--topo-betti"
-    , Arg.Unit (fun () -> p := { !p with topo = Ask_Betti})
+    , Arg.Unit (fun () -> p := { !p with topo = Topology.Ask_Betti})
     , "compute only the number of connected components of each variety")
   ; ( "--db"
     , Arg.String (fun s -> dbname := Some s)

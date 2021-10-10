@@ -2,11 +2,11 @@ open Printing
 open FieldGen
 
 (** log for zero in convex hull test *)
-let Debug.{ log = zih_log } = Debug.new_debug "hull" 'h'
-let Debug.{ log = tri_log } = Debug.new_debug "triangulation" 'z'
-let Debug.{ log = sol_log } = Debug.new_debug "solve" 's'
-let Debug.{ log = min_log } = Debug.new_debug "minimise" 'm'
-let Debug.{ log = ame_log } = Debug.new_debug "ameliorate" 'a'
+let Debug.{ log = zih_log; _ } = Debug.new_debug "hull" 'h'
+let Debug.{ log = tri_log; _ } = Debug.new_debug "triangulation" 'z'
+let Debug.{ log = sol_log; _ } = Debug.new_debug "solve" 's'
+let Debug.{ log = min_log; _ } = Debug.new_debug "minimise" 'm'
+let Debug.{ log = ame_log; _ } = Debug.new_debug "ameliorate" 'a'
 
 (** Functor with linear algebra code for the given field *)
 module Make(R:S) = struct
@@ -26,39 +26,35 @@ module Make(R:S) = struct
   let addq v1 v2 =
     for i = 0 to Array.length v1 - 1 do
       v1.(i) <- v1.(i) +. v2.(i)
-    done;
-    [@@inlined always]
+    done
 
   (** set v0 to v1 + v2 *)
   let adds v0 v1 v2 =
     for i = 0 to Array.length v1 - 1 do
       v0.(i) <- v1.(i) +. v2.(i)
-    done;
-    [@@inlined always]
+    done
 
   (** addition that allocates a new vector *)
   let ( +++ ) v1 v2 =
     let v = Array.make (Array.length v1) zero in
-    adds v v1 v2; v[@@inlined always]
+    adds v v1 v2; v
 
   (** in place subtraction *)
   let subq v1 v2 =
     for i = 0 to Array.length v1 - 1 do
       v1.(i) <- v1.(i) -. v2.(i)
-    done;
-    [@@inlined always]
+    done
 
   (** set v0 to v1 - v2 *)
   let subs v0 v1 v2 =
     for i = 0 to Array.length v1 - 1 do
       v0.(i) <- v1.(i) -. v2.(i)
-    done;
-    [@@inlined always]
+    done
 
   (** subtraction that allocates a new vector *)
   let ( --- ) v1 v2 =
     let v = Array.make (Array.length v1) zero in
-    subs v v1 v2; v [@@inlined always]
+    subs v v1 v2; v
 
   (** set v0 to v1 + v2 *)
   let addms m0 m1 m2 =
@@ -68,14 +64,13 @@ module Make(R:S) = struct
       for j = 0 to d2 - 1 do
       m0.(i).(j) <- m1.(i).(j) +. m2.(i).(j)
       done;
-    done;
-    [@@inlined always]
+    done
 
   (** addition that allocates a new matrix *)
   let ( ++++ ) m1 m2 =
     let m = Array.init (Array.length m1)
               (fun _ -> Array.make (Array.length m1.(0)) zero) in
-    addms m m1 m2; m [@@inlined always]
+    addms m m1 m2; m
 
   (** set v0 to v1 + v2 *)
   let subms m0 m1 m2 =
@@ -85,14 +80,13 @@ module Make(R:S) = struct
       for j = 0 to d2 - 1 do
       m0.(i).(j) <- m1.(i).(j) -. m2.(i).(j)
       done;
-    done;
-    [@@inlined always]
+    done
 
   (** addition that allocates a new matrix *)
   let ( ---- ) m1 m2 =
     let m = Array.init (Array.length m1)
               (fun _ -> Array.make (Array.length m1.(0)) zero) in
-    subms m m1 m2; m [@@inlined always]
+    subms m m1 m2; m
 
   (** vector product in dimension 3 only *)
   let vp v1 v2 =
@@ -106,25 +100,25 @@ module Make(R:S) = struct
   let combq t v1 u v2 =
     for i = 0 to Array.length v1 - 1 do
       v1.(i) <- t*.v1.(i) +. u*.v2.(i)
-    done [@@inlined always]
+    done
 
   (** set v1 to v1 + u v2 *)
   let combqo v1 u v2 =
     for i = 0 to Array.length v1 - 1 do
       v1.(i) <- v1.(i) +. u*.v2.(i)
-    done [@@inlined always]
+    done
 
   (** set v0 to t v1 + u v2 *)
   let combs v0 t v1 u v2 =
     for i = 0 to Array.length v1 - 1 do
       v0.(i) <- t*.v1.(i) +. u*.v2.(i)
-    done [@@inlined always]
+    done
 
   (** allocates a new vector with value t v1 + u v2 *)
   let comb t v1 u v2 =
     let n = Array.length v1 in
     let v = Array.make n zero in
-    combs v t v1 u v2; v [@@inlined always]
+    combs v t v1 u v2; v
 
   (** set m1 to t m1 + u m2*)
   let mcombq t m1 u m2 =
@@ -132,7 +126,7 @@ module Make(R:S) = struct
       for j = 0 to Array.length m2 - 1 do
         m1.(i).(j) <- t*.m1.(i).(j) +. u*.m2.(i).(j)
       done
-    done [@@inlined always]
+    done
 
   (** scalar product *)
   let ( *.* ) v1 v2 =
@@ -150,13 +144,13 @@ module Make(R:S) = struct
   let smulq x v =
     for i = 0 to Array.length v - 1 do
       v.(i) <- x*.v.(i)
-    done [@@inlined always]
+    done
 
   (** set v0 to x v1 *)
   let smuls v0 x v1 =
     for i = 0 to Array.length v1 - 1 do
       v0.(i) <- x*.v1.(i)
-    done [@@inlined always]
+    done
 
   (** alocates a new vector with x v *)
   let ( **. ) x v =
@@ -173,7 +167,7 @@ module Make(R:S) = struct
       for j = 0 to d2 - 1 do
         m0.(i).(j) <- x*.m1.(i).(j)
       done
-    done [@@inlined always]
+    done
 
   (** alocates a new matrix with x m *)
   let ( ***. ) x m =
@@ -184,13 +178,13 @@ module Make(R:S) = struct
     r
 
   (** division by a scalar *)
-  let ( //. ) v x = (one /. x) **. v [@@inlined always]
+  let ( //. ) v x = (one /. x) **. v
 
   (** opposite *)
-  let opp v = (~-.one) **. v [@@inlined always]
+  let opp v = (~-.one) **. v
 
   (** square of the Euclidian norm *)
-  let norm2 v = v *.* v [@@inlined always]
+  let norm2 v = v *.* v
 
   let fnorm2 m =
     let r = ref zero in
@@ -198,13 +192,13 @@ module Make(R:S) = struct
     !r
 
   (** Euclidian norm *)
-  let norm v = sqrt (norm2 v) [@@inlined always]
+  let norm v = sqrt (norm2 v)
 
   (** Eucidian distance *)
-  let dist v1 v2 = norm (v1 --- v2) [@@inlined always]
+  let dist v1 v2 = norm (v1 --- v2)
 
   (** Square of Euclidian distance *)
-  let dist2 v1 v2 = norm2 (v1 --- v2) [@@inlined always]
+  let dist2 v1 v2 = norm2 (v1 --- v2)
 
   (** absolute norm *)
   let abs_norm v =
@@ -212,22 +206,22 @@ module Make(R:S) = struct
     for i = 0 to Array.length v - 1 do
       r := !r +. abs v.(i)
     done;
-    !r [@@inlined always]
+    !r
 
   (** return the normalisation of v *)
   let normalise v =
     let n = norm v in
     if n =. zero then v else
-    (one /. n) **. v [@@inlined always]
+    (one /. n) **. v
 
   (** normalise v in place *)
   let normaliseq v =
     let n = norm v in
     assert (n <>. zero);
-    smulq (one /. norm v) v [@@inlined always]
+    smulq (one /. norm v) v
 
   (** normalisation for absolute norm *)
-  let abs_normalise v = (one /. abs_norm v) **. v [@@inlined always]
+  let abs_normalise v = (one /. abs_norm v) **. v
 
   (** printing functions *)
   let print_vector = print_array R.print
@@ -263,7 +257,7 @@ module Make(R:S) = struct
   (** swap in a vector *)
   let swap v i j =
     let tmp = v.(i) in
-    v.(i) <- v.(j); v.(j) <- tmp [@@inlined always]
+    v.(i) <- v.(j); v.(j) <- tmp
 
   (** determinant with full principal Gauss pivot.
       the matrice is overwritten *)
@@ -799,7 +793,7 @@ module Make(R:S) = struct
       in
 
       (** second kind of steps *)
-      let linear_step step v v2 =
+      let linear_step step v =
         (** we select indices with [r.(i) > 0] *)
         let sel = ref [] in
         for i = 0 to nb - 1 do
@@ -849,7 +843,7 @@ module Make(R:S) = struct
            print_vector r print_vector (m *** v);*)
         let (v,v2) =
           (** one linear step and one conjugate steps. *)
-          let (nr, cancel, nv, nv2) = linear_step step v v2 in
+          let (nr, cancel, nv, nv2) = linear_step step v in
           if (nv2 <. v2) then
             begin
               (** pr is set to zero for the cancelled index to force avoid
@@ -1181,7 +1175,7 @@ module Make(R:S) = struct
       let (sd,nd) = descent c0 in
       loop_eq 0 c0 fc0 nd sd one
 
-  end [@@inlined always]
+  end
 
   module type FunMin = sig
     val dim : int
@@ -1311,7 +1305,7 @@ module type V = sig
 
   val project_circle : v -> float -> v -> v
 
-  module Solve(F:Fun) : sig
+  module Solve(_:Fun) : sig
     val solve : (v -> v) -> t -> v -> (t*v)
     val solutions : (t * v) list ref
   end
@@ -1327,7 +1321,7 @@ module type V = sig
     val stat : solver_stats
   end
 
-  module Min(F:FunMin) : sig
+  module Min(_:FunMin) : sig
     val minimise : (v -> v) -> t -> v -> v
   end
 

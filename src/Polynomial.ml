@@ -292,7 +292,7 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
     | HVar of 'a hf * 'a hf
 
   let split p i =
-    let (p,q) = List.partition (fun (l,x) -> l.(i) <> 0) p in
+    let (p,q) = List.partition (fun (l,_) -> l.(i) <> 0) p in
     let p = List.map (fun (l,x) ->
                 let l = Array.init (Array.length l) (fun j ->
                             if i = j then l.(i) - 1 else l.(j))
@@ -662,7 +662,7 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
     in
     iter_monomial gn true deg dim
 
-end [@@inlined always]
+end
 
 module type B = sig
   type t

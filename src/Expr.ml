@@ -99,7 +99,7 @@ module Make(R:Field.SPlus) = struct
       | Pow(p,n) -> pow (fn p) n
       | Fun(f,p) -> f.eval (fn p)
       | Der _    -> failwith "diff in eval"
-      | Ref(v,l) -> assert false (*
+      | Ref(_,_) -> assert false (*
          try
            if l <> [] then raise Not_found;
            List.assoc v env

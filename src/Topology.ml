@@ -26,14 +26,14 @@ let compare_one t1 t2 = match (t1, t2) with
 type topo_ask = Ask_Nbc | Ask_Euler | Ask_Betti
 
 let min_demand topo =
-  let rec fn acc (t,_) = match t with
+  let fn acc (t,_) = match t with
     | Any -> acc
     | Euler _ -> max Ask_Euler acc
     | Betti _ -> max Ask_Betti acc
   in
   List.fold_left fn Ask_Nbc topo
 
-let compare2 (t1,n1) (t2,n2) = compare_one t1 t2
+let compare2 (t1,_) (t2,_) = compare_one t1 t2
 
 (** topology are sorted by the compare order, and factorised, the positive
     integer being the number of components with that topology *)
@@ -46,7 +46,7 @@ let to_string t =
     | Euler n -> fprintf ch "%d" n
     | Betti l -> fprintf ch "%a" print_int_list l
   in
-  let gn i (t,nb) =
+  let gn (t,nb) =
     if nb = 0 then
       sprintf "0"
     else if nb = 1 then
@@ -54,7 +54,7 @@ let to_string t =
     else
       sprintf "%d*%a" nb fn t
   in
-  "(" ^ String.concat "," (List.mapi gn t) ^ ")"
+  "(" ^ String.concat "," (List.map gn t) ^ ")"
 
 let print ch t = fprintf ch "%s" (to_string t)
 

@@ -13,27 +13,27 @@ end
 module FloatMin =
   struct
     type t = float
-    let zero = 0.       [@@inlined always]
-    let one = 1.        [@@inlined always]
-    let inf = infinity  [@@inlined always]
-    let ( +. ) = ( +. ) [@@inlined always]
-    let ( *. ) = ( *. ) [@@inlined always]
-    let ( -. ) = ( -. ) [@@inlined always]
-    let ( /. ) = ( /. ) [@@inlined always]
-    let ( ~-.) = ( ~-.) [@@inlined always]
-    let ( =. ) = ( = )
-    let ( <>. ) = ( <> )
-    let ( <. ) = ( < )
-    let ( >. ) = ( > )
-    let ( <=. ) = ( <= )
-    let ( >=. ) = ( >= )
-    let sqrt = sqrt     [@@inlined always]
+    let zero = 0.
+    let one = 1.
+    let inf = infinity
+    let ( +. ) = ( +. ) [@@inlined]
+    let ( *. ) = ( *. ) [@@inlined]
+    let ( -. ) = ( -. ) [@@inlined]
+    let ( /. ) = ( /. ) [@@inlined]
+    let ( ~-.) = ( ~-.) [@@inlined]
+    let ( =. ) = ( = )  [@@inlined]
+    let ( <>. ) = ( <> )[@@inlined]
+    let ( <. ) = ( < )  [@@inlined]
+    let ( >. ) = ( > )  [@@inlined]
+    let ( <=. ) = ( <= )[@@inlined]
+    let ( >=. ) = ( >= )[@@inlined]
+    let sqrt = sqrt
     let cmp = compare
-    let abs = abs_float [@@inlined always]
-    let of_int = float  [@@inlined always]
+    let abs = abs_float
+    let of_int = float
     let to_int = int_of_float
-    let to_float x = x  [@@inlined always]
-    let of_float x = x  [@@inlined always]
+    let to_float x = x
+    let of_float x = x
     let of_string = float_of_string
     let to_string = Format.sprintf "%.13H"
     let to_q = Q.of_float
@@ -57,14 +57,14 @@ module GmpMin = struct
   let mode = Mpfr.Near
 
   type nonrec t = t
-  let zero = of_int 0 mode      [@@inlined always]
-  let one = of_int 1 mode       [@@inlined always]
-  let ( +. ) x y = add x y mode [@@inlined always]
-  let ( *. ) x y = mul x y mode [@@inlined always]
-  let ( -. ) x y = sub x y mode [@@inlined always]
-  let ( /. ) x y = div x y mode [@@inlined always]
-  let ( ~-.) x = neg x mode     [@@inlined always]
-  let sqrt x = sqrt x mode      [@@inlined always]
+  let zero = of_int 0 mode
+  let one = of_int 1 mode
+  let ( +. ) x y = add x y mode
+  let ( *. ) x y = mul x y mode
+  let ( -. ) x y = sub x y mode
+  let ( /. ) x y = div x y mode
+  let ( ~-.) x = neg x mode
+  let sqrt x = sqrt x mode
   let inf = one /. zero
   let cmp = Mpfr.cmp
   let ( =. ) x y = cmp x y = 0
@@ -108,10 +108,10 @@ module Gmp = struct
   let set_prec = Mpfr.set_default_prec
   let _ = set_prec 100
 
-  module F = FieldGen.Make [@inlined always] (GmpMin)
+  module F = FieldGen.Make (GmpMin)
   include F
-  module V = Vector.Make [@inlined always] (F)
-  module B = Polynomial.Make (F) [@inlined always] (V)
+  module V = Vector.Make (F)
+  module B = Polynomial.Make (F) (V)
 end
 
 (** Zarith rational, not usable yet *)
@@ -159,9 +159,9 @@ module QMin =
   end
 
 module Q = struct
-  module F = FieldGen.Make [@inlined always] (QMin)
+  module F = FieldGen.Make (QMin)
   include F
-  module V = Vector.Make [@inlined always] (F)
-  module B = Polynomial.Make (F) [@inlined always] (V)
+  module V = Vector.Make (F)
+  module B = Polynomial.Make (F) (V)
 
 end

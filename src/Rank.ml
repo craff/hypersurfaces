@@ -75,7 +75,7 @@ let print_mat ch =
       print_newline ())
 
 let length_row = function
-    | Elt(_,_,r,s) -> s
+    | Elt(_,_,_,s) -> s
     | End -> 0
 
 let cons k x l = if x = zero then l else Elt(k,x,l, Stdlib.(length_row l + 1))
@@ -104,7 +104,7 @@ let kernel nbl nbc m =
          cons k1 (u*s1 + v*s2) (fn l1 l2)
       | (Elt(k1,s1,l1,_), Elt(k2,_,_,_)) when k1 < k2 ->
          cons k1 (u*s1) (fn l1 l2)
-      | (Elt(k1,_,_,_), Elt(k2,s2,l2,_)) (*when k1 > k2*) ->
+      | (Elt(_,_,_,_), Elt(k2,s2,l2,_)) (*when k1 > k2*) ->
          cons k2 (v*s2) (fn l1 l2)
       | (Elt(k1,s1,l1,_), End) ->
          cons k1 (u*s1) (fn l1 l2)
