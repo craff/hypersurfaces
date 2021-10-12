@@ -1030,7 +1030,7 @@ module Make(R:S) = struct
                         = r^2 + l d2 + ...
           zero pour l = - d2 /. r2 *)
       let q = -. r2 /. d2 in
-      let steepest = (if d2 <=. zero then -.one else q) **. dx in
+      let steepest = (if not (d2 >. zero) then -.one else q) **. dx in
       (** newton direction as usual *)
       let newton = solve h (-. one **. r) in
       (steepest, newton)
@@ -1094,7 +1094,7 @@ module Make(R:S) = struct
         let fc1 = try Previous.get prev with Not_found -> inf in
         let q = norm2 nd in
           (*printf "steps: %d %a %a %a %a %a\n%!" steps print fc print fc1 print epsilon2 print (fc1 /. fc) print q;*)
-          if lambda <. F.lambda_min || (fc1 /. fc <. F.min_prog_coef)
+          if lambda <. F.lambda_min || (fc1 <. F.min_prog_coef *. fc)
                                                       || q <. F.fun_min
           then
             begin
@@ -1108,7 +1108,7 @@ module Make(R:S) = struct
                 end;*)
               sol_log "ends at %4d, fc: %a, c: %a, lambda: %a"
                 steps print fc print_vector c print lambda;
-              if q >. F.fun_good then
+              if not (q <=. F.fun_good) then
                 begin
                   F.stat.nb_bad <- F.stat.nb_bad + 1;
                   raise Not_found;
@@ -1147,7 +1147,7 @@ module Make(R:S) = struct
               print_vector (F.eval c') print (F.eval c' *.* c')
               print_matrix (F.grad c') print (det (F.grad c'))
               print lambda print t;*)
-              if (fc =. of_float nan && fc' <>. of_float nan) || fc' <. fc then
+              if (is_nan fc && not (is_nan fc')) || fc' <. fc then
                 begin
                   (** progress, do to next step, try a bigger lambda *)
                   Previous.add fc' prev;

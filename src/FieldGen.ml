@@ -8,6 +8,7 @@ module type SMin = sig
   val zero : t
   val one : t
   val inf : t
+  val is_nan : t -> bool
   val ( +. ) : t -> t -> t
   val ( *. ) : t -> t -> t
   val ( -. ) : t -> t -> t
