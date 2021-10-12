@@ -16,19 +16,19 @@ module FloatMin =
     let zero = 0.
     let one = 1.
     let inf = infinity
-    let ( +. )  x y = ( +. ) x y [@@inlined]
-    let ( *. )  x y = ( *. ) x y [@@inlined]
-    let ( -. )  x y = ( -. ) x y [@@inlined]
-    let ( /. )  x y = ( /. ) x y [@@inlined]
-    let ( ~-.)  x   = ( ~-.) x   [@@inlined]
-    let ( =. )  x y = Float.equal x y        [@@inlined]
-    let ( <>. ) x y = Float.compare x y <> 0 [@@inlined]
-    let ( <. )  x y = Float.compare x y < 0  [@@inlined]
-    let ( >. )  x y = Float.compare x y > 0  [@@inlined]
-    let ( <=. ) x y = Float.compare x y <= 0 [@@inlined]
-    let ( >=. ) x y = Float.compare x y >= 0 [@@inlined]
+    let ( +. ) = ( +. ) [@@inlined]
+    let ( *. ) = ( *. ) [@@inlined]
+    let ( -. ) = ( -. ) [@@inlined]
+    let ( /. ) = ( /. ) [@@inlined]
+    let ( ~-.) = ( ~-.) [@@inlined]
+    let ( =. ) : float -> float -> bool = ( = ) [@@inlined]
+    let ( <>. ): float -> float -> bool = ( <> )[@@inlined]
+    let ( <. ) : float -> float -> bool = ( < ) [@@inlined]
+    let ( >. ) : float -> float -> bool = ( > ) [@@inlined]
+    let ( <=. ): float -> float -> bool = ( <= )[@@inlined]
+    let ( >=. ): float -> float -> bool = ( >= )[@@inlined]
     let sqrt = sqrt
-    let cmp = Float.compare
+    let cmp : float -> float -> int = Stdlib.compare
     let abs = abs_float
     let of_int = float
     let to_int = int_of_float

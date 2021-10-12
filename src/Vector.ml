@@ -1063,7 +1063,7 @@ module Make(R:S) = struct
           then raise Not_found;
           let ls =
             List.find_all
-              (fun (_,c') -> F.dist2 c c' < rs2 || F.dist2 c (opp c') < rs2)
+              (fun (_,c') -> F.dist2 c c' <. rs2 || F.dist2 c (opp c') <. rs2)
               !solutions
           in
           let (fc',c') = match ls with

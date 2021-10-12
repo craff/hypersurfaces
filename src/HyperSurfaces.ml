@@ -429,7 +429,7 @@ module Make(R:Field.SPlus) = struct
       let open Q in
       let ap = ref true in
       let fn (m,c) =
-        let t = cmp c zero in
+        let t = compare c zero in
         if t < 0 || (is_vertex m && t = 0) then ap := false
       in
       List.iter fn p;
