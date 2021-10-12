@@ -547,23 +547,23 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
 
   let digho (p:polynomial) epsilon p1 x p2 y =
     let e2 = epsilon *. epsilon in
-    if cmp p1 zero = 0 then x
-    else if cmp p2 zero = 0 then y
+    if p1 =. zero then x
+    else if p2 =. zero then y
     else begin
         assert (cmp (p1 *. p2) zero < 0);
         let h = one /. of_int 2 in
         let rec fn p1 x p2 y =
-          assert (cmp p1 zero < 0);
-          assert (cmp p2 zero > 0);
+          assert (p1 <. zero);
+          assert (p2 >. zero);
           let z = comb h x h y in
           let p3 = eval p z in
-          if cmp (dist2 x y) e2 < 0 then z else
+          if dist2 x y <. e2 then z else
           let c = cmp p3 zero in
           if c = 0 then z
           else if c < 0 then fn p3 z p2 y
           else fn p1 x p3 z
         in
-        if cmp p1 zero < 0 then fn p1 x p2 y else fn p2 y p1 x
+        if p1 <. zero then fn p1 x p2 y else fn p2 y p1 x
       end
 
   (** third version, unlimited ! *)

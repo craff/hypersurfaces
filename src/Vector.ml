@@ -1,12 +1,6 @@
 open Printing
 open FieldGen
-
-(** log for zero in convex hull test *)
-let Debug.{ log = zih_log; _ } = Debug.new_debug "hull" 'h'
-let Debug.{ log = tri_log; _ } = Debug.new_debug "triangulation" 'z'
-let Debug.{ log = sol_log; _ } = Debug.new_debug "solve" 's'
-let Debug.{ log = min_log; _ } = Debug.new_debug "minimise" 'm'
-let Debug.{ log = ame_log; _ } = Debug.new_debug "ameliorate" 'a'
+open VectorCommon
 
 (** Functor with linear algebra code for the given field *)
 module Make(R:S) = struct
@@ -457,7 +451,7 @@ module Make(R:S) = struct
            a12 a22) inv    -a12 a11)   0 det) *)
         let det = a11 *. a22 -. a12 *. a12 in
         (** exit if det is zero, only append near the solution *)
-        if det = zero then raise Exit;
+        if det =. zero then raise Exit;
         (** solution of the 2x2 system *)
         let a1 = nr2 *. a22 /. det in
         let a2 = nr2 *. (-. a12 /. det) in
@@ -735,7 +729,7 @@ module Make(R:S) = struct
           begin
             zih_log "false";
             let v = ameliorate v m0 in
-            let e = if Array.exists (fun w -> v *.* w < zlim) m0 then None
+            let e = if Array.exists (fun w -> v *.* w <. zlim) m0 then None
                     else Some v
             in
             exit_zih step e
@@ -1036,7 +1030,7 @@ module Make(R:S) = struct
                         = r^2 + l d2 + ...
           zero pour l = - d2 /. r2 *)
       let q = -. r2 /. d2 in
-      let steepest = (if d2 <= zero then -.one else q) **. dx in
+      let steepest = (if d2 <=. zero then -.one else q) **. dx in
       (** newton direction as usual *)
       let newton = solve h (-. one **. r) in
       (steepest, newton)
@@ -1064,7 +1058,7 @@ module Make(R:S) = struct
         try (** search for existing solution near enough *)
           if List.exists (fun ptr ->
                  List.exists
-                   (fun (_,c') -> F.dist2 c c' < rs2 || F.dist2 c (opp c') < rs2)
+                   (fun (_,c') -> F.dist2 c c' <. rs2 || F.dist2 c (opp c') <. rs2)
                    !ptr) F.forbidden
           then raise Not_found;
           let ls =
@@ -1090,7 +1084,7 @@ module Make(R:S) = struct
                (!best_fc',!best_c')
           in
           update_loop_stats false steps;
-          let c' = if F.dist2 c c' < rs2 then c' else opp c' in
+          let c' = if F.dist2 c c' <. rs2 then c' else opp c' in
           sol_log "abort at step %3d, fc: %a, c: %a"
             steps print fc' print_vector c';
           (fc',c')
@@ -1194,7 +1188,7 @@ module Make(R:S) = struct
       let rec fn step lambda c p d m =
         min_log "%d,%a: %a => %a(%a)" step print lambda
           print_vector c print m print_vector d;
-        if lambda <. F.lambda_min || step >= F.max_steps then c else
+        if lambda <. F.lambda_min || Int.compare step F.max_steps >= 0 then c else
           (try (fun () ->
              let f t =
                let p' = comb t d (one -. t) p in

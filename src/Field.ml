@@ -16,24 +16,24 @@ module FloatMin =
     let zero = 0.
     let one = 1.
     let inf = infinity
-    let ( +. ) = ( +. ) [@@inlined]
-    let ( *. ) = ( *. ) [@@inlined]
-    let ( -. ) = ( -. ) [@@inlined]
-    let ( /. ) = ( /. ) [@@inlined]
-    let ( ~-.) = ( ~-.) [@@inlined]
-    let ( =. ) = ( = )  [@@inlined]
-    let ( <>. ) = ( <> )[@@inlined]
-    let ( <. ) = ( < )  [@@inlined]
-    let ( >. ) = ( > )  [@@inlined]
-    let ( <=. ) = ( <= )[@@inlined]
-    let ( >=. ) = ( >= )[@@inlined]
+    let ( +. )  x y = ( +. ) x y [@@inlined]
+    let ( *. )  x y = ( *. ) x y [@@inlined]
+    let ( -. )  x y = ( -. ) x y [@@inlined]
+    let ( /. )  x y = ( /. ) x y [@@inlined]
+    let ( ~-.)  x   = ( ~-.) x   [@@inlined]
+    let ( =. )  x y = Float.equal x y        [@@inlined]
+    let ( <>. ) x y = Float.compare x y <> 0 [@@inlined]
+    let ( <. )  x y = Float.compare x y < 0  [@@inlined]
+    let ( >. )  x y = Float.compare x y > 0  [@@inlined]
+    let ( <=. ) x y = Float.compare x y <= 0 [@@inlined]
+    let ( >=. ) x y = Float.compare x y >= 0 [@@inlined]
     let sqrt = sqrt
-    let cmp = compare
+    let cmp = Float.compare
     let abs = abs_float
     let of_int = float
     let to_int = int_of_float
-    let to_float x = x
-    let of_float x = x
+    let to_float x = x [@@inlined]
+    let of_float x = x [@@inlined]
     let of_string = float_of_string
     let to_string = Format.sprintf "%.13H"
     let to_q = Q.of_float
@@ -46,10 +46,10 @@ module FloatMin =
   end
 
 module Float = struct
-  module F = FieldGen.Make [@inlined always] (FloatMin)
+  module F = FFieldMake.Make [@inlined] (FloatMin)
   include F
-  module V = Vector.Make [@inlined always] (F)
-  module B = Polynomial.Make (F) [@inlined always] (V)
+  module V = FVector.Make [@inlined] (F)
+  module B = FPolynomial.Make (F) [@inlined] (V)
 end
 
 module GmpMin = struct
@@ -108,7 +108,7 @@ module Gmp = struct
   let set_prec = Mpfr.set_default_prec
   let _ = set_prec 100
 
-  module F = FieldGen.Make (GmpMin)
+  module F = FieldMake.Make (GmpMin)
   include F
   module V = Vector.Make (F)
   module B = Polynomial.Make (F) (V)
@@ -159,7 +159,7 @@ module QMin =
   end
 
 module Q = struct
-  module F = FieldGen.Make (QMin)
+  module F = FieldMake.Make (QMin)
   include F
   module V = Vector.Make (F)
   module B = Polynomial.Make (F) (V)

@@ -429,7 +429,7 @@ module Make(R:Field.SPlus) = struct
       let open Q in
       let ap = ref true in
       let fn (m,c) =
-        let t = compare c zero in
+        let t = cmp c zero in
         if t < 0 || (is_vertex m && t = 0) then ap := false
       in
       List.iter fn p;
@@ -628,7 +628,7 @@ module Make(R:Field.SPlus) = struct
       in
       let best = ref None in
       let kn (_,s) =
-        Vector.sol_log "searching in simplex: %a" print_simplex s;
+        VectorCommon.sol_log "searching in simplex: %a" print_simplex s;
 
         let c0 = normalise s.o.c in
         let rs2 =
@@ -660,7 +660,7 @@ module Make(R:Field.SPlus) = struct
             (*if not critical then printf "fc1: %a %a %b %b\n%!" print fc1 print_ty ty b1 b2;*)
             if not b1 || not b2 then
               begin
-                Vector.sol_log "reject %b %b %b" b1 b2 (fc1 >. epsilon);
+                VectorCommon.sol_log "reject %b %b %b" b1 b2 (fc1 >. epsilon);
                 raise Not_found
               end;
             let p2 = eval_prod c1 in
@@ -680,9 +680,9 @@ module Make(R:Field.SPlus) = struct
       in
       List.iter kn sd;
       let (s, c, ty) = match !best with
-        | None -> Vector.sol_log "keep nothing"; raise Not_found
+        | None -> VectorCommon.sol_log "keep nothing"; raise Not_found
         | Some (s, _, c, sc, fc, ty) ->
-           Vector.sol_log "keep %a with sc: %a, fc: %a"
+           VectorCommon.sol_log "keep %a with sc: %a, fc: %a"
              print_vector c print sc print fc;
 (*           if not critical then printf "keep %a with sc: %a, fc: %a\n%!"
              print_vector c print sc print fc;*)
@@ -692,15 +692,15 @@ module Make(R:Field.SPlus) = struct
     in
 
     let search_single_critical sd =
-      Vector.sol_log "start search critical";
+      VectorCommon.sol_log "start search critical";
       search_points true single_critical sd
     in
     let search_multi_critical sd =
-      Vector.sol_log "start search multi critical";
+      VectorCommon.sol_log "start search multi critical";
       search_points true multi_critical sd
     in
     let search_penal_critical c sd =
-      Vector.sol_log "start search penal";
+      VectorCommon.sol_log "start search penal";
       search_points false (penal_critical c) sd
     in
 
@@ -1115,7 +1115,7 @@ module Make(R:Field.SPlus) = struct
                  ajoute s c ty
                with Not_found ->
                  assert (s.k = Active);
-                 Vector.sol_log "take center";
+                 VectorCommon.sol_log "take center";
                  let c = normalise s.o.c in
                  let c = Simp.mkv c in
                  ajoute s c Center

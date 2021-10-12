@@ -28,3 +28,21 @@
     (cat triangles_fragment.glsl)
     (echo "\"\n")
     ))))
+
+(rule
+   (target FFieldMake.ml)
+   (deps FieldMake.ml)
+   (action (with-stdout-to %{target}
+     (run sed "s/Make(R:SMin)/Make(R:SMin with type t = float)/" %{deps}))))
+
+(rule
+   (target FVector.ml)
+   (deps Vector.ml)
+   (action (with-stdout-to %{target}
+     (run sed "s/Make(R:S)/Make(R:S with type t = float)/" %{deps}))))
+
+(rule
+   (target FPolynomial.ml)
+   (deps Polynomial.ml)
+   (action (with-stdout-to %{target}
+     (run sed "s/Make(R:S)/Make(R:S with type t = float)/" %{deps}))))
