@@ -1188,7 +1188,7 @@ module Make(R:S) = struct
       let rec fn step lambda c p d m =
         min_log "%d,%a: %a => %a(%a)" step print lambda
           print_vector c print m print_vector d;
-        if lambda <. F.lambda_min || Int.compare step F.max_steps >= 0 then c else
+        if lambda <. F.lambda_min || step >= F.max_steps then c else
           (try (fun () ->
              let f t =
                let p' = comb t d (one -. t) p in

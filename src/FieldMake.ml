@@ -141,7 +141,7 @@ module Make(R:SMin) = struct
       incr steps;
       let z = (x +. y) *. h in
       if abs (y -. x) <=. stop_cond.precision
-         || Int.compare !steps stop_cond.max_steps > 0 then z
+         || !steps > stop_cond.max_steps then z
       else
         let fz = f z in
         match cmp fz zero with
@@ -167,7 +167,7 @@ module Make(R:SMin) = struct
 (*      printf "%d: %a %a %a %a %a %a\n%!" !steps print beta0 print f0
         print beta1 print f1
         print beta2 print f2;*)
-      if Int.compare !steps stop_cond.max_steps > 0
+      if !steps > stop_cond.max_steps
          || abs ((f0 -. f1) /. f0) <=. stop_cond.precision
          || abs ((f2 -. f1) /. f0) <=. stop_cond.precision
       then beta1 else
@@ -211,7 +211,7 @@ module Make(R:SMin) = struct
   let tricho ?(safe=true) ?(stop_cond=default_stop_cond) f beta0 beta3 =
     let steps = ref 0 in
     let rec fn beta0 beta2 f2 beta3 =
-      if Int.compare !steps stop_cond.max_steps > 0
+      if !steps > stop_cond.max_steps
          || abs (beta3 -. beta0) <=. stop_cond.precision
       then beta2 else
         begin
@@ -222,7 +222,7 @@ module Make(R:SMin) = struct
           else gn beta1 beta2 f2 beta3
         end
     and gn beta0 beta1 f1 beta3 =
-      if Int.compare !steps stop_cond.max_steps > 0
+      if !steps > stop_cond.max_steps
          || abs (beta3 -. beta0) <=. stop_cond.precision
       then beta1 else
         begin
