@@ -259,7 +259,7 @@ module Parse(R:Field.SPlus) = struct
 
   let%parser ident =
     (v:: RE("[a-zA-Z_'][a-zA-Z0-9_']*"))           =>
-      if v = "zeros" || v = "cos" || v = "sin" || v = "sqrt"
+      if v = "zeros" || v = "cos" || v = "sin" || v = "sqrt" || v = "random"
       then Lex.give_up () else v
 
   let%parser ne_params  =
@@ -321,7 +321,7 @@ module Parse(R:Field.SPlus) = struct
     ; "for" (name::ident) "=" (first::poly Sum) "to" (last::poly Sum)
         (step:: ~? [Cst R.one] ("step" (x::poly Sum) => x))
         "do"
-        (cmds :: ~+ cmd) "done" =>
+        (cmds :: ~+ ((c::cmd) ';' => c)) "done" =>
         For(name,first,last,step,cmds)
     ; "stats" (dim::INT) (degs :: ~+ (poly Sum)) => Stats(dim,degs)
     ; "timings" (css::(() => false ; "css" => true))
