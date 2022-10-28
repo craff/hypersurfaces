@@ -67,7 +67,7 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
     in fn p1 p2
 
   (** polynomial subtraction *)
-  let (--) (p1:polynomial) (p2:polynomial) =
+  let (--) p1 p2 =
     let rec fn p1 p2 =
       match (p1,p2) with
         | (p, []) -> p

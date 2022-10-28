@@ -27,7 +27,7 @@ module Make(R:Field.SPlus) = struct
   module Q = Field.Q
 
   type cert =
-    | NZ of (bool array * vector) list
+    | NZ of matrix * matrix list
     | SG of int
     | DV of int * int * cert * cert
     | SING
@@ -45,7 +45,7 @@ module Make(R:Field.SPlus) = struct
     | Center -> fprintf ch "C"
 
   type decision =
-    | Depend of vector * vector list * (bool * simplicies) list
+    | Depend of vector * (bool * simplicies) list
     | NonZero
     | NonDege
 
@@ -78,8 +78,8 @@ module Make(R:Field.SPlus) = struct
     in
     let dims = List.map dim p0 in
     let deg = List.map degree p0 in
+    (*let p0 = List.map Poly.normalise p0 in*)
     let qp0 = List.map (List.map (fun (m,c) -> (m,to_q c))) p0 in
-    let p0 = List.map Poly.normalise p0 in
     let hp0 = List.map to_horner p0 in
     let qhp0 = List.map Q.B.to_horner qp0 in
     let dim = List.hd dims in
@@ -478,7 +478,7 @@ module Make(R:Field.SPlus) = struct
     let qsub_v = sub_v Q.zero in
     let sub_v = sub_v zero in
 
-    let all_gradients vs {s; m; o = {l=l0; _}; _ } =
+    let all_gradients vs {s; m; _ } =
       let l = ref [] in
       Array.iteri (fun i x -> if x then l := i :: !l) vs;
       let l = !l in
@@ -493,7 +493,7 @@ module Make(R:Field.SPlus) = struct
                        (s'.s.(i').p <> s.(i).p, s')) l
            in
            l
-        | i::j::_ ->
+       | i::j::_ ->
            let r, k = edge_key s.(i) s.(j) in
            let l =
              try Hashtbl.find trs.by_edge k with Not_found -> assert false in
@@ -525,19 +525,19 @@ module Make(R:Field.SPlus) = struct
            in
            l
       in
-      let gd = ref (List.map (fun _ -> []) l0) in
+      let gd = ref [] in
       List.iter (fun (opp,({o={l; _}; m=m'; _})) ->
          let l0 =
            List.map2 (fun deg l ->
                if deg mod 2 = 0 && opp then Array.map (~-.) l else l) deg l
          in
          let l = List.map (fun l -> V.transform l m' m) l0 in
-         gd := List.map2 (fun l gd -> l :: gd) l !gd ;
+         gd := Array.of_list l :: !gd
         ) ls;
       (ls,!gd)
     in
 
-    let qall_gradients vs {s; o = {ql= lazy l0;qm= lazy m ; _}; _} =
+    let qall_gradients vs {s; o = {qm= lazy m ; _}; _} =
       let l = ref [] in
       Array.iteri (fun i x -> if x then l := i :: !l) vs;
       let l = !l in
@@ -584,14 +584,14 @@ module Make(R:Field.SPlus) = struct
            in
            l
       in
-      let gd = ref (List.map (fun _ -> []) l0) in
+      let gd = ref [] in
       List.iter (fun (opp,({o={ql=lazy ql;qm=lazy m'; _}; _})) ->
          let l0 =
            List.map2 (fun deg l ->
                if deg mod 2 = 0 && opp then Array.map Q.(~-.) l else l) deg ql
          in
          let l = List.map (fun l -> Q.V.transform l m' m) l0 in
-         gd := List.map2 (fun l gd -> l :: gd) l !gd ;
+         gd := Array.of_list l :: !gd
         ) ls;
       (ls,!gd)
     in
@@ -714,7 +714,7 @@ module Make(R:Field.SPlus) = struct
       search_points Any (penal_critical c) sd
     in
 
-    let open struct exception Zih of vector * vector list * (bool * simplicies) list end in
+    let open struct exception Zih of vector * (bool * simplicies) list end in
 
     let is_small = R.pow (small param.Args.safe) (dim-1) in
 
@@ -727,7 +727,7 @@ module Make(R:Field.SPlus) = struct
       | Some x -> small x
     in
 
-    let decision_face codim vs (s as s0) =
+    let decision_face codim vs (s as s0 : data Simp.simplex) =
       let (sd,gd) = all_gradients vs s in
       let adone = List.exists (fun (_,s) -> assert(s.k <> Removed);
                                             s.o.codim > codim) sd
@@ -752,38 +752,38 @@ module Make(R:Field.SPlus) = struct
       and hn subd s l p dp =
         (*        printf "l:%a p:%a\n%!" (print_polynome ?vars:None) (List.hd l) (print_polynome ?vars:None) (List.hd p);*)
         (*        printf "cst: %b, subd: %d %a\n%!" cst subd print_matrix s;*)
-        let rec fn acc signs points dps gds =
-          match (dps, gds) with
-          | [], [] ->
-             begin
-               let signs = Array.of_list (List.rev signs) in
-               match zih zlim points with
-               | None   -> face_log "test zih: true"; InL points
-               | Some v -> face_log "test zih: false";
-                           InR ((signs, v)::acc)
-             end
-          | dp::dps, gd::gds ->
-             let dp = List.map snd dp in
-             let new_points = dp @ gd in
-             let new_points = List.filter (fun g -> not (norm2 g <. slim)) new_points in
-             (match fn acc (true::signs) (new_points @ points) dps gds with
-              | InR acc when dps <> [] ->
-                 let new_points = List.map opp new_points in
-                 fn acc (false::signs) (new_points @ points) dps gds
-              | r    -> r)
-          | _ -> assert false
-        in
-        let res = fn [] [] [] dp gd in
+        let gds = ref gd in
+        let l0 = List.length (List.hd dp) in
+        List.iter (fun l -> assert (List.length l = l0)) dp;
+        let rec fn : ('a * 'b) list list -> 'c = function
+          []::_ -> ()
+        | dp ->
+	  let m1 = Array.of_list (List.map (fun x -> snd (List.hd x)) dp) in
+	  let dp = List.map List.tl dp in
+	  gds := m1 :: !gds;
+	  fn dp
+	in
+	fn dp;
+	let gds = !gds in
+        let res =
+	  match V.mip zlim gds with
+          | None   -> face_log "test zih: true"; InL ()
+          | Some v ->
+           List.iter (fun mm ->
+             assert (mat_positive zero (mm **** v))) gds;
+
+	    face_log "test zih: false"; InR (v, gds)
+	in
         match res with
-        | InR v -> NZ v
-        | InL all when subd <= 0 || nb_vs = 1 ->
+        | InR (v,gds) -> NZ (v,gds)
+        | InL () when subd <= 0 || nb_vs = 1 ->
            begin
              try
                face_log "face not good, stops";
                let l = ref [] in
                Array.iteri (fun i x -> if vs.(i) then l:= x :: !l) s0.m;
                let p = normalise (lcenter (Array.of_list !l)) in
-               raise (Zih (p,all,sd))
+               raise (Zih (p,sd))
              with Not_found -> assert false
            end
         | InL _ ->
@@ -849,35 +849,38 @@ module Make(R:Field.SPlus) = struct
                eprintf "%a\n" (Q.B.print_polynome ~times:false ~q:false ?vars:None) Q.B.(l ** p);
                failwith "bad certificate: polynomials not of constant signs"
              end;
-        | NZ ls ->
-           let rec fn signs points dps gds =
-             match (dps, gds) with
-             | [], [] ->
-                let signs = Array.of_list (List.rev signs) in
-                let v =
-                  try
-                    Array.map to_q (List.assoc signs ls)
-                  with Not_found -> assert false
-                in
-                List.iter (fun w ->
-                    let s = Q.V.(v *.* w) in
-                    let v = Array.map Q.to_float v in
-                    let w = Array.map Q.to_float w in
-                    if Q.(s <=. zero) then
-                      failwith (sprintf "bad certificate: zero in hull (%e <= 0) (%a.%a)"
-                                  (Q.to_float s)
-                                  Field.Float.V.print_vector v
-                                  Field.Float.V.print_vector w)) points
-             | dp::dps, gd::gds ->
-                let dp = List.map snd dp in
-                let new_points = dp @ gd in
-                fn (true::signs) (new_points @ points) dps gds;
-                if dps <> [] then
-                  let new_points = List.map Q.V.opp new_points in
-                  fn (false::signs) (new_points @ points) dps gds
-             | _ -> assert false
-           in
-           fn [] [] dp gd
+        | NZ (m,gds0) ->
+           let gds = ref (gd:Q.V.matrix list) in
+           let rec fn = function
+             []::_ -> ()
+           | dp ->
+	     let m1 = Array.of_list (List.map (fun x -> snd (List.hd x)) dp) in
+	     let dp = List.map List.tl dp in
+	     gds := m1 :: !gds;
+	     fn dp
+	   in
+	   fn dp;
+	   let gds = !gds in
+           List.iter (fun mm ->
+             if not (mat_positive zero (mm **** m)) then
+             let m  = Array.map (Array.map R.to_float) m in
+             let mm = Array.map (Array.map R.to_float) mm in
+             failwith (sprintf "bad certificate (1): zero in hull (%a.%a => %a %b)"
+                                  Field.Float.V.print_matrix m
+                                  Field.Float.V.print_matrix mm
+                                  Field.Float.V.print_matrix Field.Float.V.(mm **** m)(Field.Float.V.mat_positive 0. Field.Float.V.(mm **** m)))) gds0;
+           assert (List.length gds = List.length gds0);
+           let (m:Q.V.matrix) = Array.map (Array.map to_q) m in
+           List.iteri (fun i mm ->
+             if not (Q.V.mat_positive Q.zero Q.V.(mm **** m)) then
+             let m  = Array.map (Array.map Q.to_float) m in
+             let mm = Array.map (Array.map Q.to_float) mm in
+             let mm' = Array.map (Array.map R.to_float) (List.nth gds0 i) in
+             failwith (sprintf "bad certificate (2): zero in hull (%a.%a  = %a => %a %b)"
+                                  Field.Float.V.print_matrix m
+                                  Field.Float.V.print_matrix mm
+                                  Field.Float.V.print_matrix mm'
+                                  Field.Float.V.print_matrix Field.Float.V.(mm **** m)(Field.Float.V.mat_positive 0. Field.Float.V.(mm **** m)))) gds
         | DV (i,j,c1,c2) ->
            assert (i >= 0 && j >= 0 && i <> j);
            (*                 printf "split %d %d\n%!" i j;*)
@@ -942,11 +945,11 @@ module Make(R:Field.SPlus) = struct
         let facets = enum_facets (Some codim) dim in
         let facets = List.map (fun vs -> size vs, vs) facets in
         let facets = List.sort (fun (x,_) (y,_) -> compare y x) facets in
-        List.iter fn facets;
+	List.iter fn facets;
         NonDege
       with
-      | Zih (v,all,sd) -> Depend (v,all,(true,s)::sd)
-      | Zero -> Depend(s.o.c,[],[true,s])
+      | Zih (v,sd) -> Depend (v,(true,s)::sd)
+      | Zero -> Depend(s.o.c,[true,s])
       | e -> eprintf "got except: %s\n%!" (Printexc.to_string e);
                 assert false
     in
@@ -1099,7 +1102,7 @@ module Make(R:Field.SPlus) = struct
            s.o.codim <- s.o.codim + 1;
            if s.o.codim < dim then
              to_do.(s.o.codim) <- SimpSet.add s to_do.(s.o.codim);
-        | Depend(_,_,sd) ->
+        | Depend(_,sd) ->
            assert (s.k = Active);
            if List.exists (fun (_,s) -> s.k = Removed) sd then
              to_do.(s.o.codim) <- SimpSet.add s to_do.(s.o.codim)
