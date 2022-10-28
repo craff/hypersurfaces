@@ -76,7 +76,7 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
         | (_               , (l2,x2)::p2)              -> (l2,   ~-. x2)::fn p1 p2
     in fn p1 p2
 
-  (** polynomial addition *)
+  (** polynomial vector addition *)
   let add_grad p1 p2 =
     let rec fn p1 p2 =
       match (p1,p2) with
@@ -86,7 +86,7 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
       | ((_ ,_      )::_ , (_ ,_ as c2)::p2)              -> c2             ::fn p1 p2
     in fn p1 p2
 
-  (** polynomial subtraction *)
+  (** polynomial vector subtraction *)
   let min_grad p1 p2 =
     let rec fn p1 p2 =
       match (p1,p2) with
@@ -289,22 +289,55 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
     let l  = Array.mapi (fun i x -> if i < n2 then x + l2.(i) else x) l1 in
     (l, a1 *. a2 *. multinomial l1 *. multinomial l2 /. multinomial l)
 
-  (** polynomial mulitplication *)
+  (** polynomial multiplication *)
   let ( ** ) p1 p2 =
     List.fold_left (fun acc m1 ->
         List.fold_left (fun acc m2 -> acc ++ [m_prod m1 m2]) acc p2) [] p1
 
-  (** monomial product *)
+  (** monomial product for polynomial vector *)
   let mg_prod (l1,a1) (l2,a2) =
     let n1 = Array.length l1 and n2 = Array.length l2 in
     let (l1, l2) = if n1 > n2 then (l1, l2) else (l2, l1) in
     let l  = Array.mapi (fun i x -> if i < n2 then x + l2.(i) else x) l1 in
     (l, (a1 *. multinomial l1 *. multinomial l2 /. multinomial l) **. a2)
 
-  (** polynomial mulitplication *)
+  (** polynomial vector multiplication *)
   let mul_grad p1 p2 =
     List.fold_left (fun acc m1 ->
         List.fold_left (fun acc m2 -> add_grad acc [mg_prod m1 m2]) acc p2) [] p1
+
+  (** raise degree *)
+  let rec raise_degree d p =
+    let d' = degree p in
+    if d' = d then p else
+      begin
+        assert (d' < d);
+        let n = dim p in
+        let q = List.init n (fun i -> (var_power i n 1, one)) in
+        raise_degree d (p ** q)
+      end
+
+  (** raise degree *)
+  let rec raise_grad_degree d (p : polynomial_v)  =
+    let d' = degree p in
+    if d' = d then p else
+      begin
+        assert (d' < d);
+        let n = dim p in
+        let q : polynomial =
+          List.init n (fun i -> (var_power i n 1, one)) in
+        raise_grad_degree d (mul_grad q p)
+      end
+
+  (** raise a vector of polynomials to the same degree *)
+  let same_degree ps =
+    let d = List.fold_left (fun d p -> max d (degree p)) 0 ps in
+    List.map (raise_degree d) ps
+
+  (** raise a vector of polynomials to the same degree *)
+  let same_grad_degree ps =
+    let d = List.fold_left (fun d p -> max d (degree p)) 0 ps in
+    List.map (raise_grad_degree d) ps
 
   (** power of a polynomial *)
   let pow p n =
@@ -731,6 +764,8 @@ module type B = sig
   val to_horner_m : polynomial_m -> m hf
   val homogeneise : polynomial -> polynomial * bool
   val homogeneise_many : polynomial list -> polynomial list
+  val same_degree : polynomial list -> polynomial list
+  val same_grad_degree : polynomial_v list -> polynomial_v list
   val transform : t hf -> m -> m -> polynomial
   val subdivise : polynomial -> int -> int -> polynomial * polynomial
   val subdivise_v : polynomial_v -> int -> int -> polynomial_v * polynomial_v

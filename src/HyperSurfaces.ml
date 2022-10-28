@@ -78,7 +78,6 @@ module Make(R:Field.SPlus) = struct
     in
     let dims = List.map dim p0 in
     let deg = List.map degree p0 in
-    (*let p0 = List.map Poly.normalise p0 in*)
     let qp0 = List.map (List.map (fun (m,c) -> (m,to_q c))) p0 in
     let hp0 = List.map to_horner p0 in
     let qhp0 = List.map Q.B.to_horner qp0 in
@@ -742,7 +741,8 @@ module Make(R:Field.SPlus) = struct
       let p = sub s.o.p vs in
       let nb_vs = Array.fold_left (fun x b -> if b then x+1 else x) 0 vs in
       let l = List.map first_deg p in
-      let dp = sub_v (Lazy.force s.o.dp) vs in
+      let dp = same_grad_degree (sub_v (Lazy.force s.o.dp) vs) in
+
       let rec kn subd s l p dp =
         let lp = List.combine l p in
         let cst = find_i constant_sign2 lp in
@@ -753,8 +753,6 @@ module Make(R:Field.SPlus) = struct
         (*        printf "l:%a p:%a\n%!" (print_polynome ?vars:None) (List.hd l) (print_polynome ?vars:None) (List.hd p);*)
         (*        printf "cst: %b, subd: %d %a\n%!" cst subd print_matrix s;*)
         let gds = ref gd in
-        let l0 = List.length (List.hd dp) in
-        List.iter (fun l -> assert (List.length l = l0)) dp;
         let rec fn : ('a * 'b) list list -> 'c = function
           []::_ -> ()
         | dp ->
@@ -838,7 +836,7 @@ module Make(R:Field.SPlus) = struct
       assert (List.exists (fun (_,c) -> s'.suid = c.suid) sd);
       let p : Q.B.polynomial list = qsub (Lazy.force s.o.qp) vs in
       let l : Q.B.polynomial list = List.map Q.B.first_deg p in
-      let dp = qsub_v (Lazy.force s.o.qdp) vs in
+      let dp = Q.B.same_grad_degree (qsub_v (Lazy.force s.o.qdp) vs) in
       let rec kn subd s (l: Q.B.polynomial list) p dp cert =
         match cert with
         | SING -> ()
@@ -876,11 +874,14 @@ module Make(R:Field.SPlus) = struct
              let m  = Array.map (Array.map Q.to_float) m in
              let mm = Array.map (Array.map Q.to_float) mm in
              let mm' = Array.map (Array.map R.to_float) (List.nth gds0 i) in
-             failwith (sprintf "bad certificate (2): zero in hull (%a.%a  = %a => %a %b)"
+             failwith (sprintf "bad certificate (2): zero in hull (%a.%a  = %a => %a ~ %a %b %b)"
                                   Field.Float.V.print_matrix m
                                   Field.Float.V.print_matrix mm
                                   Field.Float.V.print_matrix mm'
-                                  Field.Float.V.print_matrix Field.Float.V.(mm **** m)(Field.Float.V.mat_positive 0. Field.Float.V.(mm **** m)))) gds
+                                  Field.Float.V.print_matrix Field.Float.V.(mm **** m)
+                                  Field.Float.V.print_matrix Field.Float.V.(mm' **** m)
+                                  (Field.Float.V.mat_positive 0. Field.Float.V.(mm **** m))
+                                  (Field.Float.V.mat_positive 0. Field.Float.V.(mm' **** m)))) gds
         | DV (i,j,c1,c2) ->
            assert (i >= 0 && j >= 0 && i <> j);
            (*                 printf "split %d %d\n%!" i j;*)
