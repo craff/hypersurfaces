@@ -753,14 +753,27 @@ module Make(R:Field.SPlus) = struct
         (*        printf "l:%a p:%a\n%!" (print_polynome ?vars:None) (List.hd l) (print_polynome ?vars:None) (List.hd p);*)
         (*        printf "cst: %b, subd: %d %a\n%!" cst subd print_matrix s;*)
         let gds = ref gd in
-        let rec fn : ('a * 'b) list list -> 'c = function
-          []::_ -> ()
-        | dp ->
-	  let m1 = Array.of_list (List.map (fun x -> snd (List.hd x)) dp) in
-	  let dp = List.map List.tl dp in
-	  gds := m1 :: !gds;
-	  fn dp
-	in
+           let rec fn dp =
+	     let cmp x y = compare y x in
+	     let min_monomial = ref None in
+	     List.iter (fun p ->
+		 match (!min_monomial, p) with
+		 | None, (m, _)::_ -> min_monomial := Some m
+		 | Some m0, (m, _)::_ -> if cmp m m0 < 0 then min_monomial := Some m
+		 | _, [] -> ()) dp;
+             match !min_monomial with
+             | None -> ()
+	     | Some min_monomial ->
+             let ms = ref [] in
+             let dp = List.map (fun p -> match p with
+               | (m, v) :: p when m = min_monomial ->
+	         ms := v :: !ms; p
+	       | p ->
+                 ms := Array.make dim zero :: !ms; p) dp
+             in
+	     gds := Array.of_list (List.rev !ms) :: !gds;
+	     fn dp
+	   in
 	fn dp;
 	let gds = !gds in
         let res =
@@ -849,12 +862,25 @@ module Make(R:Field.SPlus) = struct
              end;
         | NZ (m,gds0) ->
            let gds = ref (gd:Q.V.matrix list) in
-           let rec fn = function
-             []::_ -> ()
-           | dp ->
-	     let m1 = Array.of_list (List.map (fun x -> snd (List.hd x)) dp) in
-	     let dp = List.map List.tl dp in
-	     gds := m1 :: !gds;
+           let rec fn dp =
+	     let cmp x y = compare y x in
+	     let min_monomial = ref None in
+	     List.iter (fun p ->
+		 match (!min_monomial, p) with
+		 | None, (m, _)::_ -> min_monomial := Some m
+		 | Some m0, (m, _)::_ -> if cmp m m0 < 0 then min_monomial := Some m
+		 | _, [] -> ()) dp;
+             match !min_monomial with
+             | None -> ()
+	     | Some min_monomial ->
+             let ms = ref [] in
+             let dp = List.map (fun p -> match p with
+               | (m, v) :: p when m = min_monomial ->
+	         ms := v :: !ms; p
+	       | p ->
+                 ms := Array.make dim Q.zero :: !ms; p) dp
+             in
+	     gds := Array.of_list (List.rev !ms) :: !gds;
 	     fn dp
 	   in
 	   fn dp;

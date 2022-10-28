@@ -309,23 +309,24 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
   (** raise degree *)
   let rec raise_degree d p =
     let d' = degree p in
+    let cmp x y = compare y x in
     if d' = d then p else
       begin
         assert (d' < d);
         let n = dim p in
-        let q = List.init n (fun i -> (var_power i n 1, one)) in
+        let q = List.sort cmp (List.init n (fun i -> (var_power i n 1, one))) in
         raise_degree d (p ** q)
       end
 
   (** raise degree *)
   let rec raise_grad_degree d (p : polynomial_v)  =
     let d' = degree p in
+    let cmp x y = compare y x in
     if d' = d then p else
       begin
         assert (d' < d);
         let n = dim p in
-        let q : polynomial =
-          List.init n (fun i -> (var_power i n 1, one)) in
+        let q = List.sort cmp (List.init n (fun i -> (var_power i n 1, one))) in
         raise_grad_degree d (mul_grad q p)
       end
 
