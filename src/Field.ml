@@ -54,60 +54,48 @@ module Float = struct
 end
 
 module GmpMin = struct
-  open Mpfrf
-  let mode = Mpfr.Near
+  open Mlmpfr
+  let _ = set_default_rounding_mode To_Nearest
 
-  type nonrec t = t
-  let zero = of_int 0 mode
-  let one = of_int 1 mode
+  type nonrec t = mpfr_float
+  let zero = make_from_int 0
+  let one = make_from_int 1
   let is_nan = nan_p
-  let ( +. ) x y = add x y mode
-  let ( *. ) x y = mul x y mode
-  let ( -. ) x y = sub x y mode
-  let ( /. ) x y = div x y mode
-  let ( ~-.) x = neg x mode
+  let ( +. ) x y = add x y
+  let ( *. ) x y = mul x y
+  let ( -. ) x y = sub x y
+  let ( /. ) x y = div x y
+  let ( ~-.) x = neg x
   let inf = one /. zero
-  let sqrt x = sqrt x mode
-  let cmp = Mpfr.cmp
+  let sqrt x = sqrt x
+  let cmp = cmp
   let ( =. ) x y = cmp x y = 0
   let ( <>. ) x y = cmp x y <> 0
   let ( <. ) x y = cmp x y < 0
   let ( >. ) x y = cmp x y > 0
   let ( <=. ) x y = cmp x y <= 0
   let ( >=. ) x y = cmp x y >= 0
-  let abs x = abs x mode
-  let of_int x = of_int x mode
-  let to_int x = int_of_float (to_float x)
-  let to_float x = to_float x
-  let of_float x = of_float x mode
-  let of_string x = of_string x mode
-  let to_string x = to_string x
+  let abs x = abs x
+  let of_int x = make_from_int x
+  let to_int x = get_int x
+  let to_float x = get_float x
+  let of_float x = make_from_float x
+  let of_string x = make_from_str x
+  let get_str x = let (f,e) = get_str x in f ^"E" ^ e (* TODO: check meaning of e *)
+  let to_string x = get_str x
   let to_q x =
-    let r = Mpfrf.to_mpqf x in
-    let r = Mpqf.to_string r in
+    let r = get_str x in
     Q.of_string r
-  let print ch x = fprintf ch "%s" (to_string x)
+  let print ch x = fprintf ch "%s" (get_str x)
   let exact = false
-  let cos x =
-    let r = Mpfr.init () in
-    ignore (Mpfr.cos r (_mpfr x) mode);
-    _mpfrf r
-  let sin x =
-    let r = Mpfr.init () in
-    ignore (Mpfr.sin r (_mpfr x) mode);
-    _mpfrf r
-  let ln x =
-    let r = Mpfr.init () in
-    ignore (Mpfr.log r (_mpfr x) mode);
-    _mpfrf r
-  let exp x =
-    let r = Mpfr.init () in
-    ignore (Mpfr.exp r (_mpfr x) mode);
-    _mpfrf r
+  let cos x = cos x
+  let sin x = sin x
+  let ln x = log x
+  let exp x = exp x
 end
 
 module Gmp = struct
-  let set_prec = Mpfr.set_default_prec
+  let set_prec = Mlmpfr.set_default_prec
   let _ = set_prec 100
 
   module F = FieldMake.Make (GmpMin)
