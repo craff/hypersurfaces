@@ -76,6 +76,26 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
         | (_               , (l2,x2)::p2)              -> (l2,   ~-. x2)::fn p1 p2
     in fn p1 p2
 
+  (** polynomial addition *)
+  let add_grad p1 p2 =
+    let rec fn p1 p2 =
+      match (p1,p2) with
+      | ([], p)          | (p, [])                        -> p
+      | ((l1,x1     )::p1, (l2,x2     )::p2) when l1 = l2 -> (l1, x1 +++ x2)::fn p1 p2
+      | ((l1,_ as c1)::p1, (l2,_      )::_ ) when l1 > l2 -> c1             ::fn p1 p2
+      | ((_ ,_      )::_ , (_ ,_ as c2)::p2)              -> c2             ::fn p1 p2
+    in fn p1 p2
+
+  (** polynomial subtraction *)
+  let min_grad p1 p2 =
+    let rec fn p1 p2 =
+      match (p1,p2) with
+        | (p, []) -> p
+        | ((l1,x1     )::p1, (l2,x2)::p2) when l1 = l2 -> (l1, x1 --- x2)::fn p1 p2
+        | ((l1,_ as c1)::p1, (l2,_ )::_ ) when l1 > l2 -> c1             ::fn p1 p2
+        | (_               , (l2,x2)::p2)              -> (l2,    opp x2)::fn p1 p2
+    in fn p1 p2
+
   (** multiplication by a constant *)
   let mul_cst x (p:polynomial) =
     List.map (fun (l,y) -> (l,y*.x)) p
@@ -274,6 +294,18 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
     List.fold_left (fun acc m1 ->
         List.fold_left (fun acc m2 -> acc ++ [m_prod m1 m2]) acc p2) [] p1
 
+  (** monomial product *)
+  let mg_prod (l1,a1) (l2,a2) =
+    let n1 = Array.length l1 and n2 = Array.length l2 in
+    let (l1, l2) = if n1 > n2 then (l1, l2) else (l2, l1) in
+    let l  = Array.mapi (fun i x -> if i < n2 then x + l2.(i) else x) l1 in
+    (l, (a1 *. multinomial l1 *. multinomial l2 /. multinomial l) **. a2)
+
+  (** polynomial mulitplication *)
+  let mul_grad p1 p2 =
+    List.fold_left (fun acc m1 ->
+        List.fold_left (fun acc m2 -> add_grad acc [mg_prod m1 m2]) acc p2) [] p1
+
   (** power of a polynomial *)
   let pow p n =
     let d = unsafe_dim p in
@@ -394,6 +426,16 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
       done;
       assert false
     with Exit -> List.rev !res
+
+  let tgrad p =
+    let dim = unsafe_dim p in
+    let d = of_int (unsafe_degree p) in
+    let n2 = List.init dim (fun i -> (var_power i dim 2, one)) in
+    let nd = List.init dim (fun i ->
+                (var_power i dim 1,
+                 Array.init dim (fun j -> if i = j then d else zero)))
+    in
+    min_grad (mul_grad n2 (gradient p)) (mul_grad p nd)
 
   (** gradient as a polynomial with vector as coefficients *)
   let hessian (p:polynomial) =
@@ -694,9 +736,10 @@ module type B = sig
   val subdivise_v : polynomial_v -> int -> int -> polynomial_v * polynomial_v
   val partial : polynomial -> int -> polynomial
 
-  val gradient : polynomial -> polynomial_v
-  val hessian  : polynomial -> polynomial_m
-  val plane : t p -> t array
+  val gradient  : polynomial -> polynomial_v
+  val tgrad     : polynomial -> polynomial_v
+  val hessian   : polynomial -> polynomial_m
+  val plane     : t p -> t array
   val first_deg : 'a p -> 'a p
 
   val cst_poly : int -> polynomial
