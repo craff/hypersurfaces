@@ -966,6 +966,7 @@ module Make(R:S) = struct
     val dim : int (** the codomain dimension *)
     val eval : v -> v (** the function to solve *)
     val grad : v -> m (** its gradient, should raise Not_found if null *)
+    val final : v -> bool (** a final test to keep point or not *)
     val dist2 : v -> v -> t
     val min_prog_int : int (** limitation of the number of steps, testes every
                                [min_prog_int] steps *)
@@ -1167,7 +1168,8 @@ module Make(R:S) = struct
       sol_log "starting solve at %a => %a" print_vector c0 print fc0;
       Previous.add fc0 prev;
       let (sd,nd) = descent c0 in
-      loop_eq 0 c0 fc0 nd sd one
+      let (_, c as res) = loop_eq 0 c0 fc0 nd sd one in
+      if not (F.final c) then raise Not_found else res
 
   end
 
@@ -1287,6 +1289,7 @@ module type V = sig
     val dim : int
     val eval : v -> v
     val grad : v -> m
+    val final : v -> bool
     val dist2 : v -> v -> t
     val min_prog_int : int
     val min_prog_coef : t

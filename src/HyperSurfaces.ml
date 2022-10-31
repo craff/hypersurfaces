@@ -99,7 +99,7 @@ module Make(R:Field.SPlus) = struct
     in
     let forbidden = ref [] in
     let single_critical =
-      List.map (fun (_,dp,hp,_) ->
+      List.map (fun (p,dp,hp,_) ->
          let module F = struct
              let dim = dim
              let fun_min = epsilon2
@@ -109,6 +109,12 @@ module Make(R:Field.SPlus) = struct
              let lambda_min = epsilon2
              let eval c = fst (eval_tgrad dp c)
              let grad c = fst3 (eval_thess hp c)
+             let final c =
+               let x = R.B.eval p c in
+               let y = grad c in
+               let open Stdlib in
+               abs_float (to_float (det y)) ** (1.0 /. float dim)
+                 /. abs_float (to_float x) > 1e-7
              let dist2 = dist2
              let stat = solver1_stat
              let forbidden = []
@@ -129,6 +135,7 @@ module Make(R:Field.SPlus) = struct
                let dim = dim + codim
                let fun_min = epsilon2 *. epsilon2
                let fun_good = small param.Args.crit_limit
+	       let final _ = true
                let min_prog_coef = of_int 2
                let min_prog_int = 10*dim
                let lambda_min = epsilon2
@@ -238,7 +245,8 @@ module Make(R:Field.SPlus) = struct
                 let p = penal c in
                 let n = fst (eval_tgrad dp c) in
                 p **. n
-              let grad c = fst3 (eval_thess hp c)
+	      let grad c = fst3 (eval_thess hp c)
+   	      let final _ = true
               let dist2 = dist2
               let stat = solver3_stat
             end
@@ -611,9 +619,11 @@ module Make(R:Field.SPlus) = struct
 
     let bad = Array.make dim (inf*.zero) in
 
-    let search_points critical allp sd =
+    let search_points kind allp sd =
+      let critical = kind <> Any in
       let select x (_,dy,_,sy,fcy,_ as y) =
         assert (dy >=. zero);
+        assert (fcy >=. zero);
         match x with
         | None -> Some y
         | Some (_,dx,_,sx,fcx,_) ->
@@ -622,7 +632,7 @@ module Make(R:Field.SPlus) = struct
              | 1 -> x
              | _ -> Some y
            else
-             match compare fcy fcx with
+             match compare (fcy*.sx) (fcx*.sy) with
              | 1 -> x
              | _ -> Some y
       in
@@ -693,15 +703,15 @@ module Make(R:Field.SPlus) = struct
 
     let search_single_critical sd =
       VectorCommon.sol_log "start search critical";
-      search_points true single_critical sd
+      search_points Single single_critical sd
     in
     let search_multi_critical sd =
       VectorCommon.sol_log "start search multi critical";
-      search_points true multi_critical sd
+      search_points Multi multi_critical sd
     in
     let search_penal_critical c sd =
       VectorCommon.sol_log "start search penal";
-      search_points false (penal_critical c) sd
+      search_points Any (penal_critical c) sd
     in
 
     let open struct exception Zih of vector * vector list * (bool * simplicies) list end in
