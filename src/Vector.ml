@@ -304,6 +304,48 @@ module Make(R:S) = struct
     assert (cmp (det [| [| zero; one |]; [| one; zero |] |]) (~-. one) = 0);
     assert (cmp (det [| [| one; one |]; [| one; one |] |]) zero = 0)
 
+  (** test if a matrix is positive with cholesky decomposition
+      of the matrix tB + B.  *)
+  let unsafe_positive zlim m =
+  let len = Array.length m in
+    for i = 0 to len - 1 do
+      for j = i+1 to len - 1 do
+        let v = (m.(j).(i) +. m.(i).(j)) /. of_int 2 in
+        m.(j).(i) <- v;
+	m.(i).(j) <- v
+      done
+    done;
+    try
+      for i = 0 to len - 1 do
+        let p = m.(i).(i) in
+        if p <=. zlim then raise Exit;
+        for j = i+1 to len - 1 do
+          let v = m.(j).(i) in
+	  m.(j).(i) <- zero;
+	  m.(i).(j) <- zero;
+          m.(j).(j) <- m.(j).(j) -. v /. p *. v;
+          for k = j + 1 to len - 1 do
+            m.(j).(k) <- m.(j).(k) -. v /. p *. m.(i).(k);
+            m.(k).(j) <- m.(j).(k);
+          done;
+        done;
+      done;
+      true
+    with Exit -> false
+
+  (** safe positive test that do not touch the matrix *)
+  let positive zlim m =
+    let m = Array.map Array.copy m in
+    unsafe_positive zlim m
+  let mat_positive = positive
+
+  (** test positive *)
+  let _ =
+    let open R in
+    assert (positive zero [| [| one; zero |]; [| zero; one |] |]);
+    assert (not (positive zero [| [| zero; one |]; [| one; zero |] |]));
+    assert (not (positive zero [| [| one; one |]; [| one; one |] |]))
+
   let is_zero m = Array.for_all (fun x -> cmp x zero = 0) m
 
   let eq m1 m2 =
@@ -913,6 +955,26 @@ module Make(R:S) = struct
     let _ = assert (exact || (zih zero a = None))
   end
 
+  (** find a matrix M such tMA is positive for the convex hul of ms *)
+  let mip zlim ms =
+    let k = Array.length (List.hd ms) in
+    let n = Array.length (List.hd ms).(0) in
+    assert(n >= k);
+    List.iter (fun m -> assert (Array.length m = k);
+		        assert (Array.length m.(0) = n)) ms;
+    try
+      let b =
+        Array.init k (fun i ->
+	  let vs = List.map (fun m -> m.(i)) ms in
+          match zih zlim vs with
+	  | None -> raise Exit
+          | Some v -> v)
+      in
+      let b = transpose b in
+      let fn m = positive zlim (m **** b) in
+      if List.for_all fn ms then Some b else (assert (k > 1); None)
+    with Exit -> None
+
   (** General equation solver using a mixture of steepest descent and newton
      method *)
 
@@ -1262,6 +1324,7 @@ module type V = sig
   val mcombq : t -> m -> t -> m -> unit
 
   val det : m -> t
+  val mat_positive : t -> m -> bool
   val ( **** ) : m -> m -> m
   val ( *** ) : m -> v -> v
   val ( **- ) : m -> v -> v
@@ -1277,6 +1340,7 @@ module type V = sig
 
   val zih : ?r0:vector -> t -> vector list -> vector option
   val pih : ?r0:vector -> t -> vector -> vector list -> vector option
+  val mip : t -> matrix list -> matrix option
   val print_zih_stats : formatter -> unit
 
   type solver_stats
