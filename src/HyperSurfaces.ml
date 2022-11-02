@@ -740,7 +740,6 @@ module Make(R:Field.SPlus) = struct
       in
       if not too_hard then
       let p = sub s.o.p vs in
-      let len = Array.length vs in
       let nb_vs = dim - codim in
       let l = List.map first_deg p in
       let dp = sub_v (Lazy.force s.o.dp) vs in
@@ -790,7 +789,7 @@ module Make(R:Field.SPlus) = struct
         | InL _ ->
            begin
              let best = ref (-.one, (-1,-1)) in
-             for i = 1 to len - 1 do
+             for i = 1 to dim - 1 do
                if vs.(i) then
                  for j = 0 to i-1 do
                    if vs.(j) then
