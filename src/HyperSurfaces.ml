@@ -740,7 +740,7 @@ module Make(R:Field.SPlus) = struct
       in
       if not too_hard then
       let p = sub s.o.p vs in
-      let nb_vs = dim - codim in
+      let nb_vs = Array.fold_left (fun x b -> if b then x+1 else x) 0 vs in
       let l = List.map first_deg p in
       let dp = sub_v (Lazy.force s.o.dp) vs in
       let rec kn subd s l p dp =
