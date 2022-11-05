@@ -719,7 +719,7 @@ module Make(R:Field.SPlus) = struct
 
     let certs = Hashtbl.create 1024 in
 
-    let zlim = small param.Args.zih_limit in
+    (*let zlim = small param.Args.zih_limit in*)
 
     let slim = match param.Args.sing_limit with
       | None -> zero
@@ -752,6 +752,7 @@ module Make(R:Field.SPlus) = struct
       and hn subd s l p dp =
         (*        printf "l:%a p:%a\n%!" (print_polynome ?vars:None) (List.hd l) (print_polynome ?vars:None) (List.hd p);*)
         (*        printf "cst: %b, subd: %d %a\n%!" cst subd print_matrix s;*)
+        (*List.iter (fun m -> Format.eprintf "in dp: %a\n%!" print_matrix m) gd;*)
         let gds = ref gd in
            let rec fn dp =
 	     let cmp x y = compare y x in
@@ -770,14 +771,16 @@ module Make(R:Field.SPlus) = struct
 	         ms := v :: !ms; p
 	       | p ->
                  ms := Array.make dim zero :: !ms; p) dp
-             in
-	     gds := Array.of_list (List.rev !ms) :: !gds;
+	     in
+	     let m = Array.of_list (List.rev !ms) in
+             (*Format.eprintf "in gp: %a\n%!" print_matrix m;*)
+	     gds := m :: !gds;
 	     fn dp
 	   in
 	fn dp;
 	let gds = !gds in
         let res =
-	  match V.mip zlim gds with
+	  match V.mip (Array.of_list (List.map transpose gds)) with
           | None   -> face_log "test zih: true"; InL ()
           | Some v ->
            List.iter (fun mm ->

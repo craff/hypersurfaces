@@ -630,6 +630,7 @@ module Make(R:S) = struct
       Format.eprintf "%a, %a\n%!" print mu print_vector e) r
   end
 *)
+
   (** compute the circumcenter of a simplex whose vertices are
       the line of the matrix m and are normalised, in which case
       we must have m.(i) *.* x = one for all i  *)
@@ -1053,7 +1054,7 @@ module Make(R:S) = struct
     let d1  = Array.length ms.(0) in
     let d2  = Array.length ms.(0).(0) in
     assert (d2 <= d1);
-    Format.eprintf "mih %d %d %d\n%!" nb d1 d2;
+    zih_log "mip %d %d %d\n%!" nb d1 d2;
     let msym a b =
       let r = transpose a **** b ++++ transpose b **** a in
       assert (Array.length r = d2);
@@ -1066,7 +1067,6 @@ module Make(R:S) = struct
       Array.sort cmp l;
       (l, a)
     in
-
     let eval m =
       normalise2 m;
       let ss = Array.map (spec m) ms in
