@@ -238,6 +238,17 @@ module Make(R:S) = struct
     done;
     res
 
+  (** make a matrix symmetric by adding its transpose matrix (in place) *)
+  let symmetrise m =
+    let dim = Array.length m in
+    let h2 = one /. of_int 2 in
+    for i = 0 to dim - 2 do
+      for j = i+1 to dim - 1 do
+        let x = h2 *. (m.(i).(j) +. m.(j).(i)) in
+        m.(i).(j) <- x; m.(j).(i) <- x
+      done
+    done
+
   (** matrix multiplication *)
   let ( **** ) m n =
     Array.map (fun v -> n **- v) m
@@ -556,6 +567,67 @@ module Make(R:S) = struct
   (** two instances of the previous *)
   let solve_transpose_both =
     solve_both_gen solve_transpose_cg solve_transpose ( **- )
+
+  (** le raleigh inverse iteration method *)
+  let raleigh pi m =
+    let d = Array.length m in
+    let rec fn r e mu =
+      let m' = Array.init d (fun i -> Array.init d (fun j ->
+	if i = j then m.(i).(i) -. mu else m.(i).(j)))
+      in
+      try
+        let e' = solve m' e in
+        let e' = normalise (pi e') in
+        let e'' = m *** e' in
+        let mu' = e' *.* e'' in
+        let r' = norm2 (e'' --- mu' **. e')  in
+        (*Format.eprintf "%a %a %a %a\n%!" print mu' print r' print_vector e' print_vector e'';*)
+        if r' <. r then
+          fn r' e' mu' else (e, mu)
+      with Not_found -> (e, mu)
+      in
+    let e = normalise (pi (Array.init d (fun _ -> of_float Stdlib.(Random.float 2.0 -. 1.0)))) in
+    let mu = e *.* (m *** e) in
+    fn inf e mu
+
+  let spectrum m =
+    (*Format.eprintf "spectrum: %a: " print_matrix m;*)
+    let d = Array.length m in
+    Random.init (Hashtbl.hash m);
+    let pi = ref (fun x -> x) in
+    let r = Array.init d (fun i ->
+      if i = d - 1 then
+        let e = normalise (!pi (Array.init d (fun _ -> of_float Stdlib.(Random.float 2.0 -. 1.0)))) in
+        let e' = m *** e in
+        let mu = e' *.* e in
+	(*Format.eprintf " %a %!" print mu;*)
+        (e, mu)
+      else
+        let (e,_ as p) = raleigh !pi m in
+	(*Format.eprintf " %a %!" print mu;*)
+        let pi' = !pi in
+        pi := (fun x -> let x = pi' x in x --- (x *.* e) **. e);
+        p)
+    in
+    (*Format.eprintf "\n%!";*)
+    r
+
+  let scalar2 m1 m2 =
+    let r = ref zero in
+    Array.iter2 (Array.iter2 (fun x1 x2 -> r := !r +. x1 *. x2)) m1 m2;
+    !r
+
+  let normalise2 m =
+    let n = sqrt (scalar2 m m) in
+    Array.iteri (fun i -> Array.iteri (fun j x -> m.(i).(j) <- x /. n)) m
+
+  module TestRaleight = struct
+    let m = Array.map (Array.map of_int) [|[| 1;2;3 |]; [| 1;2;1 |]; [| 3;2;1 |]|]
+    let r = spectrum m
+    let _ =
+      Array.iter (fun (e,mu) ->
+      Format.eprintf "%a, %a\n%!" print mu print_vector e) r
+  end
 
   (** compute the circumcenter of a simplex whose vertices are
       the line of the matrix m and are normalised, in which case
@@ -956,25 +1028,118 @@ module Make(R:S) = struct
   end
 
   (** find a matrix M such tMA is positive for the convex hul of ms *)
-  let mip zlim ms =
-    let k = Array.length (List.hd ms) in
-    let n = Array.length (List.hd ms).(0) in
-    assert(n >= k);
-    List.iter (fun m -> assert (Array.length m = k);
-		        assert (Array.length m.(0) = n)) ms;
-    try
-      let b =
-        Array.init k (fun i ->
-	  let vs = List.map (fun m -> m.(i)) ms in
-          match zih zlim vs with
-	  | None -> raise Exit
-          | Some v -> v)
+  let mip ms =
+    Array.iter normalise2 ms;
+    let nb = Array.length ms in
+    let d1  = Array.length ms.(0) in
+    let d2  = Array.length ms.(0).(0) in
+    assert (d2 <= d1);
+    Format.eprintf "mip %d %d %d\n%!" nb d1 d2;
+    let eval m =
+      let mu0 = ref inf in
+      Array.iter (fun a ->
+	let m' = transpose a **** m in
+        symmetrise m';
+        let s = spectrum m' in
+	Array.iter (fun (_,mu) -> if mu <. !mu0 then mu0 := mu;) s) ms;
+      !mu0
+    in
+    let evals m =
+      let mu0 = ref inf in
+      let ss = Array.map (fun a ->
+	let m' = transpose a **** m in
+        symmetrise m';
+        let s = spectrum m' in
+	Array.iter (fun (_,mu) ->
+			Format.eprintf "  %a" print mu;
+			if mu <. !mu0 then mu0 := mu) s;
+	s) ms
       in
-      let b = transpose b in
-      let fn m = positive zlim (m **** b) in
-      if List.for_all fn ms then Some b else (assert (k > 1); None)
-    with Exit -> None
+      Format.eprintf "\n%!";
+      (!mu0, ss)
+    in
+    let direction1 a e m =
+      let p = Array.init d1 (fun _ -> Array.make d2 inf) in
+      let ae = a *** e in
+      for i = 0 to d1 - 1 do
+        for j = 0 to d2 - 1 do
+          let pente = e.(j) *. ae.(i) -. m.(i).(j) in
+          p.(i).(j) <- pente
+        done
+      done;
+      p
+    in
+    let direction t v m ss =
+      let acts = ref [] in
+      let objs = ref [] in
+      Array.iter2 (fun a s ->
+	let bestn = ref zero in
+	let bestd = ref [||] in
+	let bestmu = ref zero in
+	Array.iter (fun (e,mu) ->
+	  if  mu -. v <. t then
+  	    let d = direction1 a e m in
+	    let n = scalar2 d d in
+	    if n >. !bestn then (bestn := n; bestd := d; bestmu := mu)) s;
+	let d = !bestd in
+	let mu = !bestmu in
+   	let obj = v +. (t -. mu) in
+        if !bestd <> [||] (* && List.for_all (fun a -> scalar2 a d /. sqrt (scalar2 a a *. scalar2 d d)
+	 		               <. of_float 0.9) !acts*) then
+	    (acts := d :: !acts;Format.eprintf "KEEP\n%!";
+	     objs := obj :: !objs) else Format.eprintf "REMOVE\n%!") ms ss;
+      let b = Array.of_list !objs in
+      let acts = Array.of_list !acts in
+      let mat = Array.map (fun x -> Array.map (fun y -> scalar2 x y) acts) acts in
+      let r = solve_cg mat b in
+      let d = Array.init d1 (fun _ -> Array.make d2 zero) in
+      Array.iteri (fun i l -> mcombq one d l acts.(i)) r;
+      d
+    in
+    let rec loop (nb,ng,np) t v m ss =
+      Format.eprintf "loop(%d,%d/%d): t: %a v:%a m:%a\n%!"
+        ng np nb print t print v print_matrix m;
+      let d = direction t v m ss in
+      Format.eprintf "dir: %a\n%!" print_matrix d;
+      let step l =
+        let r = Array.init d1 (fun i -> Array.init d2 (fun j ->
+							   m.(i).(j) +. d.(i).(j) *. l))
+	in
+	normalise2 r;
+	r
+      in
+      let fn l =
+        let r = eval (step l) in
+	(*Format.eprintf "  linear: %a => %a\n%!" print l print r;*)
+	-. r
+      in
+      let stop_cond = { default_stop_cond with max_steps = 15 } in
+      let l = tricho ~safe:false ~stop_cond fn zero (of_int 2) in
+      let m' = step l in
+      let (v',ss') = evals m' in
+      Format.eprintf "best step: %a(%a) => %a <?> %a\n%!" print l print (l /. t) print v' print v;
+      if np > 3 then m
+      else if v' <=. v || l =. zero then
+        if abs (t /. v) <. of_float 1e-12 then m else
+          loop (nb+1,ng,np) (t /. of_int 2) v m ss
+	else
+	  let np = if v >. zero then np+1 else np in
+	  loop (nb+1,ng+1,np) (t *. min (sqrt l) (of_float 2.0)) v' m' ss'
+    in
+    let m0 = ms.(1) in
+    let (v0, ss0) = evals m0 in
+    loop (0,0,0) (abs v0 +. of_float 0.1) v0 m0 ss0
 
+  module TestMiP = struct
+(*    let m1 = Array.map (Array.map of_int) [|[|1;1|];[|2;0|];[|1;-2|]|]
+    let m2 = Array.map (Array.map of_int) [|[|1;1|];[|-2;1|];[|0;2|]|]
+    let r = mip [|m1;m2|]
+    let _ = Format.eprintf "==> %a\n%!" print_matrix r*)
+    let m1 = Array.map (Array.map of_int) [|[|1;1|];[|2;0|];[|1;-2|]|]
+    let m2 = Array.map (Array.map of_int) [|[|1;1|];[|-2;-1|];[|0;2|]|]
+    let r = mip [|m1;m2|]
+    let _ = Format.eprintf "==> %a\n%!" print_matrix r
+  end
   (** General equation solver using a mixture of steepest descent and newton
      method *)
 
@@ -1340,7 +1505,7 @@ module type V = sig
 
   val zih : ?r0:vector -> t -> vector list -> vector option
   val pih : ?r0:vector -> t -> vector -> vector list -> vector option
-  val mip : t -> matrix list -> matrix option
+  val mip : matrix array -> matrix
   val print_zih_stats : formatter -> unit
 
   type solver_stats
