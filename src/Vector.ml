@@ -117,7 +117,7 @@ module Make(R:S) = struct
   (** set m1 to t m1 + u m2*)
   let mcombq t m1 u m2 =
     for i = 0 to Array.length m1 - 1 do
-      for j = 0 to Array.length m2 - 1 do
+      for j = 0 to Array.length m1.(0) - 1 do
         m1.(i).(j) <- t*.m1.(i).(j) +. u*.m2.(i).(j)
       done
     done
