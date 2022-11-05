@@ -248,7 +248,7 @@ module Make(R:SMin) = struct
         let f3 = f beta3 in
         let f = f beta in
         if f <. f0 && f <. f3 then beta
-        else if f0 <. f3 then beta0 else beta1
+        else if f0 <. f3 then beta0 else beta3
       end
 
   (* precision *)
