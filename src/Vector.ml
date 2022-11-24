@@ -807,6 +807,8 @@ module Make(R:S) = struct
        have [v2 = 0] with [r]'s coef non negative and summing to one *)
       (** previous descent direction *)
       let pr = Array.make nb zero in
+      (** last step where index was canceled *)
+      let cancels = Array.make nb (-nb) in
 
       (** first kind of steps:
           we will update [r] with [r = set_one (r + alpha(delta_i + beta pr))]
@@ -821,9 +823,8 @@ module Make(R:S) = struct
           of r keeping r non negative and summing to one thanks to the use of
           set_one. *)
       let conjugate_step step v v2 =
+        let candidate = ref None in
         let candidates = ref [] in
-        let nb_c = ref 0 in
-        let stop = ref true in
         let sigma = ref zero in
         for j = 0 to nb-1 do
           sigma := !sigma +. pr.(j)
@@ -832,14 +833,17 @@ module Make(R:S) = struct
         for i = 0 to nb - 1 do
           let s = m.(i) *.* v in
           (*zih_log "  %a %a %a" print r.(i) print s print_vector m.(i);*)
-          if s <=. zero  then
+          if s <=. zero then
             begin
-              stop := false;
-              incr nb_c;
-              candidates := i :: !candidates
+	      candidates := i :: !candidates;
+	      let v = r.(i) *. s in
+	      match !candidate with
+   	      | None -> candidate := Some(i,v)
+              | Some (_,v') -> if v' > v then candidate := Some(i,v)
             end
         done;
-        if !stop then
+        match !candidate with
+	| None ->
           begin
             zih_log "false";
             let v = ameliorate v m0 in
@@ -847,8 +851,8 @@ module Make(R:S) = struct
                     else Some v
             in
             exit_zih step e
-          end;
-        let i = List.nth !candidates (Random.int !nb_c) in
+          end
+        | Some(i,_) ->
         (** value of interest, see the article *)
         let p = m **- pr in
         let p2 = norm2 p in
@@ -874,9 +878,8 @@ module Make(R:S) = struct
         let beta =
           if pv >. zero then
             begin
-              let beta0 = zero in
               let beta1 = -. vw /. pv in
-              tricho ~stop_cond f beta0 beta1
+              tricho ~stop_cond f zero beta1
             end
           else
             zero
@@ -895,8 +898,9 @@ module Make(R:S) = struct
         let nv2 = norm2 nv in
         (** [nv2] should be equal (very near with rounding) to [fa], checking
            in log *)
-        zih_log "cg step: %d, index: %d, beta: %a, alpha: %a, norm: %a = %a"
-          step i print beta print alpha print fa print nv2;
+        zih_log "cg step: %d, index: %d, beta: %a, alpha: %a, norm: %a = %a, %a"
+        step i print beta print alpha print fa print nv2
+	print_int_list !candidates;
         (nv, nv2)
       in
 
@@ -904,18 +908,26 @@ module Make(R:S) = struct
       let linear_step step v =
         (** we select indices with [r.(i) > 0] *)
         let sel = ref [] in
+        let sel2 = ref [] in
+	let nb2 = ref 0 in
+	let not_cancelled i = step - cancels.(i) > dim in
         for i = 0 to nb - 1 do
-          if r.(i) >. zero then sel := i :: !sel;
+          if r.(i) >. zero then
+	    begin
+  	      sel := i :: !sel;
+	      if not_cancelled i then (sel2 := i :: !sel2; incr nb2)
+            end
         done;
-        let nsel = Array.of_list !sel in
-        let ms = Array.map (fun i -> Array.append (r.(i) **. m.(i)) [|r.(i)|]) nsel in
+	let sel = if !nb2 > 1 then !sel2 else !sel in
+	let nsel = Array.of_list sel in
+	let ms = Array.map (fun i -> Array.append m.(i) [|one|]) nsel in
         let vs = Array.append v [|zero|] in
         (** computing vector s such that [m **- s] is nearest to v
             and sum to zero. We will move [r] is direction [-s] *)
         let s =
           if Array.length nsel > dim then
             let mm v = ms **- (ms *** v) in
-            ms *** (irm_cg mm vs)
+	    ms *** irm_cg mm vs
           else
             let mm v = ms *** (ms **- v) in
             irm_cg mm (ms *** vs)
@@ -925,19 +937,19 @@ module Make(R:S) = struct
             to keep r positive. *)
         let cancel = ref (-1) in
         Array.iteri (fun i k ->
-            if !alpha *. s.(i) >. one then
+            if !alpha *. s.(i) >. r.(k) then
               begin
-                alpha := one /. s.(i);
+                alpha := r.(k) /. s.(i);
                 cancel := k
               end) nsel;
         let alpha = !alpha in
         let cancel = !cancel in
-        (** if cancel = -1, then alpha = 1 and if [Array.length sel > dim],
+        (** if cancel = -1, then alpha = 1 and if [Array.length sel >= dim],
             then new v = m **- r will be nul, so we can stop *)
         let r = Array.copy r in
         Array.iteri (fun i k ->
             if k = cancel then (r.(k) <- zero)
-            else r.(k) <- r.(k) *. (one -. alpha *. s.(i))) nsel;
+            else r.(k) <- r.(k) -. alpha *. s.(i)) nsel;
         set_one r;
         let nv = m **- r in
         let nv2 = norm2 nv in
@@ -949,16 +961,17 @@ module Make(R:S) = struct
       let rec fn step v v2 =
 (*        zih_log "step: %d\n\tr: %a\n\tm.v: %a" step
            print_vector r print_vector (m *** v);*)
+        (** one linear step and one conjugate steps. *)
         let (v,v2) =
-          (** one linear step and one conjugate steps. *)
-          let (nr, cancel, nv, nv2) = linear_step step v in
+(*	  if step mod 2 = 0 then (v,v2) else*)
+	  let (nr, cancel, nv, nv2) = linear_step step v in
           if (nv2 <. v2) then
             begin
               (** pr is set to zero for the cancelled index to force avoid
                   this indice to be updated by the next conjugate step due to
                   the previous descent direction. This appears to be better
                   than resetting pr to zero completely. *)
-              if cancel <> -1 then pr.(cancel) <- zero;
+              if cancel <> -1 then (pr.(cancel) <- zero; cancels.(cancel) <- step);
               Array.blit nr 0 r 0 nb;
               (nv,nv2)
             end
