@@ -620,7 +620,7 @@ module Make(R:S) = struct
   let normalise2 m =
     let n = sqrt (scalar2 m m) in
     Array.iteri (fun i -> Array.iteri (fun j x -> m.(i).(j) <- x /. n)) m
-
+(*
   module TestRaleight = struct
     let m = Array.map (Array.map of_int) [|[| 1;2;3 |]; [| 1;2;1 |]; [| 3;2;1 |]|]
     let r = spectrum m
@@ -628,7 +628,7 @@ module Make(R:S) = struct
       Array.iter (fun (e,mu) ->
       Format.eprintf "%a, %a\n%!" print mu print_vector e) r
   end
-
+*)
   (** compute the circumcenter of a simplex whose vertices are
       the line of the matrix m and are normalised, in which case
       we must have m.(i) *.* x = one for all i  *)
@@ -1129,7 +1129,7 @@ module Make(R:S) = struct
     let m0 = ms.(1) in
     let (v0, ss0) = evals m0 in
     loop (0,0,0) (abs v0 +. of_float 0.1) v0 m0 ss0
-
+(*
   module TestMiP = struct
 (*    let m1 = Array.map (Array.map of_int) [|[|1;1|];[|2;0|];[|1;-2|]|]
     let m2 = Array.map (Array.map of_int) [|[|1;1|];[|-2;1|];[|0;2|]|]
@@ -1139,7 +1139,8 @@ module Make(R:S) = struct
     let m2 = Array.map (Array.map of_int) [|[|1;1|];[|-2;-1|];[|0;2|]|]
     let r = mip [|m1;m2|]
     let _ = Format.eprintf "==> %a\n%!" print_matrix r
-  end
+    end
+    *)
   (** General equation solver using a mixture of steepest descent and newton
      method *)
 
