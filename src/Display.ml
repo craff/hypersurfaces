@@ -367,7 +367,7 @@ end
 
 let _ =
   if not !batch then
-    ignore (Thread.create (fun () -> let open Init () in init ()) ())
+    ignore (Domain.spawn (fun () -> let open Init () in init ()))
 
 module Make(R:Field.SPlus) = struct
   module V = R.V

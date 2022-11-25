@@ -1092,7 +1092,6 @@ module Make(R:Field.SPlus) = struct
       let ls = to_do.(codim) in
       to_do.(codim) <- SimpSet.empty;
       let fn s =
-        Thread.yield ();
         if s.k <> Removed && s.o.codim = codim then
         let d = Chrono.add_time test_chrono (decision codim) s in
         match d with
