@@ -1,7 +1,7 @@
 (** Small timer library for timing the application of functions. *)
 
 let unix_time : unit -> float = fun () ->
-  Unix.(let t = times () in t.tms_utime +. t.tms_stime)
+  Unix.gettimeofday ()
 
 let time : (float -> unit) -> ('a -> 'b) -> 'a -> 'b = fun rt fn x ->
   let t = unix_time () in
