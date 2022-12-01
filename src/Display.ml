@@ -314,6 +314,7 @@ let save_image () =
   printf "image saved as %S\n%!" filename
 
 let key_cb ~key ~state ~x ~y =
+  let state = state land (lnot 16) in (* 16 in numpad lock *)
   let _ = x,y in
   let c = if key < 256 then Char.chr key else Char.chr 0 in
   match key, c with
