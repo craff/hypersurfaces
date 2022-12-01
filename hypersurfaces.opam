@@ -12,7 +12,7 @@ depends: [
   "ocaml" { >= "4.04.0" }
   "dune"  { build & >= "1.2.0" }
   "pacomb" { build }
-  "gles3" "zarith" "mlgmpidl" "sqlite3" "imagelib"
+  "domain_shims" "mlmpfr"  "gles3" "zarith" "sqlite3" "imagelib"
 ]
 
 build: [ [ "dune" "build" "-p" name "-j" jobs ] ]
