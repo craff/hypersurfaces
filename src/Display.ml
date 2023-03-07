@@ -17,6 +17,7 @@ type gl_object =
   ; lwidth : float
   ; uid  : int
   ; mutable visible : bool
+  ; mutable deleted : bool
   }
 
 let mk_object =
@@ -24,23 +25,37 @@ let mk_object =
   (fun ?(lwidth=1.0) vert norm elem col view shape ->
     let uid = !c in
     incr c;
-    { vert; norm; elem; col; view; uid; shape; lwidth; visible=false })
-
-let wait, restart =
-  let c = Condition.create () in
-  let m = Mutex.create () in
-  Mutex.lock m;
-  (fun () -> if not !batch then Condition.wait c m),
-  (fun () -> Condition.signal c)
+    { vert; norm; elem; col; view; uid; shape; lwidth; visible=false; deleted=false })
 
 let objects = ref ([] : (string * gl_object) list)
 
 let updated = ref false
 
+let display_stack = Queue.create ()
+
+let display_mutex  = Mutex.create ()
+
+let display_wait = ref false
+
+let pop_display () =
+  try
+    Mutex.lock display_mutex;
+    let names = Queue.pop display_stack in
+    Mutex.unlock display_mutex;
+    updated := true;
+    display_wait := true;
+    objects := List.filter (fun (_, o) -> not o.deleted) !objects;
+    List.iter (fun (name, o) ->
+        o.visible <-  List.mem name names) !objects;
+  with Queue.Empty ->
+    Mutex.unlock display_mutex;
+    display_wait := false
+
 let display names =
-  updated := true;
-  List.iter (fun (name, o) ->
-      o.visible <-  List.mem name names) !objects
+  Mutex.lock display_mutex;
+  Queue.push names display_stack;
+  Mutex.unlock display_mutex;
+  if not !display_wait then (Printf.printf "ICI\n%!"; pop_display ())
 
 let draw_mutex = Mutex.create ()
 
@@ -131,7 +146,10 @@ let rm_object = fun obj ->
 
 let add_object = fun name obj ->
   Mutex.lock draw_mutex;
-  objects := (name, obj) :: (List.filter (fun (n,_) -> n <> name) !objects);
+  objects := (name, obj) ::
+               (List.filter (fun (n,o) -> n <> name ||
+                                            (o.deleted <- true;
+                                             o.visible)) !objects);
   updated := true;
   Mutex.unlock draw_mutex
 
@@ -318,7 +336,7 @@ let key_cb ~key ~state ~x ~y =
   let _ = x,y in
   let c = if key < 256 then Char.chr key else Char.chr 0 in
   match key, c with
-  | _    , ('n'|'N') -> restart ()
+  | _    , ('n'|'N') -> pop_display ()
   | 65363, _         -> if state = 0 then move_right () else
                           if state = 1 then crotate_right ()
                           else rotate_right ()

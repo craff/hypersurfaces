@@ -1084,8 +1084,7 @@ module Make(R:Field.SPlus) = struct
        | Some o -> Display.rm_object o);
       let o = D.mk_lines_from_polyhedron "tmp_build" edges in
       o.Display.visible <- true;
-      tmp_object := Some o;
-      if !Args.progw then (printf "WAIT\n%!"; Display.wait ());
+      tmp_object := Some o
     in
 
     let test codim =

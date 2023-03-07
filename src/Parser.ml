@@ -138,7 +138,6 @@ module Parse(R:Field.SPlus) = struct
        opts
     | Display(names) ->
        Display.display names;
-       if not (!Args.cont) then Display.wait ();
        opts
     | For(name,first,last,step,cmds) ->
        let first = eval_cst first in
