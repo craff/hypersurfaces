@@ -55,7 +55,7 @@ let display names =
   Mutex.lock display_mutex;
   Queue.push names display_stack;
   Mutex.unlock display_mutex;
-  if not !display_wait then (Printf.printf "ICI\n%!"; pop_display ())
+  if not !display_wait then pop_display ()
 
 let draw_mutex = Mutex.create ()
 
