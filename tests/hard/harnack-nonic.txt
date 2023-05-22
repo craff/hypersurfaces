@@ -72,5 +72,5 @@ let s9(x,y,z) = 7.7980874564901533907e-03 * z^9 +
   -2.9777049848481819188e-04 * 3.0000000000000000000e+00 * x^8 * y +
   2.4245017376906769574e-13 * x^9;
 
-let s9 = zeros [subd=20,nb critical=10,limit positive=1.5,expected=(29*0)] s9;
+let s9 = zeros [subd=20,nb critical=15,limit positive=1.5,expected=(29*0)] s9;
 display s9; display s9 s9__t;
