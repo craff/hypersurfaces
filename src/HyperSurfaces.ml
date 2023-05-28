@@ -719,7 +719,7 @@ module Make(R:Field.SPlus) = struct
 
     let certs = Hashtbl.create 1024 in
 
-    (*let zlim = small param.Args.zih_limit in*)
+    let zlim = small param.Args.zih_limit in
 
     let slim = match param.Args.sing_limit with
       | None -> zero
@@ -779,14 +779,20 @@ module Make(R:Field.SPlus) = struct
 	   in
 	fn dp;
 	let gds = !gds in
+        let (mu, v) = V.mih zlim (Array.of_list (List.map transpose gds)) in
         let res =
-	  match V.mip (Array.of_list (List.map transpose gds)) with
-          | None   -> face_log "test zih: true"; InL ()
-          | Some v ->
-           List.iter (fun mm ->
-             assert (mat_positive zero (mm **** v))) gds;
-
-	    face_log "test zih: false"; InR (v, gds)
+          if mu <. zlim then
+            begin
+              face_log "test zih: true";
+              InL ()
+            end
+          else
+            begin
+              List.iter (fun mm ->
+                  assert (mat_positive zero (mm **** v))) gds;
+	      face_log "test zih: false";
+              InR (v, gds)
+            end
 	in
         match res with
         | InR (v,gds) -> NZ (v,gds)
