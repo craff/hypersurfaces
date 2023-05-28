@@ -1165,7 +1165,7 @@ module Make(R:S) = struct
     let (mu, m) as res = loop (abs mu0) m0 mu0 ss0 in
     assert (mu <= zero || test_mih ms m);
     res
-
+(*
   module TestMiH = struct
     let m1 = Array.map (Array.map of_int) [|[|1;0|];[|0;1|];|]
     let m2 = Array.map (Array.map of_int) [|[|0;1|];[|1;0|];|]
@@ -1181,7 +1181,7 @@ module Make(R:S) = struct
     let _ = Format.eprintf "==> %a %a\n%!" print mu print_matrix r
     let _ = exit 0
   end
-
+ *)
   (** General equation solver using a mixture of steepest descent and newton
      method *)
 
