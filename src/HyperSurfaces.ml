@@ -779,21 +779,35 @@ module Make(R:Field.SPlus) = struct
 	   in
 	fn dp;
 	let gds = !gds in
-        let (mu, v) = V.mih zlim (Array.of_list (List.map transpose gds)) in
         let res =
-          if mu <. zlim then
+          if codim = 1 then
             begin
-              face_log "test zih: true";
-              InL ()
+              let gds0 = List.map (fun m -> m.(0)) gds in
+              match
+                V.zih zlim gds0
+              with
+              | None -> InL()
+              | Some v -> InR(transpose [|v|],gds)
             end
-          else
-            begin
-              List.iter (fun mm ->
-                  assert (mat_positive zero (mm **** v))) gds;
-	      face_log "test zih: false";
-              InR (v, gds)
-            end
-	in
+        else
+          begin
+            let (mu, v) =
+              V.mih zlim (Array.of_list (List.map transpose gds))
+            in
+              if mu <. zlim then
+                begin
+                  face_log "test zih: true";
+                  InL ()
+                end
+              else
+                begin
+                  List.iter (fun mm ->
+                      assert (mat_positive zero (mm **** v))) gds;
+	          face_log "test zih: false";
+                InR (v, gds)
+                end
+          end
+      in
         match res with
         | InR (v,gds) -> NZ (v,gds)
         | InL () when subd <= 0 || nb_vs = 1 ->

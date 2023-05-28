@@ -1127,7 +1127,7 @@ module Make(R:S) = struct
         print_matrix m0;*)
       let (gs, _lambda') = grads m0 lambda mu0 ss0 in
       try
-        if !nb > 15 then raise Not_found;
+        if !nb > 500 then raise Not_found;
         incr nb;
         let vgs = Array.to_list (Array.map vec_of_mat gs) in
         (*Format.printf "\t%d active\n%!" (List.length vgs);*)
