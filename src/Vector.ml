@@ -1118,13 +1118,17 @@ module Make(R:S) = struct
               v.(i*d2 + j)))
     in
 
+    let nb = ref 0 in
+
     let rec loop lambda m0 mu0 ss0 =
-      Format.printf "mih_loop: %a %a %a\n%!"
+(*      Format.printf "mih_loop: %a %a %a\n%!"
         print mu0
         print lambda
-        print_matrix m0;
+        print_matrix m0;*)
       let (gs, _lambda') = grads m0 lambda mu0 ss0 in
       try
+        if !nb > 15 then raise Not_found;
+        incr nb;
         let vgs = Array.to_list (Array.map vec_of_mat gs) in
         (*Format.printf "\t%d active\n%!" (List.length vgs);*)
         let dir =
@@ -1150,7 +1154,7 @@ module Make(R:S) = struct
         let m1 = m0 ++++ (alpha ***. dir) in
         let (mu1, ss1) = eval m1 in
         if mu1 >. mu0 then
-          loop (max (of_int 2 *. (mu1 -. mu0)) (lambda *. of_int 2))  m1 mu1 ss1
+          loop (lambda *. of_int 2)  m1 mu1 ss1
         else raise Not_found
       with Not_found ->
         if lambda <. zlim then
