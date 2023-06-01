@@ -22,11 +22,13 @@ let get_count : t -> int    = fun p -> p.count
 
 let all_chronos : t list ref = ref []
 
-let create name =
-  let chr = { name ; time = 0.0 ; cumul = 0.0; start = 0.0; count = 0 } in
+let create ?(start=0.0) name =
+  let chr = { name ; time = 0.0 ; cumul = 0.0; start; count = 0 } in
   all_chronos := chr :: !all_chronos; chr
 
-let root_chrono = create "others"
+let root_chrono = create ~start:(unix_time()) "others"
+
+let create name = create name
 
 let current = ref root_chrono
 

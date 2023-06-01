@@ -1,7 +1,7 @@
 
 (** log for zero in convex hull test *)
-let Debug.{ log = zih_log; _ } = Debug.new_debug "hull" 'h'
-let Debug.{ log = tri_log; _ } = Debug.new_debug "triangulation" 'z'
-let Debug.{ log = sol_log; _ } = Debug.new_debug "solve" 's'
-let Debug.{ log = min_log; _ } = Debug.new_debug "minimise" 'm'
-let Debug.{ log = ame_log; _ } = Debug.new_debug "ameliorate" 'a'
+let zih_log = Debug.new_debug "hull" 'h'
+let tri_log = Debug.new_debug "triangulation" 'z'
+let sol_log = Debug.new_debug "solve" 's'
+let min_log = Debug.new_debug "minimise" 'm'
+let ame_log = Debug.new_debug "ameliorate" 'a'

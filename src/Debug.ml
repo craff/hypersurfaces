@@ -10,8 +10,10 @@ let debug_list = ref []
     requires computation that could have a significant cost. A
     test can be used to avoid the computation when the default
     channel is not active. *)
-type debug = { log : 'a. ('a, formatter, unit) format -> 'a
-             ; tst : unit -> bool }
+
+type 'a debug =  ((('a, formatter, unit, unit) format4 -> 'a) -> unit) -> unit
+
+type debug_r = { log : 'a. 'a debug } [@@unboxed]
 
 (** create a new debug channel, with its name and a given letter.
     This gives 26 possible debug channel if using only lowercase letter.
@@ -25,11 +27,15 @@ let new_debug ?(ch=err_formatter) name letter =
     end;
   debug_list := (letter, pr) :: !debug_list;
   let tst () = !pr in
-  let log fmt =
-    let pr = if tst () then fprintf else ifprintf in
-    pr ch ("%s: " ^^ fmt ^^ "\n%!") name
+  let log = fun k ->
+    if tst () then
+      k (fun fmt ->
+          fprintf ch "%s: " name;
+          kfprintf (fun ch -> fprintf ch "\n%!") ch fmt)
+    else
+      ()
   in
-  {tst; log}
+  { log }
 
 (** set which debug channels are active, using the characters in the string
     debug *)

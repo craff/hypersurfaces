@@ -1,8 +1,9 @@
+open Debug
 open Printing
 open Lib
 
-let Debug.{ log = decomp_log; _ } = Debug.new_debug "decomposition" 'd'
-let Debug.{ log = face_log  ; _ } = Debug.new_debug "face" 'f'
+let decomp_log = Debug.new_debug "decomposition" 'd'
+let face_log   = Debug.new_debug "face" 'f'
 
 let solver1_chrono = Chrono.create "solver1"
 let solver2_chrono = Chrono.create "solver2"
@@ -132,7 +133,7 @@ module Make(R:Field.SPlus) = struct
          List.init codim (fun i ->
              let dim0 = dim in
              let module F = struct
-               let dim = dim + codim
+               let dim = dim + codim - 1
                let fun_min = epsilon2 *. epsilon2
                let fun_good = small param.Args.crit_limit
 	       let final _ = true
@@ -149,25 +150,25 @@ module Make(R:Field.SPlus) = struct
                  !r
                let eval c =
                  let x = Array.sub c 0 dim0 in
-                 let l = Array.sub c dim0 codim in
+                 let l = Array.sub c dim0 (codim - 1) in
                  let tg = zero_v dim0 in
                  let ps = zero_v (codim - 1) in
-                 let s = ref (-. one) in
                  List.iteri
                    (fun j (_,dp,_,d) ->
                      let (tg',dp) = eval_tgrad dp x in
                      let p = dp /. of_int d in
-                     s := !s +. l.(j) *. l.(j);
                      if j < i then ps.(j) <- p;
                      if j > i then ps.(j-1) <- p;
-                     combq one tg l.(j) tg') dp0;
+                     let coef = if j < i then l.(j)
+                                else if j = i then one
+                                else l.(j-1) in
+                     combq one tg coef tg') dp0;
                  Array.init dim (fun j ->
                      if j < dim0 then tg.(j)
-                     else if j - dim0 < codim - 1 then ps.(j-dim0)
-                     else !s)
+                     else ps.(j-dim0))
                let grad c =
                  let x = Array.sub c 0 dim0 in
-                 let l = Array.sub c dim0 codim in
+                 let l = Array.sub c dim0 (codim - 1) in
                  let ths = Array.init codim (fun j ->
                                let (_,_,hp,_) = List.nth dp0 j in
                                eval_thess hp x)
@@ -367,7 +368,7 @@ module Make(R:Field.SPlus) = struct
       with Not_found -> ()
     done;
 
-    decomp_log "init simplex: %a" print_matrix !lm;
+    decomp_log.log (fun k -> k "init simplex: %a" print_matrix !lm);
 
     let lm = Array.map (fun c ->
       Simp.mkv c) !lm
@@ -410,7 +411,7 @@ module Make(R:Field.SPlus) = struct
 
       let o = { p; c; d=abs (det m); l; dp; f; codim = 0; qm; qp; ql; qdp } in
       let s = mks ~t:trs o s in
-      decomp_log "make %a" print_simplex s;
+      decomp_log.log (fun k -> k "make %a" print_simplex s);
       s
     in
 
@@ -419,7 +420,7 @@ module Make(R:Field.SPlus) = struct
     to_do.(0) <- List.fold_left (fun s x -> SimpSet.add (mk x) s)
                    SimpSet.empty ls;
 
-    decomp_log "init simplicies done";
+    decomp_log.log (fun k -> k "init simplicies done");
     let add_to_do l =
       to_do.(0) <- List.fold_left (fun s x -> SimpSet.add x s) to_do.(0) l
     in
@@ -642,7 +643,7 @@ module Make(R:Field.SPlus) = struct
       in
       let best = ref None in
       let kn (_,s) =
-        VectorCommon.sol_log "searching in simplex: %a" print_simplex s;
+        VectorCommon.sol_log.log (fun k -> k "searching in simplex: %a" print_simplex s);
 
         let c0 = normalise s.o.c in
         let rs2 =
@@ -675,7 +676,7 @@ module Make(R:Field.SPlus) = struct
             (*if not critical then printf "fc1: %a %a %b %b\n%!" print fc1 print_ty ty b1 b2;*)
             if not b1 || not b2 then
               begin
-                VectorCommon.sol_log "reject %b %b %b" b1 b2 (fc1 >. epsilon);
+                VectorCommon.sol_log.log (fun k -> k "reject %b %b %b" b1 b2 (fc1 >. epsilon));
                 raise Not_found
               end;
             let p2 = eval_prod c1 in
@@ -695,27 +696,27 @@ module Make(R:Field.SPlus) = struct
       in
       List.iter kn sd;
       let (s, c, ty) = match !best with
-        | None -> VectorCommon.sol_log "keep nothing"; raise Not_found
+        | None -> VectorCommon.sol_log.log (fun k -> k "keep nothing"); raise Not_found
         | Some (s, _, c, sc, fc, ty) ->
-           VectorCommon.sol_log "keep %a with sc: %a, fc: %a"
+           VectorCommon.sol_log.log (fun k -> k "keep %a with sc: %a, fc: %a"
              print_vector c print sc print fc;
 (*           if not critical then printf "keep %a with sc: %a, fc: %a\n%!"
-             print_vector c print sc print fc;*)
+             print_vector c print sc print fc;*));
            (s, c, ty)
       in
       (s, Simp.mkv c, ty)
     in
 
     let search_single_critical sd =
-      VectorCommon.sol_log "start search critical";
+      VectorCommon.sol_log.log (fun k -> k "start search critical");
       search_points Single single_critical sd
     in
     let search_multi_critical sd =
-      VectorCommon.sol_log "start search multi critical";
+      VectorCommon.sol_log.log (fun k -> k "start search multi critical");
       search_points Multi multi_critical sd
     in
     let search_penal_critical c sd =
-      VectorCommon.sol_log "start search penal";
+      VectorCommon.sol_log.log (fun k -> k "start search penal");
       search_points Any (penal_critical c) sd
     in
 
@@ -737,7 +738,7 @@ module Make(R:Field.SPlus) = struct
       let adone = List.exists (fun (_,s) -> assert(s.k <> Removed);
                                             s.o.codim > codim) sd
       in
-      face_log "decision for %a, adone: %b\n%!" print_matrix s.m adone;
+      face_log.log (fun k -> k "decision for %a, adone: %b\n%!" print_matrix s.m adone);
       if not adone then
       let too_hard = List.exists (fun (_,s) ->
                          s.o.d < is_small &&
@@ -752,7 +753,7 @@ module Make(R:Field.SPlus) = struct
         let lp = List.combine l p in
         let cst = find_i constant_sign2 lp in
         match cst with
-        | Some i -> face_log "constant sign"; SG i
+        | Some i -> face_log.log (fun k -> k "constant sign"); SG i
         | _ -> hn subd s l p dp
       and hn subd s l p dp =
         (*        printf "l:%a p:%a\n%!" (print_polynome ?vars:None) (List.hd l) (print_polynome ?vars:None) (List.hd p);*)
@@ -763,8 +764,8 @@ module Make(R:Field.SPlus) = struct
              begin
                let signs = Array.of_list (List.rev signs) in
                match zih zlim points with
-               | None   -> face_log "test zih: true"; InL points
-               | Some v -> face_log "test zih: false";
+               | None   -> face_log.log (fun k -> k "test zih: true"); InL points
+               | Some v -> face_log.log (fun k -> k "test zih: false");
                            InR ((signs, v)::acc)
              end
           | dp::dps, gd::gds ->
@@ -784,7 +785,7 @@ module Make(R:Field.SPlus) = struct
         | InL all when subd <= 0 || nb_vs = 1 ->
            begin
              try
-               face_log "face not good, stops";
+               face_log.log (fun k -> k "face not good, stops");
                let l = ref [] in
                Array.iteri (fun i x -> if vs.(i) then l:= x :: !l) s0.m;
                let p = normalise (lcenter (Array.of_list !l)) in
@@ -815,9 +816,9 @@ module Make(R:Field.SPlus) = struct
                           if k = j then (x +++ s.(i)) //. of_int 2 else x) s in
              let s2 = Array.mapi (fun k x ->
                           if k = i then (x +++ s.(j)) //. of_int 2 else x) s in
-             face_log "subdivise %d %d, first test" i j;
+             face_log.log (fun k -> k "subdivise %d %d, first test" i j);
              let c1 = kn (subd-1) s1 l1 p1 dp1 in
-             face_log "subdivise %d %d, second test" i j;
+             face_log.log (fun k -> k "subdivise %d %d, second test" i j);
              let c2 = kn (subd-1) s2 l2 p2 dp2 in
              DV (i,j,c1,c2)
            end
@@ -976,8 +977,10 @@ module Make(R:Field.SPlus) = struct
       rm trs s;
       if s.o.codim < dim then
         to_do.(s.o.codim) <- SimpSet.remove s to_do.(s.o.codim);
-      decomp_log "adding center %a to %a (%a => %a)" print_vector (to_vec x)
-        print_simplex s print_vector s.o.c print (s.o.c *.* (to_vec x));
+      decomp_log.log (fun k ->
+          k "adding center %a to %a (%a => %a)"
+            print_vector (to_vec x)
+            print_simplex s print_vector s.o.c print (s.o.c *.* (to_vec x)));
       let rec rml acc k = function
         | [] -> (None, List.rev acc)
         | (_,_,k' as c)::l -> if k = k' then (Some c, List.rev_append acc l)
@@ -988,19 +991,19 @@ module Make(R:Field.SPlus) = struct
             let k = face_key s.s i in (i,s,k))
       in
       let rec fn area acc l =
-        decomp_log "%d+%d faces" (List.length l) (List.length acc);
+        decomp_log.log (fun k -> k "%d+%d faces" (List.length l) (List.length acc));
         match l with
         | []       -> (acc,area)
         | (i,s,key as c)::l ->
-           decomp_log "test face %d of %a\ntest with key %a"
-             i print_simplex s print_face_key key;
+           decomp_log.log (fun k -> k "test face %d of %a\ntest with key %a"
+             i print_simplex s print_face_key key);
            assert (s.k = Removed);
            let l0 = try Hashtbl.find trs.by_face key with Not_found -> [] in
            let (sg,v)   = visible s  x in
            assert v;
            match l0 with
            | [(j,s')] ->
-              decomp_log "next simplex tested is %a" print_simplex s';
+              decomp_log.log (fun k -> k "next simplex tested is %a" print_simplex s');
               let (sg',v') = visible s' x in
               assert(s'.k <> Removed);
               if v' then
@@ -1009,7 +1012,7 @@ module Make(R:Field.SPlus) = struct
                   let j0 = ref 0 in
                   while s'.s.(!j0).uid <> s.s.(i0).uid do incr j0 done;
                   let j0 = !j0 in
-                  decomp_log "to remove";
+                  decomp_log.log (fun k -> k "to remove");
                   let good = (sg = sg') = (s.s.(i0).p = s'.s.(j0).p) in
                   let acc = ref acc in
                   let l   = ref l   in
@@ -1024,7 +1027,8 @@ module Make(R:Field.SPlus) = struct
                           let (b,l')  = rml [] key' !l   in
                           match b with
                           | None ->
-                             decomp_log "adding face %d of %a" k print_simplex s';
+                             decomp_log.log (fun kk ->
+                                 kk "adding face %d of %a" k print_simplex s');
                              l := (k,s',key') :: l'
                           | Some(h,s'',_) ->
                              l := l';
@@ -1046,7 +1050,8 @@ module Make(R:Field.SPlus) = struct
               else
                 fn area (c::acc) l
            | _ ->
-              decomp_log "len: %d for %a\n%!" (List.length l0) print_face_key key;
+              decomp_log.log (fun k -> k "len: %d for %a\n%!"
+                                     (List.length l0) print_face_key key);
               assert false
       in
       let (hole,area) = if dim > 2 then fn s.o.f [] faces else (faces, s.o.f) in
@@ -1058,10 +1063,10 @@ module Make(R:Field.SPlus) = struct
             assert v;
             let s' = Array.mapi (fun j y -> if i = j then x else y) s.s in
             if not sg then s'.(i) <- ch_sg x;
-            decomp_log "before mk";
+            decomp_log.log (fun k -> k "before mk");
             let r = mk ~f:area s' in
 
-            decomp_log "after mk";
+            decomp_log.log (fun k -> k "after mk");
             r
           ) hole
       in
@@ -1127,7 +1132,7 @@ module Make(R:Field.SPlus) = struct
                  ajoute s c ty
                with Not_found ->
                  assert (s.k = Active);
-                 VectorCommon.sol_log "take center";
+                 VectorCommon.sol_log.log (fun k -> k "take center");
                  let c = normalise s.o.c in
                  let c = Simp.mkv c in
                  ajoute s c Center

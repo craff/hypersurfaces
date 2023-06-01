@@ -1,8 +1,9 @@
+open Debug
 open Printing
 open Topology
 open Lib
 
-let Debug.{ log = table_log; tst = table_tst } = Debug.new_debug "table" 't'
+let table_log = Debug.new_debug "table" 't'
 
 module Make(R:Field.SPlus) = struct
   open R
@@ -225,12 +226,11 @@ module Make(R:Field.SPlus) = struct
       Array.iteri (fun i _ ->
           let key = face_key s.s i in
           let l = try Hashtbl.find by_face key with Not_found -> [] in
-          if table_tst () then
-            begin
-              table_log "add_f: simplex with key %a" print_face_key key;
+          table_log.log (fun k ->
+              k "add_f: simplex with key %a" print_face_key key;
               List.iter
-                (fun (i,s) -> table_log "  %d %a" i print_simplex s) ((i,s)::l);
-            end;
+                (fun (i,s) ->
+                  table_log.log (fun k -> k "  %d %a" i print_simplex s)) ((i,s)::l));
           assert (List.length l <= 1);
           Hashtbl.replace by_face key ((i,s)::l)) s.s
   let rm_f by_face s =
@@ -245,18 +245,18 @@ module Make(R:Field.SPlus) = struct
           else Hashtbl.replace by_face key l) s.s
 
   let rm t s =
-    table_log "rm simplex %a" print_simplex s;
-    (*      decomp_log "remove %a" print_simplex s.s;*)
-      assert (s.k <> Removed);
-      s.k <- Removed;
-      t.nb <- t.nb - 1;
-      rm_s t.all s;
-      if t.has_v_tbl then rm_v t.dim t.by_vertex s;
-      if t.has_e_tbl then rm_e t.dirs t.by_edge s;
-      if t.has_f_tbl then rm_f t.by_face s
+    table_log.log (fun k -> k "rm simplex %a" print_simplex s);
+    (*      decomp_log.log "remove %a" print_simplex s.s;*)
+    assert (s.k <> Removed);
+    s.k <- Removed;
+    t.nb <- t.nb - 1;
+    rm_s t.all s;
+    if t.has_v_tbl then rm_v t.dim t.by_vertex s;
+    if t.has_e_tbl then rm_e t.dirs t.by_edge s;
+    if t.has_f_tbl then rm_f t.by_face s
 
   let add t s =
-    table_log "add simplex %a" print_simplex s;
+    table_log.log (fun k -> k "add simplex %a" print_simplex s);
     t.nb <- t.nb + 1;
     add_s t.all s;
     if t.has_v_tbl then add_v t.dim t.by_vertex s;
