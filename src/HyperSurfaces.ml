@@ -1383,17 +1383,14 @@ module Make(R:Field.SPlus) = struct
             assert (t >. zero);
             assert (u >. zero);
             let x0 = comb t (to_vec si) u (to_vec sj) in
-            (*            printf "splitting: %a\n%!" print_vector x0;*)
+            (*printf "splitting %d: %a\n%!" codim print_vector x0;*)
             let x0 = Simp.mkv x0 in
             let fn (i,j,s) =
               assert (s.k = Active);
-              let sign =
-                assert (s.s.(i).uid = si.uid);
-                assert (s.s.(j).uid = sj.uid);
-                let r = s.s.(i).p = si.p in
-                assert (r = (s.s.(j).p = sj.p));
-                r
-              in
+              assert (s.s.(i).uid = si.uid);
+              assert (s.s.(j).uid = sj.uid);
+              let sign = s.s.(i).p = si.p in
+              assert (sign = (s.s.(j).p = sj.p));
               let x0 = if sign then x0 else ch_sg x0 in
               let l = s.o in
               let s1 = Array.mapi (fun k x -> if i = k then x0 else x) s.s in
