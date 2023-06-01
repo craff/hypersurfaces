@@ -617,8 +617,6 @@ module Make(R:Field.SPlus) = struct
       visible_v s x
     in
 
-    let bad = Array.make dim (inf*.zero) in
-
     let search_points kind allp sd =
       let critical = kind <> Any in
       let select x (_,dy,_,sy,fcy,_ as y) =
@@ -655,9 +653,8 @@ module Make(R:Field.SPlus) = struct
                 fun c ->
                   let c = normalise c in
                   let d = c *.* s.o.c in
-                  if d <. of_float 0.9 then
-                    bad
-                  else c
+                  if d <. of_float 0.9 then raise V.Abort;
+                  c
               else
                 let coef = ((norm s.o.c -. one) *. of_float 0.9 +. one) /. norm s.o.c in
                 assert (coef >. zero);

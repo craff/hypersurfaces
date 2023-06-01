@@ -1271,6 +1271,8 @@ module Make(R:S) = struct
       end
 
   (** the main functor *)
+  exception Abort (* to abort the search *)
+
   module Solve(F:Fun) = struct
 
     (** memo of all solutions *)
@@ -1431,14 +1433,17 @@ module Make(R:S) = struct
       in
       (** initial call to the loop *)
       let c0 = try project c0
-               with Not_found -> failwith "solve start out of domain"
+               with Abort -> failwith "solve start out of domain"
       in
-      let fc0 = norm2 (F.eval c0) in
-      sol_log "starting solve at %a => %a" print_vector c0 print fc0;
-      Previous.add fc0 prev;
-      let (sd,nd) = descent c0 in
-      let (_, c as res) = loop_eq 0 c0 fc0 nd sd one in
-      if not (F.final c) then raise Not_found else res
+      try
+        let fc0 = norm2 (F.eval c0) in
+        sol_log "starting solve at %a => %a" print_vector c0 print fc0;
+        Previous.add fc0 prev;
+        let (sd,nd) = descent c0 in
+        let (_, c as res) = loop_eq 0 c0 fc0 nd sd one in
+        if not (F.final c) then raise Not_found else res
+      with
+        Abort -> raise Not_found
 
   end
 
@@ -1572,6 +1577,8 @@ module type V = sig
   end
 
   val project_circle : v -> float -> v -> v
+
+  exception Abort
 
   module Solve(_:Fun) : sig
     val solve : (v -> v) -> t -> v -> (t*v)
