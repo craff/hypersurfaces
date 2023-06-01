@@ -1314,7 +1314,7 @@ module Make(R:S) = struct
     (** [solve rs2 c0] start the solver from [c0]. It reuses an existing
        solution if it reaches a point [x] s.t. [dist2 x s < rs2] for an existing
        solution sd. May raise Not_found is it reached a point of null gradient *)
-    let solve project rs2 c0 =
+    let solve project check rs2 c0 =
       (** main loop function:
            steps: count the number of steps.
            c: current position
@@ -1359,6 +1359,7 @@ module Make(R:S) = struct
           let c' = if F.dist2 c c' <. rs2 then c' else opp c' in
           sol_log "abort at step %3d, fc: %a, c: %a"
             steps print fc' print_vector c';
+          check c';
           (fc',c')
         with Exit -> loop steps c fc nd sd lambda
       and loop steps c fc nd sd lambda =
@@ -1404,41 +1405,32 @@ module Make(R:S) = struct
               in
               let t = tricho ~safe:false ~stop_cond f zero one in
               let d = comb t nd (one -. t) sd in
-              (** trichotomie again to search for best lambda *)
-              let f lambda =
-                let c' = project (comb one c lambda d) in
-                norm2 (F.eval c')
-              in
-              let u = tricho ~safe:false ~stop_cond f zero
-                              (of_int 2) in
               (** we compute new position and functional at this position *)
-              let lambda' = u *. lambda in
-              let c' = project (comb one c u d) in
+              let c' = project (comb one c lambda d) in
               let fc' = norm2 (F.eval c') in
               sol_log "%d, c: %a(%a), fc: %a, c': %a(%a), fc': %a(%a), sd: %a (%a), nd! %a,\
-                       vc: %a(%a), dc: %a(%a), lambda: %a, beta: %a, gamma: %a"
+                       vc: %a(%a), dc: %a(%a), lambda: %a, beta: %a"
               steps
-              print_vector c print (norm2 c) print fc print_vector c' print (norm2 c') print fc' print (fc -. fc')
+              print_vector c print (norm2 c) print fc
+              print_vector c' print (norm2 c') print fc' print (fc -. fc')
               print_vector sd print (sd *.* c) print_vector nd
               print_vector (F.eval c') print (F.eval c' *.* c')
               print_matrix (F.grad c') print (det (F.grad c'))
-              print lambda print t print u;
+              print lambda print t;
               if (is_nan fc && not (is_nan fc')) || fc' <. fc then
                 begin
-                  (** progress, do to next step, try a bigger lambda *)
+                  check c';
                   Previous.add fc' prev;
                   let (sd,nd) = descent c' in
-                  loop_eq (steps + 1) c' fc' nd sd lambda'
+                  loop_eq (steps + 1) c' fc' nd sd (lambda *. of_float 1.5)
                 end
               else
                 (** no progress, try smaller lambda *)
-                loop steps c fc nd sd (lambda /. of_int 10)
+                loop steps c fc nd sd (lambda /. of_int 2)
             end
       in
       (** initial call to the loop *)
-      let c0 = try project c0
-               with Abort -> failwith "solve start out of domain"
-      in
+      let c0 = project c0 in
       try
         let fc0 = norm2 (F.eval c0) in
         sol_log "starting solve at %a => %a" print_vector c0 print fc0;
@@ -1585,7 +1577,7 @@ module type V = sig
   exception Abort
 
   module Solve(_:Fun) : sig
-    val solve : (v -> v) -> t -> v -> (t*v)
+    val solve : (v -> v) -> (v -> unit) -> t -> v -> (t*v)
     val solutions : (t * v) list ref
   end
 

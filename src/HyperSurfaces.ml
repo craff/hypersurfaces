@@ -12,9 +12,9 @@ let add_chrono = Chrono.create "add"
 let certif_chrono = Chrono.create "certif"
 let total_chrono = Chrono.create "total"
 
-let chr_solve1 s a b c = Chrono.add_time solver1_chrono (s a b) c
-let chr_solve2 s a b c = Chrono.add_time solver2_chrono (s a b) c
-let chr_solve3 s a b c = Chrono.add_time solver3_chrono (s a b) c
+let chr_solve1 s a b c d = Chrono.add_time solver1_chrono (s a b c) d
+let chr_solve2 s a b c d = Chrono.add_time solver2_chrono (s a b c) d
+let chr_solve3 s a b c d = Chrono.add_time solver3_chrono (s a b c) d
 
 module Make(R:Field.SPlus) = struct
   open R
@@ -182,42 +182,47 @@ module Make(R:Field.SPlus) = struct
                                let r = ref zero in
                                for m = 0 to codim - 1 do
                                  let (th,_,_) = ths.(m) in
-                                 r := !r +. l.(m) *. th.(j).(k)
+                                 let coef = if m < i then l.(m)
+                                            else if m = i then one
+                                            else l.(m-1)
+                                 in
+                                 r := !r +. coef *. th.(j).(k)
                                done;
                                !r
                              end
                            else
                              begin
+                               let k' = if k' < i then k' else k' + 1 in
                                let (_,tg,_) = ths.(k') in
                                tg.(j)
                              end
-                         else if j' < codim - 1 then
+                         else
                            if k < dim0 then
                              begin
                                let j' = if j' < i then j' else j' + 1 in
                                let (_,tg,_) = ths.(j') in
                                tg.(k)
                              end
-                           else zero
-                         else
-                           if k < dim0 || k' < codim - 1 then zero
-                           else of_int 2 *. l.(k')))
+                           else zero))
                let stat = solver2_stat
            end
          in
          let module S = Solve(F) in
          forbidden := S.solutions :: !forbidden;
-         let solve proj a x =
+         let solve proj check a x =
            let proj' x =
              let x' = proj (Array.sub x 0 dim) in
-             let l' = normalise (Array.sub x dim codim) in
+             let l' = Array.sub x dim (codim - 1) in
              Array.append x' l'
            in
-           let z = sqrt (one /. of_int codim) in
-           let x = Array.init F.dim (fun i ->
-                       if i < dim then x.(i) else z)
+           let check' x =
+             let x' = proj (Array.sub x 0 dim) in
+             check x'
            in
-           let (fc,r) = S.solve proj' a x in
+           let x = Array.init F.dim (fun i ->
+                       if i < dim then x.(i) else zero)
+           in
+           let (fc,r) = S.solve proj' check' a x in
            (fc,Array.sub r 0 dim)
          in
          (Multi, chr_solve2 solve))
@@ -294,7 +299,8 @@ module Make(R:Field.SPlus) = struct
           List.fold_left (fun acc x ->
               try
                 let proj = normalise in
-                let (fc1,c1) = solve proj (one /. of_int 1000) x in
+                let check _ = () in
+                let (fc1,c1) = solve proj check (one /. of_int 1000) x in
                 (*                printf "fc1: %a %a\n%!" print fc1 print_ty ty;*)
                 let pc = eval_prod c1 in
                 (ty,pc,c1,fc1)::acc
@@ -649,19 +655,21 @@ module Make(R:Field.SPlus) = struct
           try
             (*if not critical then printf "solve %a %a ==> " print_vector s.c print_vector c0;*)
             let proj =
-              if critical then
-                fun c ->
-                  let c = normalise c in
-                  let d = c *.* s.o.c in
-                  if d <. of_float 0.9 then raise V.Abort;
-                  c
+              if critical then normalise
               else
                 let coef = ((norm s.o.c -. one) *. of_float 0.9 +. one) /. norm s.o.c in
                 assert (coef >. zero);
                 let cen = coef **. s.o.c in
                 project_circle cen 0.05
             in
-            let (fc1,c1) = solve proj rs2 c0 in
+            let check =
+              if critical then
+                (fun c ->
+                let d = c *.* s.o.c in
+                if d <. of_float 0.9 then raise V.Abort)
+              else fun _ -> ()
+            in
+            let (fc1,c1) = solve proj check rs2 c0 in
             assert(fc1 >=. zero);
             let (b1,b2) = visible_v s c1 in
             (*if not critical then printf "fc1: %a %a %b %b\n%!" print fc1 print_ty ty b1 b2;*)
