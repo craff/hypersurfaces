@@ -1397,38 +1397,42 @@ module Make(R:S) = struct
               (** given [lambda], we search the best [t] by trichotomie
                   for c = c + lambda (t nd + (1 - t) sd)
                 high precision is very important here *)
-              let f nd t =
+              let f t =
                 let d = comb t nd (one -. t) sd in
                 let c' = project (comb one c lambda d) in
                 norm2 (F.eval c')
               in
-              let t = tricho ~safe:false ~stop_cond (f nd) zero one in
-              (** we compute new position and functional at this position *)
+              let t = tricho ~safe:false ~stop_cond f zero one in
               let d = comb t nd (one -. t) sd in
-              let c' = project (comb one c lambda d) in
-              (** no move: call loop with negative lambda to stop *)
-              if Array.for_all2 (=.) c c' then
-                loop steps c fc nd sd (-. one)
-              else
+              (** trichotomie again to search for best lambda *)
+              let f lambda =
+                let c' = project (comb one c lambda d) in
+                norm2 (F.eval c')
+              in
+              let u = tricho ~safe:false ~stop_cond f zero
+                              (of_int 2) in
+              (** we compute new position and functional at this position *)
+              let lambda' = u *. lambda in
+              let c' = project (comb one c u d) in
               let fc' = norm2 (F.eval c') in
-(*            sol_log "%d, c: %a(%a), fc: %a, c': %a(%a), fc': %a(%a), sd: %a (%a), nd! %a,\
-                       vc: %a(%a), dc: %a(%a), lambda: %a, beta: %a"
+              sol_log "%d, c: %a(%a), fc: %a, c': %a(%a), fc': %a(%a), sd: %a (%a), nd! %a,\
+                       vc: %a(%a), dc: %a(%a), lambda: %a, beta: %a, gamma: %a"
               steps
               print_vector c print (norm2 c) print fc print_vector c' print (norm2 c') print fc' print (fc -. fc')
               print_vector sd print (sd *.* c) print_vector nd
               print_vector (F.eval c') print (F.eval c' *.* c')
               print_matrix (F.grad c') print (det (F.grad c'))
-              print lambda print t;*)
+              print lambda print t print u;
               if (is_nan fc && not (is_nan fc')) || fc' <. fc then
                 begin
                   (** progress, do to next step, try a bigger lambda *)
                   Previous.add fc' prev;
                   let (sd,nd) = descent c' in
-                  loop_eq (steps + 1) c' fc' nd sd one
+                  loop_eq (steps + 1) c' fc' nd sd lambda'
                 end
               else
-                (** no progress, try a smaller lambda *)
-                loop steps c fc nd sd (lambda /. of_float 1.5)
+                (** no progress, try smaller lambda *)
+                loop steps c fc nd sd (lambda /. of_int 10)
             end
       in
       (** initial call to the loop *)
