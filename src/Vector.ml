@@ -1,4 +1,5 @@
 open Printing
+open Debug
 open FieldGen
 open VectorCommon
 
@@ -465,37 +466,37 @@ module Make(R:S) = struct
       no progress. Still it gives less good solution as Gauss Pivot *)
   let irm_cg ?(epsilon=zero) m b =
     let d = Array.length b in
-    (** initial solution *)
+    (* initial solution *)
     let x = zero_v d in
-    (** initial residual and its norm *)
+    (* initial residual and its norm *)
     let r = b --- m x in
     let r2 = r *.* r in
-    (** previous solution and residual norm *)
+    (* previous solution and residual norm *)
     let prev = ref (x,r2) in
-    (** step counter *)
+    (* step counter *)
     let i = ref 0 in
     try
-      (** exit if residual small enough, by default epsilon=0!*)
+      (* exit if residual small enough, by default epsilon=0!*)
       if r2 <=. epsilon then raise Exit;
-      (** compute initial beta vector *)
+      (* compute initial beta vector *)
       let q = r2 /. (r *.* m r) in
       let p = q **. r in
       let beta = m p in
       while true do
-        (** translate solution *)
+        (* translate solution *)
         addq x p;
-        (** adjust or recompute residual *)
+        (* adjust or recompute residual *)
         if !i mod d <> 0 then subq r beta else subs r b (m x);
         let nr2 = r *.* r in
-        (** update previous if progress *)
+        (* update previous if progress *)
         let (_,pr2) = !prev in
         if nr2 <. pr2 then prev := (x,nr2);
-        (** exit if nr2 smaller than epsilon or more than 2d steps,
-            normally should converge in d steps, allows for 2d steps
-            because of numerical errors *)
+        (* exit if nr2 smaller than epsilon or more than 2d steps,
+           normally should converge in d steps, allows for 2d steps
+           because of numerical errors *)
         if nr2 <=. epsilon || !i >= 2*d then raise Exit;
-        (** solve the 2x2 system for optimizin descent in the
-            combined directions *)
+        (* solve the 2x2 system for optimizin descent in the
+           combined directions *)
         let alpha = m r in
         let a11 = r *.* alpha in
         let a12 = p *.* alpha in
@@ -503,14 +504,14 @@ module Make(R:S) = struct
         (* (a11 a12      * (a22 -a12 = (det 0
            a12 a22) inv    -a12 a11)   0 det) *)
         let det = a11 *. a22 -. a12 *. a12 in
-        (** exit if det is zero, only append near the solution *)
+        (* exit if det is zero, only append near the solution *)
         if det =. zero then raise Exit;
-        (** solution of the 2x2 system *)
+        (* solution of the 2x2 system *)
         let a1 = nr2 *. a22 /. det in
         let a2 = nr2 *. (-. a12 /. det) in
-        (** next descent direction *)
+        (* next descent direction *)
         combq a2 p a1 r;
-        (** update beta for next step *)
+        (* update beta for next step *)
         combq a2 beta a1 alpha;
         incr i
       done;
@@ -694,7 +695,7 @@ module Make(R:S) = struct
       maximise the min of [m.(i) *.* v] under the constraint [norm2 v = 1].
    *)
   let ameliorate v m =
-    ame_log "start ameliorate";
+    ame_log.log (fun k -> k "start ameliorate");
     assert (not (Array.exists (fun v -> norm2 v <=. zero) m));
     let nb = Array.length m in
     let dim = Array.length m.(0) in
@@ -715,13 +716,13 @@ module Make(R:S) = struct
       while !size < dim && !size < nb - 1 &&
               fst values.(!size) <=. goal do incr size done;
       let size = !size in
-      ame_log "size: %d dim:%d nb:%d" size dim nb;
+      ame_log.log (fun k -> k "size: %d dim:%d nb:%d" size dim nb);
       let mm = Array.init (size+1) (fun i ->
                    if i = 0 then v else m.(snd values.(i - 1))) in
       let mm' = transpose mm in
       let b = Array.init (size+1) (fun i ->
                   if i = 0 then zero else (goal -. fst values.(i-1))) in
-      ame_log "solving with %a = %a" print_matrix mm print_vector b;
+      ame_log.log (fun k -> k "solving with %a = %a" print_matrix mm print_vector b);
       mm' *** (solve (mm **** mm') b)
     in
 
@@ -736,12 +737,13 @@ module Make(R:S) = struct
 
     let rec loop v f step =
       try
-        ame_log "loop: %a %a" print f print step;
+        ame_log.log (fun k -> k "loop: %a %a" print f print step);
         let goal = f +. step in
         let d = direction v goal in
-        ame_log "d: %a (%a %b)" print_vector d print (norm2 d) (norm2 d <=. zero);
+        ame_log.log (fun k -> k  "d: %a (%a %b)"
+                            print_vector d print (norm2 d) (norm2 d <=. zero));
         let l = linear_search v d in
-        ame_log "l: %a" print l;
+        ame_log.log (fun k -> k  "l: %a" print l);
         let step' = step *. l in
         let v' = normalise (comb one v l d) in
         let f' = value v' in
@@ -791,30 +793,31 @@ module Make(R:S) = struct
 
   (** main zero in hull test function, can provide an initial position *)
   let zih ?r0 zlim m0 = try
-      (** normalise and transform the list m0 into a matrix *)
+      if m0 = [] then exit_zih 0 None;
+      (* normalise and transform the list m0 into a matrix *)
       let m0 = List.sort_uniq compare m0 in
       let nb = List.length m0 in
       let m0 = Array.of_list m0 in
-      (** if a vector is nul, we exit immediately *)
+      (* if a vector is nul, we exit immediately *)
       if Array.exists (fun v -> norm v <=. zlim) m0 then exit_zih 0 None;
       let m = Array.map normalise m0 in
-      zih_log "zih: %a" print_matrix m;
+      zih_log.log (fun k -> k "zih: %a" print_matrix m);
       let dim = Array.length m.(0) in
-      (** initial position *)
+      (* initial position *)
       let r = match r0 with
         | Some r -> Array.copy r
         | None -> Array.make nb (one /. of_int nb)
       in
-      (** in what follows: [v = m **- r] and [v2 = norm2 r] and we are trying to
+      (* in what follows: [v = m **- r] and [v2 = norm2 r] and we are trying to
        have [v2 = 0] with [r]'s coef non negative and summing to one *)
-      (** previous descent direction *)
+      (* previous descent direction *)
       let pr = Array.make nb zero in
-      (** last step where index was canceled *)
+      (* last step where index was canceled *)
       let cancels = Array.make nb (-nb) in
 
-      (** first kind of steps:
-          we will update [r] with [r = set_one (r + alpha(delta_i + beta pr))]
-          where
+      (* first kind of steps:
+         we will update [r] with [r = set_one (r + alpha(delta_i + beta pr))]
+         where
 
           - [pr] is the previous descent direction
             i.e previous [delta_i + beta pr]
@@ -834,7 +837,7 @@ module Make(R:S) = struct
         let sigma = !sigma in
         for i = 0 to nb - 1 do
           let s = m.(i) *.* v in
-          (*zih_log "  %a %a %a" print r.(i) print s print_vector m.(i);*)
+          (*zih_log.log "  %a %a %a" print r.(i) print s print_vector m.(i);*)
           if s <=. zero then
             begin
 	      candidates := i :: !candidates;
@@ -847,7 +850,7 @@ module Make(R:S) = struct
         match !candidate with
 	| None ->
           begin
-            zih_log "false";
+            zih_log.log (fun k -> k "false");
             let v = ameliorate v m0 in
             let e = if Array.exists (fun w -> v *.* w <. zlim) m0 then None
                     else Some v
@@ -855,7 +858,7 @@ module Make(R:S) = struct
             exit_zih step e
           end
         | Some(i,_) ->
-        (** value of interest, see the article *)
+        (* value of interest, see the article *)
         let p = m **- pr in
         let p2 = norm2 p in
         let pv = p *.* v in
@@ -863,7 +866,7 @@ module Make(R:S) = struct
         let pw = p *.* w in
         let vw = m.(i) *.* v in
         assert (vw <=. zero || (printf "%d\n%!" i; false) );
-        (** function computing [alpha] and [f]: the new [norm v2] from [beta] *)
+        (* function computing [alpha] and [f]: the new [norm v2] from [beta] *)
         let find_alpha beta =
           let w2 = beta *. beta *. p2 +. of_int 2 *. beta *. pw +. one in
           let vw = beta *. pv +. vw in
@@ -875,7 +878,7 @@ module Make(R:S) = struct
           in
           (alpha, f)
         in
-        (** computation of best beta by trichotomie *)
+        (* computation of best beta by trichotomie *)
         let f beta = snd (find_alpha beta) in
         let beta =
           if pv >. zero then
@@ -886,9 +889,9 @@ module Make(R:S) = struct
           else
             zero
         in
-        (** final alpha from best beta *)
+        (* final alpha from best beta *)
         let (alpha, fa) = find_alpha beta in
-        (** updating [r], [pr], and computing new [v] and new [v2] ([nv] and
+        (* updating [r], [pr], and computing new [v] and new [v2] ([nv] and
            [nv2]) *)
         for j = 0 to nb - 1 do
           pr.(j) <- pr.(j) *. beta;
@@ -898,17 +901,18 @@ module Make(R:S) = struct
         set_one r;
         let nv = m **- r in
         let nv2 = norm2 nv in
-        (** [nv2] should be equal (very near with rounding) to [fa], checking
+        (* [nv2] should be equal (very near with rounding) to [fa], checking
            in log *)
-        zih_log "cg step: %d, index: %d, beta: %a, alpha: %a, norm: %a = %a, %a"
-        step i print beta print alpha print fa print nv2
-	print_int_list !candidates;
+        zih_log.log (fun k ->
+            k "cg step: %d, index: %d, beta: %a, alpha: %a, norm: %a = %a, %a"
+              step i print beta print alpha print fa print nv2
+	      print_int_list !candidates);
         (nv, nv2)
       in
 
-      (** second kind of steps *)
+      (* second kind of steps *)
       let linear_step step v =
-        (** we select indices with [r.(i) > 0] *)
+        (* we select indices with [r.(i) > 0] *)
         let sel = ref [] in
         let sel2 = ref [] in
 	let nb2 = ref 0 in
@@ -924,8 +928,8 @@ module Make(R:S) = struct
 	let nsel = Array.of_list sel in
 	let ms = Array.map (fun i -> Array.append m.(i) [|one|]) nsel in
         let vs = Array.append v [|zero|] in
-        (** computing vector s such that [m **- s] is nearest to v
-            and sum to zero. We will move [r] is direction [-s] *)
+        (* computing vector s such that [m **- s] is nearest to v
+           and sum to zero. We will move [r] is direction [-s] *)
         let s =
           if Array.length nsel > dim then
             let mm v = ms **- (ms *** v) in
@@ -935,8 +939,8 @@ module Make(R:S) = struct
             irm_cg mm (ms *** vs)
         in
         let alpha = ref (one) in
-        (** we update [r = r + alpha s], computing [alpha] maximum
-            to keep r positive. *)
+        (* we update [r = r + alpha s], computing [alpha] maximum
+           to keep r positive. *)
         let cancel = ref (-1) in
         Array.iteri (fun i k ->
             if !alpha *. s.(i) >. r.(k) then
@@ -946,8 +950,8 @@ module Make(R:S) = struct
               end) nsel;
         let alpha = !alpha in
         let cancel = !cancel in
-        (** if cancel = -1, then alpha = 1 and if [Array.length sel >= dim],
-            then new v = m **- r will be nul, so we can stop *)
+        (* if cancel = -1, then alpha = 1 and if [Array.length sel >= dim],
+           then new v = m **- r will be nul, so we can stop *)
         let r = Array.copy r in
         Array.iteri (fun i k ->
             if k = cancel then (r.(k) <- zero)
@@ -955,33 +959,33 @@ module Make(R:S) = struct
         set_one r;
         let nv = m **- r in
         let nv2 = norm2 nv in
-        zih_log "lin step: %d, alpha: %a, cancel: %d, sel: %a"
-          step print alpha cancel print_int_array nsel;
+        zih_log.log (fun k -> k  "lin step: %d, alpha: %a, cancel: %d, sel: %a"
+                            step print alpha cancel print_int_array nsel);
         (r, cancel, nv, nv2)
       in
 
       let rec fn step v v2 =
-(*        zih_log "step: %d\n\tr: %a\n\tm.v: %a" step
+(*        zih_log.log "step: %d\n\tr: %a\n\tm.v: %a" step
            print_vector r print_vector (m *** v);*)
-        (** one linear step and one conjugate steps. *)
+        (* one linear step and one conjugate steps. *)
         let (v,v2) =
 (*	  if step mod 2 = 0 then (v,v2) else*)
 	  let (nr, cancel, nv, nv2) = linear_step step v in
           if (nv2 <. v2) then
             begin
-              (** pr is set to zero for the cancelled index to force avoid
-                  this indice to be updated by the next conjugate step due to
-                  the previous descent direction. This appears to be better
-                  than resetting pr to zero completely. *)
+              (* pr is set to zero for the cancelled index to force avoid
+                 this indice to be updated by the next conjugate step due to
+                 the previous descent direction. This appears to be better
+                 than resetting pr to zero completely. *)
               if cancel <> -1 then (pr.(cancel) <- zero; cancels.(cancel) <- step);
               Array.blit nr 0 r 0 nb;
               (nv,nv2)
             end
           else
             begin
-              (** linear steps are not always descent steps, so we do not
-                  stop if they are rejected *)
-              zih_log "reject linear step %a >= %a" print nv2 print v2;
+              (* linear steps are not always descent steps, so we do not
+                 stop if they are rejected *)
+              zih_log.log (fun k -> k  "reject linear step %a >= %a" print nv2 print v2);
               (v,v2)
             end
         in
@@ -991,30 +995,30 @@ module Make(R:S) = struct
             (nv,nv2)
           else
             begin
-              (** conjugate steps are always descent step, so failure
+              (* conjugate steps are always descent step, so failure
                 to descent while [m.(i) *.* v] is not always > 0
                 means [v] ~ 0 up to numerical errors *)
-              zih_log "no progress %a >= %a, stops" print nv2 print v2;
+              zih_log.log (fun k -> k "no progress %a >= %a, stops" print nv2 print v2);
               exit_zih step None;
             end;
         in
         if v2 <. epsilon2 then
           begin
-            zih_log "too small %d, stops" step;
+            zih_log.log (fun k -> k "too small %d, stops" step);
             exit_zih step None;
           end;
-        (** if too many steps, we stop assuming zero in hull.  *)
+        (* if too many steps, we stop assuming zero in hull.  *)
         if step > 20 * dim * nb then
           begin
-            zih_log "too long %d, stops" step;
+            zih_log.log (fun k -> k "too long %d, stops" step);
             exit_zih ~abort:true step None;
           end;
         fn (step+1) v v2
       in
-      (** initial call *)
+      (* initial call *)
       let v = m **- r in
       let v2 = norm2 v in
-      zih_log "starts";
+      zih_log.log (fun k -> k "starts");
       fn 0 v v2
     with ExitZih b -> b
 
@@ -1237,23 +1241,32 @@ module Make(R:S) = struct
 
   module type Fun = sig
     val dim : int (** the codomain dimension *)
+
     val eval : v -> v (** the function to solve *)
+
     val grad : v -> m (** its gradient, should raise Not_found if null *)
+
     val final : v -> bool (** a final test to keep point or not *)
+
     val dist2 : v -> v -> t
+
     val min_prog_int : int (** limitation of the number of steps, testes every
                                [min_prog_int] steps *)
+
     val min_prog_coef : t (** should decrease by [min_prog_coef] factor every
                               [min_prof_int] steps *)
 
     val lambda_min : t (** minimum value for the step size: stop solver if
                           lambda < lamnbda_min *)
+
     val fun_min : t (** minimum value for the target function.
                         stop solver if a position p with norm2 p < fun_min is reached *)
+
     val fun_good : t (** When stoping the algorithm, consider that it converges if
                         value is less than fun_good *)
 
     val stat : solver_stats (** solver stats *)
+
     val forbidden : (t*v) list ref list
   end
 
@@ -1275,9 +1288,11 @@ module Make(R:S) = struct
       end
 
   (** the main functor *)
+  exception Abort (* to abort the search *)
+
   module Solve(F:Fun) = struct
 
-    (** memo of all solutions *)
+    (* memo of all solutions *)
     let solutions = ref []
 
     let update_loop_stats normal steps =
@@ -1292,20 +1307,20 @@ module Make(R:S) = struct
       if steps > F.stat.max_reached_steps then
         F.stat.max_reached_steps <- steps
 
-    (** steepest descent and newton from c *)
+    (* steepest descent and newton from c *)
     let descent c =
       let r = F.eval c in
       let h = F.grad c in
       let dx = of_int 2 **. (h **- r) in
       let d2 = norm2 dx in
       let r2 = norm2 r in
-      (** optimal step:
-          f(x + l dx)^2 = f(x)^2 + 2 l f(x) f'(x) dx + ...
+      (* optimal step:
+         f(x + l dx)^2 = f(x)^2 + 2 l f(x) f'(x) dx + ...
                         = r^2 + l d2 + ...
-          zero pour l = - d2 /. r2 *)
+         zero pour l = - d2 /. r2 *)
       let q = -. r2 /. d2 in
       let steepest = (if not (d2 >. zero) then -.one else q) **. dx in
-      (** newton direction as usual *)
+      (* newton direction as usual *)
       let newton = solve h (-. one **. r) in
       (steepest, newton)
 
@@ -1316,8 +1331,8 @@ module Make(R:S) = struct
     (** [solve rs2 c0] start the solver from [c0]. It reuses an existing
        solution if it reaches a point [x] s.t. [dist2 x s < rs2] for an existing
        solution sd. May raise Not_found is it reached a point of null gradient *)
-    let solve project rs2 c0 =
-      (** main loop function:
+    let solve project check rs2 c0 =
+      (* main loop function:
            steps: count the number of steps.
            c: current position
            fc: norm2 c
@@ -1329,7 +1344,7 @@ module Make(R:S) = struct
       let rec loop_eq steps c fc nd sd lambda =
         if not (fc <. inf) then raise Not_found;
         assert (fc >=. zero || (printf "%a %a\n%!" print fc print_vector c; false));
-        try (** search for existing solution near enough *)
+        try (* search for existing solution near enough *)
           if List.exists (fun ptr ->
                  List.exists
                    (fun (_,c') -> F.dist2 c c' <. rs2 || F.dist2 c (opp c') <. rs2)
@@ -1359,8 +1374,9 @@ module Make(R:S) = struct
           in
           update_loop_stats false steps;
           let c' = if F.dist2 c c' <. rs2 then c' else opp c' in
-          sol_log "abort at step %3d, fc: %a, c: %a"
-            steps print fc' print_vector c';
+          sol_log.log (fun k -> k "abort at step %3d, fc: %a, c: %a"
+                              steps print fc' print_vector c');
+          check c';
           (fc',c')
         with Exit -> loop steps c fc nd sd lambda
       and loop steps c fc nd sd lambda =
@@ -1380,8 +1396,8 @@ module Make(R:S) = struct
                   let m = F.grad c in
                   printf "\t %a (%a)\n%!" print_matrix m print (det m);
                 end;*)
-              sol_log "ends at %4d, fc: %a, c: %a, lambda: %a"
-                steps print fc print_vector c print lambda;
+              sol_log.log (fun k -> k "ends at %4d, fc: %a, c: %a, lambda: %a"
+                steps print fc print_vector c print lambda);
               if not (q <=. F.fun_good) then
                 begin
                   F.stat.nb_bad <- F.stat.nb_bad + 1;
@@ -1389,60 +1405,59 @@ module Make(R:S) = struct
                 end;
               if rs2 >. zero then
                 begin
-                  sol_log "%d solutions" (1 + List.length !solutions);
+                  sol_log.log (fun k -> k "%d solutions" (1 + List.length !solutions));
                   solutions := (fc,c) :: !solutions;
                 end;
               (fc,c)
             end
           else
             begin
-              (** given [lambda], we search the best [t] by trichotomie
+              (* given [lambda], we search the best [t] by trichotomie
                   for c = c + lambda (t nd + (1 - t) sd)
                 high precision is very important here *)
-              let f nd t =
+              let f t =
                 let d = comb t nd (one -. t) sd in
                 let c' = project (comb one c lambda d) in
                 norm2 (F.eval c')
               in
-              let t = tricho ~safe:false ~stop_cond (f nd) zero one in
-              (** we compute new position and functional at this position *)
+              let t = tricho ~safe:false ~stop_cond f zero one in
               let d = comb t nd (one -. t) sd in
+              (* we compute new position and functional at this position *)
               let c' = project (comb one c lambda d) in
-              (** no move: call loop with negative lambda to stop *)
-              if Array.for_all2 (=.) c c' then
-                loop steps c fc nd sd (-. one)
-              else
               let fc' = norm2 (F.eval c') in
-(*            sol_log "%d, c: %a(%a), fc: %a, c': %a(%a), fc': %a(%a), sd: %a (%a), nd! %a,\
-                       vc: %a(%a), dc: %a(%a), lambda: %a, beta: %a"
-              steps
-              print_vector c print (norm2 c) print fc print_vector c' print (norm2 c') print fc' print (fc -. fc')
-              print_vector sd print (sd *.* c) print_vector nd
-              print_vector (F.eval c') print (F.eval c' *.* c')
-              print_matrix (F.grad c') print (det (F.grad c'))
-              print lambda print t;*)
+              sol_log.log (fun k ->
+                  k "%d, c: %a(%a), fc: %a, c': %a(%a), fc': %a(%a), sd: %a (%a), nd! %a,\
+                     vc: %a(%a), dc: %a(%a), lambda: %a, beta: %a"
+                    steps
+                    print_vector c print (norm2 c) print fc
+                    print_vector c' print (norm2 c') print fc' print (fc -. fc')
+                    print_vector sd print (sd *.* c) print_vector nd
+                    print_vector (F.eval c') print (F.eval c' *.* c')
+                    print_matrix (F.grad c') print (det (F.grad c'))
+                    print lambda print t);
               if (is_nan fc && not (is_nan fc')) || fc' <. fc then
                 begin
-                  (** progress, do to next step, try a bigger lambda *)
+                  check c';
                   Previous.add fc' prev;
                   let (sd,nd) = descent c' in
-                  loop_eq (steps + 1) c' fc' nd sd one
+                  loop_eq (steps + 1) c' fc' nd sd (lambda *. of_float 1.5)
                 end
               else
-                (** no progress, try a smaller lambda *)
-                loop steps c fc nd sd (lambda /. of_float 1.5)
+                (* no progress, try smaller lambda *)
+                loop steps c fc nd sd (lambda /. of_int 2)
             end
       in
-      (** initial call to the loop *)
-      let c0 = try project c0
-               with Not_found -> failwith "solve start out of domain"
-      in
-      let fc0 = norm2 (F.eval c0) in
-      sol_log "starting solve at %a => %a" print_vector c0 print fc0;
-      Previous.add fc0 prev;
-      let (sd,nd) = descent c0 in
-      let (_, c as res) = loop_eq 0 c0 fc0 nd sd one in
-      if not (F.final c) then raise Not_found else res
+      (* initial call to the loop *)
+      let c0 = project c0 in
+      try
+        let fc0 = norm2 (F.eval c0) in
+        sol_log.log (fun k -> k "starting solve at %a => %a" print_vector c0 print fc0);
+        Previous.add fc0 prev;
+        let (sd,nd) = descent c0 in
+        let (_, c as res) = loop_eq 0 c0 fc0 nd sd one in
+        if not (F.final c) then raise Not_found else res
+      with
+        Abort -> raise Not_found
 
   end
 
@@ -1461,8 +1476,8 @@ module Make(R:S) = struct
 
     let minimise proj _ c0 =
       let rec fn step lambda c p d m =
-        min_log "%d,%a: %a => %a(%a)" step print lambda
-          print_vector c print m print_vector d;
+        min_log.log (fun k -> k "%d,%a: %a => %a(%a)" step print lambda
+          print_vector c print m print_vector d);
         if lambda <. F.lambda_min || step >= F.max_steps then c else
           (try (fun () ->
              let f t =
@@ -1472,7 +1487,7 @@ module Make(R:S) = struct
               in
               let stop_cond = { default_stop_cond with max_steps = 60 } in
               let t = tricho ~safe:false ~stop_cond f zero one in
-              (** we compute new position and functional at this position *)
+              (* we compute new position and functional at this position *)
               let p' = comb t d (one -. t) p in
               let c' = proj (comb one c lambda p') in
               let m' = F.eval c' in
@@ -1485,12 +1500,12 @@ module Make(R:S) = struct
         with Not_found ->
           (fun () -> fn step (lambda /. of_int 2) c p d m)) ()
       in
-      min_log "minmax begins";
+      min_log.log (fun k -> k "minmax begins");
       let c0 = proj c0 in
       let m0 = F.eval c0 in
       let d0 = opp (F.grad c0) in
       let r = fn 0 m0 c0 d0 d0 m0 in
-      min_log "minmax ends";
+      min_log.log (fun k -> k "minmax ends");
       r
   end
 end
@@ -1577,8 +1592,10 @@ module type V = sig
 
   val project_circle : v -> float -> v -> v
 
+  exception Abort
+
   module Solve(_:Fun) : sig
-    val solve : (v -> v) -> t -> v -> (t*v)
+    val solve : (v -> v) -> (v -> unit) -> t -> v -> (t*v)
     val solutions : (t * v) list ref
   end
 

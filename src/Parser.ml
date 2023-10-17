@@ -64,7 +64,7 @@ module Parse(R:Field.SPlus) = struct
        let opts = fn_opts opts in
        let dim = List.length vars in
        let ps = B.homogeneise_many (List.map (to_bernstein dim vars) pols) in
-       let (ts, ps, es, dim, ctrs, safe,time) =
+       let (ts, ps, es, dim, ctrs, safe,sings,time) =
          H.triangulation opts ps
        in
        let topo_ask =
@@ -75,6 +75,12 @@ module Parse(R:Field.SPlus) = struct
        in
        let topo = H.Simp.topology topo_ask ctrs in
        eprintf "   topology: %a (safe: %b)\n%!" Topology.print topo safe;
+       if sings <> [] then
+         begin
+           eprintf "   nodes: %d\n%!" (List.length sings);
+           List.iter (fun x ->
+               eprintf "      %a\n%!" R.V.print_vector x) sings
+         end;
        begin
          let open Args in
          match opts.expected with

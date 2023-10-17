@@ -480,6 +480,7 @@ module Make(R:Field.SPlus) = struct
     let vert = create_float_bigarray (Hashtbl.length tbl * 3) in
     Hashtbl.iter (fun x i ->
         let setv i x = Bigarray.Genarray.set vert [|i|] x in
+        if x.(3) < 0.0 then Array.iteri (fun i c -> x.(i) <- -. c) x;
         let d = x.(3) +. !proj_coef in
         setv (3*i+0) (x.(0)/.d);
         setv (3*i+1) (x.(1)/.d);

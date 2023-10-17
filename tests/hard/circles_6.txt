@@ -1,0 +1,5 @@
+let p = zeros(x,y) [expected=36, subd=20, nb critical=6]
+  (10 * x^2 + y^2 - 1) * (10 *x^2 + y^2 - 0.975) * (10 *x^2 + y^2 - 0.95)
+  (x^2 + 10 * y^2 - 1) * (x^2 + 10 * y^2 - 0.975) * (x^2 + 10 * y^2 - 0.95);
+display p p__t;
+display p;
