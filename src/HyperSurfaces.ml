@@ -1363,6 +1363,21 @@ module Make(R:Field.SPlus) = struct
 
     Hashtbl.iter (fun _ s -> add ctrs (mks s.o.l s.s)) trs.all;
 
+    let get_singulars trs =
+      match dp0 with
+      | [_,dp,_,_] ->
+         let r = ref [] in
+         Hashtbl.iter (fun _ l ->
+             match l with
+             | [] -> assert false
+             | (i,s)::_ ->
+                let x = to_vec s.s.(i) in
+                let g = eval_grad dp x in
+                if (norm2 g <. slim) then r := x :: !r) trs.by_vertex;
+         !r
+      | _ -> []
+    in
+
     let rec extract dim codim trs =
       let edge_value l =
         match l with
@@ -1557,10 +1572,10 @@ module Make(R:Field.SPlus) = struct
         eprintf "unsafe cells present: not checking certificate\n%!";
 
     (List.map (Array.map to_vec) all, List.map (Array.map to_vec) !ptrs
-     , edges, dim, ctrs, nb_unsafe = 0)
+     , edges, dim, ctrs, nb_unsafe = 0, get_singulars trs)
 
   let triangulation param p0 =
-    let (all,ptrs,edges,dim,ctrs,unsafe) =
+    let (all,ptrs,edges,dim,ctrs,unsafe,sings) =
       try
         Chrono.add_time total_chrono (triangulation param) p0
       with Not_found as e ->
@@ -1568,7 +1583,7 @@ module Make(R:Field.SPlus) = struct
         eprintf "Uncaught exception %s\n%!" (Printexc.to_string e);
         exit 1
     in
-    let r = (all,ptrs,edges,dim,ctrs,unsafe,Chrono.get_cumul total_chrono) in
+    let r = (all,ptrs,edges,dim,ctrs,unsafe,sings,Chrono.get_cumul total_chrono) in
     Chrono.iter (fun n t tc c -> printf "   %10s: %8.3fs (%8.3fs self) for %6d call(s)\n%!" n tc t c);
     Chrono.reset_all ();
     r
