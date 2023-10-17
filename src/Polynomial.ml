@@ -20,8 +20,10 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
   type m = V.m
   type 'a p         = (int array * 'a) list
   type 'a pe        = 'a p
+
   (** we have polynomial with coeeficient in the field *)
   type polynomial   = R.t p
+
   (** and polynomial with vector coefficient, for the gradient *)
   type polynomial_v = v   p
   type polynomial_m = m   p

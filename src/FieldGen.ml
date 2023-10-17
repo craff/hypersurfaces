@@ -31,7 +31,8 @@ module type SMin = sig
   val to_string : t -> string
   val to_q : t -> Q.t
   val print : formatter -> t -> unit
-  (** true is computation are exact, for rational for instance *)
+
+  (** true if computation are exact, for rational for instance *)
   val exact : bool
   val cos : t -> t
   val sin : t -> t
@@ -45,6 +46,7 @@ module type S = sig
 
   val precision : int option (* number of bits *)
   val small : float -> t (* number using pourcentage of the precision *)
+
   (** power function, in O(ln n) *)
   val pow : t -> int -> t
   val powf : t -> t -> t
@@ -85,6 +87,7 @@ module type S = sig
 
   (** least float such that [one + epsilon != one] *)
   val epsilon : t
+
   (** square of epsilon *)
   val epsilon2 : t
 end

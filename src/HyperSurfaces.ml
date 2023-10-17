@@ -756,8 +756,8 @@ module Make(R:Field.SPlus) = struct
         | Some i -> face_log.log (fun k -> k "constant sign"); SG i
         | _ -> hn subd s l p dp
       and hn subd s l p dp =
-        (*        printf "l:%a p:%a\n%!" (print_polynome ?vars:None) (List.hd l) (print_polynome ?vars:None) (List.hd p);*)
-        (*        printf "cst: %b, subd: %d %a\n%!" cst subd print_matrix s;*)
+        (*printf "l:%a p:%a\n%!" (print_polynome ?vars:None) (List.hd l) (print_polynome ?vars:None) (List.hd p);*)
+        (*printf "subd: %d %a\n%!" subd print_matrix s;*)
         let rec fn acc signs points dps gds =
           match (dps, gds) with
           | [], [] ->
@@ -833,7 +833,7 @@ module Make(R:Field.SPlus) = struct
           kn param.Args.subd s.m l p dp
       in
       let key = facet_key s.s vs in
-      Hashtbl.replace certs key (s,cert,ref false)
+      Hashtbl.replace certs key (s,cert,ref false);
     in
 
     let check_decision_face vs s' s cert =
@@ -953,8 +953,10 @@ module Make(R:Field.SPlus) = struct
       with
       | Zih (v,all,sd) -> Depend (v,all,(true,s)::sd)
       | Zero -> Depend(s.o.c,[],[true,s])
-      | e -> eprintf "got except: %s\n%!" (Printexc.to_string e);
-                assert false
+      | e ->
+         let _ = Printexc.print_backtrace stderr in
+         eprintf "got except: %s\n%!" (Printexc.to_string e);
+         assert false
     in
 
     let ajoute s x = Chrono.add_time add_chrono (fun ty ->

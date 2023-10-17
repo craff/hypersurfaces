@@ -4,20 +4,20 @@ open Debug
 
 let db_log = Debug.new_debug "db" 'q'
 
-let create_polynomial = "
+let create_polynomial = {|
   CREATE TABLE IF NOT EXISTS polynomial (
     value TEXT PRIMARY KEY,
     degree INTEGER,
     dimension INTEGER,
-    random INT(1))"
+    random INT(1))|}
 
 let rec pkey n = match n with
   | _ when n <= 0 -> assert false
   | 1             -> "p0 INTEGER"
   | n             -> sprintf "%s, p%d INTEGER" (pkey (n-1)) (n-1)
 
-let create_variety n = sprintf
-  "CREATE TABLE IF NOT EXISTS variety%d (
+let create_variety n = sprintf {|
+  CREATE TABLE IF NOT EXISTS variety%d (
     %s,
     nb_components INTEGER,
     topology TEXT,
@@ -28,7 +28,7 @@ let create_variety n = sprintf
     pos_limit FLOAT,
     zih_limit FLOAT,
     dprec FLOAT
-   )" n (pkey n)
+   )|} n (pkey n)
    (* euler : list of integers as string *)
 
 let db_ptr = ref None
@@ -180,8 +180,8 @@ let timings ?(css=false) dim nb =
   let where = String.concat " AND " where in
   let sql =
     sprintf
-      "SELECT p0.dimension, %s, AVG(v.time), STD(v.time), MAX(v.time), COUNT() FROM variety%d as v%s WHERE %s
-       GROUP BY p0.dimension, %s"
+      {|SELECT p0.dimension, %s, AVG(v.time), STD(v.time), MAX(v.time), COUNT() FROM variety%d as v%s WHERE %s
+        GROUP BY p0.dimension, %s|}
       degs nb pols where degs
   in
   db_log.log (fun k -> k "sql: %s" sql);
@@ -224,8 +224,8 @@ let stats dim degs =
   let where = String.concat " AND " where in
   let sql =
     sprintf
-      "SELECT nb_components, topology, COUNT() FROM variety%d as v%s WHERE %s
-       GROUP BY topology"
+      {|SELECT nb_components, topology, COUNT() FROM variety%d as v%s WHERE %s
+        GROUP BY topology|}
       nb pols where
   in
   db_log.log (fun k -> k "sql: %s" sql);

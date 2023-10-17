@@ -4,29 +4,29 @@
   (name Hyper)
   (public_name Hyper)
   (modules :standard)
-  (preprocess (pps pacomb.ppx))
+  (preprocess (per_module ((pps pacomb.ppx) Parser Topology)))
   (libraries unix threads domain_shims zarith mlmpfr gles3 pacomb imagelib sqlite3))
 
 (rule
   (targets lines_shader.ml)
   (action (with-stdout-to lines_shader.ml (progn
-    (echo "let vertex = String.trim \"") ; hack to remove newline.
+    (echo "let vertex = String.trim {|") ; hack to remove newline.
     (cat lines_vertex.glsl)
-    (echo "\"\n")
-    (echo "let fragment = String.trim \"") ; hack to remove newline.
+    (echo "|}\n")
+    (echo "let fragment = String.trim {|") ; hack to remove newline.
     (cat lines_fragment.glsl)
-    (echo "\"\n")
+    (echo "|}\n")
     ))))
 
 (rule
   (targets triangles_shader.ml)
   (action (with-stdout-to triangles_shader.ml (progn
-    (echo "let vertex = String.trim \"") ; hack to remove newline.
+    (echo "let vertex = String.trim {|") ; hack to remove newline.
     (cat triangles_vertex.glsl)
-    (echo "\"\n")
-    (echo "let fragment = String.trim \"") ; hack to remove newline.
+    (echo "|}\n")
+    (echo "let fragment = String.trim {|") ; hack to remove newline.
     (cat triangles_fragment.glsl)
-    (echo "\"\n")
+    (echo "|}\n")
     ))))
 
 (rule
