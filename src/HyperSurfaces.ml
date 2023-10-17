@@ -85,6 +85,7 @@ module Make(R:Field.SPlus) = struct
     let dim = List.hd dims in
     if not (List.for_all ((=) dim) dims) then failwith "inhomogeneous equations";
     let codim = List.length p0 in
+    let codim0 = codim in
     let dp00 = List.map2 (fun p d -> ( pre_eval ( *. ) p
                                     , pre_eval ( **.) (gradient p)
                                     , pre_eval ( ***. ) (hessian p), d)) p0 deg in
@@ -786,30 +787,30 @@ module Make(R:Field.SPlus) = struct
 	fn dp;
 	let gds = !gds in
         let res =
-          if codim = 1 then
+          if codim0 = 1 then
             begin
-              let gds0 = List.map (fun m -> m.(0)) gds in
+              let gds0 = List.map (fun m -> assert (Array.length m = 1);
+                                            m.(0)) gds in
               match
                 V.zih zlim gds0
               with
               | None -> InL()
-              | Some v -> InR(transpose [|v|],gds)
+              | Some v -> InR(transpose [|v|],List.map (fun v -> [|v|]) gds0)
             end
         else
           begin
-            let (mu, v) =
-              V.mih zlim (Array.of_list (List.map transpose gds))
+            let v =
+              V.mih zlim (Array.of_list gds)
             in
-              if mu <. zlim then
+            match v with
+            | None ->
                 begin
-                  face_log "test zih: true";
+                  face_log.log (fun k -> k "test zih: true");
                   InL ()
                 end
-              else
+            | Some v ->
                 begin
-                  List.iter (fun mm ->
-                      assert (mat_positive zero (mm **** v))) gds;
-	          face_log "test zih: false";
+	          face_log.log (fun k -> k "test zih: false");
                 InR (v, gds)
                 end
           end
@@ -949,6 +950,7 @@ module Make(R:Field.SPlus) = struct
                                   Field.Float.V.print_matrix m
                                   Field.Float.V.print_matrix mm
                                   Field.Float.V.print_matrix Field.Float.V.(mm **** m)(Field.Float.V.mat_positive 0. Field.Float.V.(mm **** m)))) gds0;
+
            assert (List.length gds = List.length gds0);
            let (m:Q.V.matrix) = Array.map (Array.map to_q) m in
            List.iteri (fun i mm ->
@@ -964,6 +966,7 @@ module Make(R:Field.SPlus) = struct
                                   Field.Float.V.print_matrix Field.Float.V.(mm' **** m)
                                   (Field.Float.V.mat_positive 0. Field.Float.V.(mm **** m))
                                   (Field.Float.V.mat_positive 0. Field.Float.V.(mm' **** m)))) gds
+
         | DV (i,j,c1,c2) ->
            assert (i >= 0 && j >= 0 && i <> j);
            (*                 printf "split %d %d\n%!" i j;*)
@@ -1031,8 +1034,8 @@ module Make(R:Field.SPlus) = struct
 	List.iter fn facets;
         NonDege
       with
-      | Zih (v,all,sd) -> Depend (v,all,(true,s)::sd)
-      | Zero -> Depend(s.o.c,[],[true,s])
+      | Zih (v,sd) -> Depend (v,(true,s)::sd)
+      | Zero -> Depend(s.o.c,[true,s])
       | e ->
          let _ = Printexc.print_backtrace stderr in
          eprintf "got except: %s\n%!" (Printexc.to_string e);

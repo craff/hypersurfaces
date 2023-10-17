@@ -252,6 +252,7 @@ module Make(R:S) = struct
 
   (** matrix multiplication *)
   let ( **** ) m n =
+    assert (Array.length m.(0) = Array.length n);
     Array.map (fun v -> n **- v) m
 
   (** transposition **)
@@ -335,9 +336,9 @@ module Make(R:S) = struct
           let v = m.(j).(i) in
 	  m.(j).(i) <- zero;
 	  m.(i).(j) <- zero;
-          m.(j).(j) <- m.(j).(j) -. v /. p *. v;
+          m.(j).(j) <- p *. m.(j).(j) -. v *. v;
           for k = j + 1 to len - 1 do
-            m.(j).(k) <- m.(j).(k) -. v /. p *. m.(i).(k);
+            m.(j).(k) <- p *. m.(j).(k) -. v *. m.(i).(k);
             m.(k).(j) <- m.(j).(k);
           done;
         done;
@@ -355,6 +356,10 @@ module Make(R:S) = struct
   let _ =
     let open R in
     assert (positive zero [| [| one; zero |]; [| zero; one |] |]);
+    assert (positive zero [| [| one; of_float 0.9 |]; [| of_float 0.9; one |] |]);
+    assert (positive zero [| [| one; of_float (-.0.9) |]; [| of_float 0.9; one |] |]);
+    assert (positive zero [| [| one; of_float 0.9 |]; [| of_float (-.0.9); one |] |]);
+    assert (positive zero [| [| one; of_float (-.0.9) |]; [| of_float (-.0.9); one |] |]);
     assert (not (positive zero [| [| zero; one |]; [| one; zero |] |]));
     assert (not (positive zero [| [| one; one |]; [| one; one |] |]))
 
@@ -1053,12 +1058,35 @@ module Make(R:S) = struct
 
   (** find a matrix M such tMA is positive for the convex hul of ms *)
   let mih zlim ms =
-    Array.iter normalise2 ms;
-    let nb = Array.length ms in
+    (*Array.iter normalise2 ms;*)
     let d1  = Array.length ms.(0) in
     let d2  = Array.length ms.(0).(0) in
-    assert (d2 <= d1);
-    zih_log "mip %d %d %d\n%!" nb d1 d2;
+    assert (d1 <= d2);
+    try
+      let ns =
+        transpose (Array.init d1 (fun i ->
+             let vs = Array.map (fun m -> m.(i)) ms in
+             match zih zlim (Array.to_list vs) with
+             | None -> raise Exit
+             | Some v -> v))
+      in
+      (*      Format.eprintf "==> %a\n%!" print_matrix ns;*)
+      Array.iter (fun m ->
+          if not (unsafe_positive zero (m **** ns)) then
+            begin
+              (*Format.eprintf "reject %a\n%!" print_matrix (ns **** m);*)
+              raise Exit
+            end) ms;
+      Some ns
+    with
+    | Exit -> None
+    | e ->
+       let _ = Printexc.print_backtrace stderr in
+       eprintf "got except: %s\n%!" (Printexc.to_string e);
+       assert false
+
+(*
+                zih_log.log (fun k -> k "mip %d %d %d\n%!" nb d1 d2);
     let msym a b =
       let r = transpose a **** b ++++ transpose b **** a in
       assert (Array.length r = d2);
@@ -1173,20 +1201,26 @@ module Make(R:S) = struct
     let (mu, m) as res = loop (abs mu0) m0 mu0 ss0 in
     assert (mu <= zlim || test_mih ms m);
     res
+ *)
 (*
   module TestMiH = struct
     let m1 = Array.map (Array.map of_int) [|[|1;0|];[|0;1|];|]
     let m2 = Array.map (Array.map of_int) [|[|0;1|];[|1;0|];|]
-    let (mu,r) = mih (of_float 1e-12) [|m1;m2|]
-    let _ = Format.eprintf "==> %a %a\n%!" print mu print_matrix r
+    let _ = assert (mih (of_float 1e-12) [|m1;m2|] = None)
     let m1 = Array.map (Array.map of_int) [|[|1;1|];[|2;0|];[|1;-2|]|]
-    let m2 = Array.map (Array.map of_int) [|[|1;1|];[|-2;1|];[|0;2|]|]
-    let (mu,r) = mih (of_float 1e-12) [|m1;m2|]
-    let _ = Format.eprintf "==> %a %a\n%!" print mu print_matrix r
+    let m2 = Array.map (Array.map of_int) [|[|1;1|];[|2;-1|];[|0;2|]|]
+    let _ = match mih (of_float 1e-12) [|m1;m2|] with
+      | None -> assert false
+      | Some r -> Format.eprintf "==> %a\n%!" print_matrix r;
+                  assert (unsafe_positive zero (transpose m1 **** r));
+                  assert (unsafe_positive zero (transpose m2 **** r))
     let m1 = Array.map (Array.map of_int) [|[|1;1|];[|2;0|];[|1;-2|]|]
     let m2 = Array.map (Array.map of_int) [|[|1;1|];[|-2;-1|];[|0;2|]|]
-    let (mu,r) = mih (of_float 1e-12) [|m1;m2|]
-    let _ = Format.eprintf "==> %a %a\n%!" print mu print_matrix r
+    let _ = match mih (of_float 1e-12) [|m1;m2|] with
+      | None -> assert false
+      | Some r -> Format.eprintf "==> %a\n%!" print_matrix r;
+                  assert (unsafe_positive zero (transpose m1 **** r));
+                  assert (unsafe_positive zero (transpose m2 **** r))
     let _ = exit 0
   end
  *)
@@ -1566,7 +1600,7 @@ module type V = sig
 
   val zih : ?r0:vector -> t -> vector list -> vector option
   val pih : ?r0:vector -> t -> vector -> vector list -> vector option
-  val mih : t -> matrix array -> t * matrix
+  val mih : t -> matrix array -> matrix option
   val print_zih_stats : formatter -> unit
 
   type solver_stats
