@@ -320,18 +320,16 @@ module Make(R:S) = struct
   (** test if a matrix is positive with cholesky decomposition
       of the matrix tB + B.  *)
   let unsafe_positive zlim m =
-  let len = Array.length m in
-    for i = 0 to len - 1 do
-      for j = i+1 to len - 1 do
-        let v = (m.(j).(i) +. m.(i).(j)) /. of_int 2 in
-        m.(j).(i) <- v;
-	m.(i).(j) <- v
-      done
-    done;
+    let len = Array.length m in
+    Format.eprintf "positive: %a\n%!" print_matrix m;
+    symmetrise m;
+    Format.eprintf "positive (s): %a\n%!" print_matrix m;
     try
       for i = 0 to len - 1 do
         let p = m.(i).(i) in
-        if p <=. zlim then raise Exit;
+        if p <=. zlim then (Format.eprintf "mih fails: %a <= %a\n%!"
+                              R.print p R.print zlim;
+                            raise Exit);
         for j = i+1 to len - 1 do
           let v = m.(j).(i) in
 	  m.(j).(i) <- zero;
@@ -599,25 +597,67 @@ module Make(R:S) = struct
   let spectrum m =
     (* Format.eprintf "spectrum: %a: " print_matrix m;*)
     let d = Array.length m in
-    Random.init (Hashtbl.hash m);
+    if d <= 0 then invalid_arg "max_eigen: empty matrix";
+    Random.init (Hashtbl.hash m); (* to force reproductible bahavior *)
     let pi = ref (fun x -> x) in
-    let r = Array.init d (fun i ->
-      if i = d - 1 then
-        let e = normalise (!pi (Array.init d (fun _ -> of_float Stdlib.(Random.float 2.0 -. 1.0)))) in
-        let e' = m *** e in
-        let mu = e' *.* e in
-        (*	Format.eprintf " %a %a %a!" print mu print_vector e print (norm (mu **. e --- e'));*)
-        (mu, e)
-      else
-        let (_mu, e as p) = raleigh !pi m in
-(*        let e' = m *** e in
-	Format.eprintf " %a %a %a!" print mu print_vector e print (norm (mu **. e --- e'));*)
-        let pi' = !pi in
-        pi := (fun x -> let x = pi' x in x --- (x *.* e) **. e);
-        p)
+    let r =
+      Array.init d (fun i ->
+        if i = d - 1 then
+          begin
+            let e = normalise (!pi (Array.init d (fun _ -> of_float Stdlib.(Random.float 2.0 -. 1.0)))) in
+            let e' = m *** e in
+            let mu = e' *.* e in
+            (*	Format.eprintf " %a %a %a!" print mu print_vector e print (norm (mu **. e --- e'));*)
+            (mu, e)
+          end
+        else
+          begin
+            let (_mu, e as p) = raleigh !pi m in
+            (*        let e' = m *** e in
+	              Format.eprintf " %a %a %a!" print mu print_vector e print (norm (mu **. e --- e'));*)
+            let pi' = !pi in
+            pi := (fun x -> let x = pi' x in x --- (x *.* e) **. e);
+            p
+          end
+        )
     in
     (* Format.eprintf "\n%!";*)
     r
+
+  let max_eigen m =
+    (* Format.eprintf "spectrum: %a: " print_matrix m;*)
+    let d = Array.length m in
+    if d <= 0 then invalid_arg "max_eigen: empty matrix";
+    Random.init (Hashtbl.hash m); (* to force reproductible bahavior *)
+    let pi = ref (fun x -> x) in
+    let best = ref None in
+    let check mu v =
+      match !best with
+      | None -> best := Some(mu,v)
+      | Some(mu',_) -> if mu' < mu then best := Some(mu,v)
+    in
+    for i = 0 to d - 1 do
+      if i = d - 1 then
+        begin
+          let e = normalise (!pi (Array.init d (fun _ -> of_float Stdlib.(Random.float 2.0 -. 1.0)))) in
+          let e' = m *** e in
+          let mu = e' *.* e in
+          (*	Format.eprintf " %a %a %a!" print mu print_vector e print (norm (mu **. e --- e'));*)
+          check mu e
+        end
+      else
+        begin
+          let (mu, e) = raleigh !pi m in
+          check mu e;
+          (*        let e' = m *** e in
+	            Format.eprintf " %a %a %a!" print mu print_vector e print (norm (mu **. e --- e'));*)
+          let pi' = !pi in
+          pi := (fun x -> let x = pi' x in x --- (x *.* e) **. e);
+        end
+    done;
+    match !best with
+    | None -> assert false
+    | Some r -> r
 
   let scalar2 m1 m2 =
     let r = ref zero in
@@ -627,7 +667,8 @@ module Make(R:S) = struct
   let normalise2 m =
     let n = sqrt (scalar2 m m) in
     Array.iteri (fun i -> Array.iteri (fun j x -> m.(i).(j) <- x /. n)) m
-(*
+
+  (*
   module TestRaleight = struct
     let m = Array.map (Array.map of_int) [|[| 1;2;3 |]; [| 1;2;1 |]; [| 3;2;1 |]|]
     let r = spectrum m
@@ -635,7 +676,7 @@ module Make(R:S) = struct
       Array.iter (fun (e,mu) ->
       Format.eprintf "%a, %a\n%!" print mu print_vector e) r
   end
-*)
+ *)
 
   (** compute the circumcenter of a simplex whose vertices are
       the line of the matrix m and are normalised, in which case
@@ -1056,23 +1097,264 @@ module Make(R:S) = struct
     let fn a = unsafe_positive zero (m **** a) in
     Array.for_all fn ms
 
+  (*
+  (** find a vector v that is the eigen vector with the least
+      least possible max eigen value of ^tmm for m in the convex hull of
+      m0.
+   *)
+  let mzih zlim m0 = try
+      if m0 = [] then exit_zih 0 None;
+      (* normalise and transform the list m0 into a matrix *)
+      (* if a vector is nul, we exit immediately *)
+      if Array.exists (Array.exists (fun v -> norm v <=. zlim)) m0 then exit_zih 0 None;
+      zih_log.log (fun k -> k "mzih: %a" print_matrix m);
+      let dim = Array.length m.(0) in
+      (* initial position *)
+      let r = Array.make nb (one /. of_int nb) in
+      (* in what follows:
+           [v = (m **- r)] and
+           [v2 = max_eigen of (transpose v) v]
+           [w] is the corresponding eigen vector
+         and we are trying to have [v2 = 0] with [r]'s coef non negative and
+         summing to one *)
+      (* previous descent direction *)
+      let pr = Array.make nb zero in
+      (* last step where index was canceled *)
+      let cancels = Array.make nb (-nb) in
+
+      (* first kind of steps:
+         we will update [r] with [r = set_one (r + alpha(delta_i + beta pr))]
+         where
+
+          - [pr] is the previous descent direction
+            i.e previous [delta_i + beta pr]
+          - [delta_i =] vector with one in position such that
+                  [m.(i) *.* v <= 0] and minimum
+
+          alpha and beta, will be positive, this will increase all coefficient
+          of r keeping r non negative and summing to one thanks to the use of
+          set_one. *)
+      let conjugate_step step v v2 w =
+        let candidate = ref None in
+        let candidates = ref [] in
+        let sigma = ref zero in
+        for j = 0 to nb-1 do
+          sigma := !sigma +. pr.(j)
+        done;
+        let sigma = !sigma in
+        for i = 0 to nb - 1 do
+          let s = (m.(i) **- w)  *.* (v **- w) in
+          (*zih_log.log "  %a %a %a" print r.(i) print s print_vector m.(i);*)
+          if s <=. zero then
+            begin
+	      candidates := i :: !candidates;
+	      let v = r.(i) *. s in
+	      match !candidate with
+   	      | None -> candidate := Some(i,v)
+              | Some (_,v') -> if v' > v then candidate := Some(i,v)
+            end
+        done;
+        match !candidate with
+	| None ->
+          begin
+            zih_log.log (fun k -> k "false");
+            let v = mat_ameliorate v m0 in
+            let e = if Array.exists (fun w -> v *.* w <. zlim) m0 then None
+                    else Some v
+            in
+            exit_zih step e
+          end
+        | Some(i,_) ->
+        (* value of interest, see the article *)
+        let p = m **- pr in
+        let p2 = norm2 p in
+        let pv = p *.* v in
+        let w = m.(i) in
+        let pw = p *.* w in
+        let vw = m.(i) *.* v in
+        assert (vw <=. zero || (printf "%d\n%!" i; false) );
+        (* function computing [alpha] and [f]: the new [norm v2] from [beta] *)
+        let find_alpha beta =
+          let w2 = beta *. beta *. p2 +. of_int 2 *. beta *. pw +. one in
+          let vw = beta *. pv +. vw in
+          let sigma = beta *. sigma +. one in
+          let alpha = (v2 *. sigma -. vw) /. (w2 -. vw *. sigma) in
+          let f =
+            let d = one +. alpha *. sigma in
+            (v2 +. of_int 2 *. alpha *. vw +. alpha *. alpha *. w2) /. (d*.d)
+          in
+          (alpha, f)
+        in
+        (* computation of best beta by trichotomie *)
+        let f beta = snd (find_alpha beta) in
+        let beta =
+          if pv >. zero then
+            begin
+              let beta1 = -. vw /. pv in
+              tricho ~stop_cond f zero beta1
+            end
+          else
+            zero
+        in
+        (* final alpha from best beta *)
+        let (alpha, fa) = find_alpha beta in
+        (* updating [r], [pr], and computing new [v] and new [v2] ([nv] and
+           [nv2]) *)
+        for j = 0 to nb - 1 do
+          pr.(j) <- pr.(j) *. beta;
+        done;
+        pr.(i) <- pr.(i) +. one;
+        Array.iteri (fun j c -> r.(j) <- r.(j) +. c *. alpha) pr;
+        set_one r;
+        let nv = m **- r in
+        let nv2 = norm2 nv in
+        (* [nv2] should be equal (very near with rounding) to [fa], checking
+           in log *)
+        zih_log.log (fun k ->
+            k "cg step: %d, index: %d, beta: %a, alpha: %a, norm: %a = %a, %a"
+              step i print beta print alpha print fa print nv2
+	      print_int_list !candidates);
+        (nv, nv2)
+      in
+
+      (* second kind of steps *)
+      let linear_step step v =
+        (* we select indices with [r.(i) > 0] *)
+        let sel = ref [] in
+        let sel2 = ref [] in
+	let nb2 = ref 0 in
+	let not_cancelled i = step - cancels.(i) > dim in
+        for i = 0 to nb - 1 do
+          if r.(i) >. zero then
+	    begin
+  	      sel := i :: !sel;
+	      if not_cancelled i then (sel2 := i :: !sel2; incr nb2)
+            end
+        done;
+	let sel = if !nb2 > 1 then !sel2 else !sel in
+	let nsel = Array.of_list sel in
+	let ms = Array.map (fun i -> Array.append m.(i) [|one|]) nsel in
+        let vs = Array.append v [|zero|] in
+        (* computing vector s such that [m **- s] is nearest to v
+           and sum to zero. We will move [r] is direction [-s] *)
+        let s =
+          if Array.length nsel > dim then
+            let mm v = ms **- (ms *** v) in
+	    ms *** irm_cg mm vs
+          else
+            let mm v = ms *** (ms **- v) in
+            irm_cg mm (ms *** vs)
+        in
+        let alpha = ref (one) in
+        (* we update [r = r + alpha s], computing [alpha] maximum
+           to keep r positive. *)
+        let cancel = ref (-1) in
+        Array.iteri (fun i k ->
+            if !alpha *. s.(i) >. r.(k) then
+              begin
+                alpha := r.(k) /. s.(i);
+                cancel := k
+              end) nsel;
+        let alpha = !alpha in
+        let cancel = !cancel in
+        (* if cancel = -1, then alpha = 1 and if [Array.length sel >= dim],
+           then new v = m **- r will be nul, so we can stop *)
+        let r = Array.copy r in
+        Array.iteri (fun i k ->
+            if k = cancel then (r.(k) <- zero)
+            else r.(k) <- r.(k) -. alpha *. s.(i)) nsel;
+        set_one r;
+        let nv = m **- r in
+        let nv2 = norm2 nv in
+        zih_log.log (fun k -> k  "lin step: %d, alpha: %a, cancel: %d, sel: %a"
+                            step print alpha cancel print_int_array nsel);
+        (r, cancel, nv, nv2)
+      in
+
+      let rec fn step v v2 =
+(*        zih_log.log "step: %d\n\tr: %a\n\tm.v: %a" step
+           print_vector r print_vector (m *** v);*)
+        (* one linear step and one conjugate steps. *)
+        let (v,v2) =
+(*	  if step mod 2 = 0 then (v,v2) else*)
+	  let (nr, cancel, nv, nv2) = linear_step step v in
+          if (nv2 <. v2) then
+            begin
+              (* pr is set to zero for the cancelled index to force avoid
+                 this indice to be updated by the next conjugate step due to
+                 the previous descent direction. This appears to be better
+                 than resetting pr to zero completely. *)
+              if cancel <> -1 then (pr.(cancel) <- zero; cancels.(cancel) <- step);
+              Array.blit nr 0 r 0 nb;
+              (nv,nv2)
+            end
+          else
+            begin
+              (* linear steps are not always descent steps, so we do not
+                 stop if they are rejected *)
+              zih_log.log (fun k -> k  "reject linear step %a >= %a" print nv2 print v2);
+              (v,v2)
+            end
+        in
+        let (v,v2) =
+          let (nv,nv2) = conjugate_step step v v2 in
+          if (nv2 <. v2) then
+            (nv,nv2)
+          else
+            begin
+              (* conjugate steps are always descent step, so failure
+                to descent while [m.(i) *.* v] is not always > 0
+                means [v] ~ 0 up to numerical errors *)
+              zih_log.log (fun k -> k "no progress %a >= %a, stops" print nv2 print v2);
+              exit_zih step None;
+            end;
+        in
+        if v2 <. epsilon2 then
+          begin
+            zih_log.log (fun k -> k "too small %d, stops" step);
+            exit_zih step None;
+          end;
+        (* if too many steps, we stop assuming zero in hull.  *)
+        if step > 20 * dim * nb then
+          begin
+            zih_log.log (fun k -> k "too long %d, stops" step);
+            exit_zih ~abort:true step None;
+          end;
+        fn (step+1) v v2
+      in
+      (* initial call *)
+      let v = m **- r in
+      let v2 = norm2 v in
+      zih_log.log (fun k -> k "starts");
+      fn 0 v v2
+    with ExitZih b -> b
+   *)
   (** find a matrix M such tMA is positive for the convex hul of ms *)
   let mih zlim ms =
-    (*Array.iter normalise2 ms;*)
     let d1  = Array.length ms.(0) in
     let d2  = Array.length ms.(0).(0) in
     assert (d1 <= d2);
     try
-      let ns =
-        transpose (Array.init d1 (fun i ->
-             let vs = Array.map (fun m -> m.(i)) ms in
-             match zih zlim (Array.to_list vs) with
-             | None -> raise Exit
-             | Some v -> v))
-      in
-      (*      Format.eprintf "==> %a\n%!" print_matrix ns;*)
+      let ns = Array.make d1 [||] in
+(*      let rec pk j v =
+        if j = 0 then (normaliseq v; v)
+        else
+          let w = ns.(j-1) in
+          let x = -. (w *.* v) in
+          combq one v x w;
+          pk (j - 1) v
+      in*)
+      for i = 0 to d1 - 1 do
+        let vs = Array.map (fun m -> (*pk i*) (Array.copy m.(i))) ms in
+        match zih zlim (Array.to_list vs) with
+        | None -> raise Exit
+        | Some v -> normaliseq v; ns.(i) <- v
+      done;
+      let ns = transpose ns in
+      Format.eprintf "==> %a\n%!" print_matrix ns;
       Array.iter (fun m ->
-          if not (unsafe_positive zero (m **** ns)) then
+          Format.eprintf "check: %a\n%!" print_matrix m;
+          if not (unsafe_positive zlim (m **** ns)) then
             begin
               (*Format.eprintf "reject %a\n%!" print_matrix (ns **** m);*)
               raise Exit

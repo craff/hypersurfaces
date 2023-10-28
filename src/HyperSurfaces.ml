@@ -799,6 +799,8 @@ module Make(R:Field.SPlus) = struct
             end
         else
           begin
+            Format.eprintf "calling mih\n%!";
+            List.iter (Format.eprintf "  ===> %a\n%!" print_matrix) gds;
             let v =
               V.mih zlim (Array.of_list gds)
             in
@@ -811,7 +813,9 @@ module Make(R:Field.SPlus) = struct
             | Some v ->
                 begin
 	          face_log.log (fun k -> k "test zih: false");
-                InR (v, gds)
+                  Format.eprintf "storing mih\n%!";
+                  List.iter (Format.eprintf "  ===> %a\n%!" print_matrix) gds;
+                  InR (v, gds)
                 end
           end
       in
