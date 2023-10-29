@@ -691,69 +691,6 @@ module Make(R:S) = struct
       r.(j) <- r.(j) /. !s;
     done
 
-  (** Take a vector [v] and a matrix [m] such that [m.(i) *.* v > 0] and
-      maximise the min of [m.(i) *.* v] under the constraint [norm2 v = 1].
-   *)
-  let ameliorate v m =
-    ame_log.log (fun k -> k "start ameliorate");
-    assert (not (Array.exists (fun v -> norm2 v <=. zero) m));
-    let nb = Array.length m in
-    let dim = Array.length m.(0) in
-    if (nb <= 0) then v else
-    let v = normalise v in
-
-    let value v =
-      let best = ref inf in
-      Array.iter (fun w -> let s = v *.* w in if s <. !best then best := s) m;
-      !best
-    in
-
-    let direction v goal =
-      let values = Array.init nb (fun i -> (m.(i) *.* v, i)) in
-      let cmp (x,_) (y,_) = cmp x y in
-      Array.sort cmp values;
-      let size = ref 1 in
-      while !size < dim && !size < nb - 1 &&
-              fst values.(!size) <=. goal do incr size done;
-      let size = !size in
-      ame_log.log (fun k -> k "size: %d dim:%d nb:%d" size dim nb);
-      let mm = Array.init (size+1) (fun i ->
-                   if i = 0 then v else m.(snd values.(i - 1))) in
-      let mm' = transpose mm in
-      let b = Array.init (size+1) (fun i ->
-                  if i = 0 then zero else (goal -. fst values.(i-1))) in
-      ame_log.log (fun k -> k "solving with %a = %a" print_matrix mm print_vector b);
-      mm' *** (solve (mm **** mm') b)
-    in
-
-    let linear_search v d =
-      let fn l =
-        let w = normalise (comb one v l d) in
-        -. value w
-      in
-      let stop_cond = { default_stop_cond with max_steps = 15 } in
-      tricho ~safe:false ~stop_cond fn zero (of_int 10)
-    in
-
-    let rec loop v f step =
-      try
-        ame_log.log (fun k -> k "loop: %a %a" print f print step);
-        let goal = f +. step in
-        let d = direction v goal in
-        ame_log.log (fun k -> k  "d: %a (%a %b)"
-                            print_vector d print (norm2 d) (norm2 d <=. zero));
-        let l = linear_search v d in
-        ame_log.log (fun k -> k  "l: %a" print l);
-        let step' = step *. l in
-        let v' = normalise (comb one v l d) in
-        let f' = value v' in
-        if f' >. f then loop v' f' step' else v
-      with Not_found -> v
-    in
-
-    let f0 = value v in
-    loop v f0 f0
-
   (** structure to store statistics about zero in hull test *)
   type zih_steps = {
       mutable nb_call : int;
@@ -852,11 +789,7 @@ module Make(R:S) = struct
           begin
             zih_log.log (fun k -> k "false");
             let v = normalise v in
-            (*let v = ameliorate v m0 in*)
-            let e = if Array.exists (fun w -> v *.* w <. zlim) m0 then None
-                    else Some v
-            in
-            exit_zih step e
+            exit_zih step (Some v)
           end
         | Some(i,_) ->
         (* value of interest, see the article *)
