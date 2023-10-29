@@ -851,6 +851,7 @@ module Make(R:S) = struct
 	| None ->
           begin
             zih_log.log (fun k -> k "false");
+            let v = normalise v in
             (*let v = ameliorate v m0 in*)
             let e = if Array.exists (fun w -> v *.* w <. zlim) m0 then None
                     else Some v
