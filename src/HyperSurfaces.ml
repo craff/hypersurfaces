@@ -727,6 +727,7 @@ module Make(R:Field.SPlus) = struct
     let certs = Hashtbl.create 1024 in
 
     let zlim = small param.Args.zih_limit in
+    let zcoef = of_float param.Args.zih_coef in
 
     let slim = match param.Args.sing_limit with
       | None -> zero
@@ -763,7 +764,7 @@ module Make(R:Field.SPlus) = struct
           | [], [] ->
              begin
                let signs = Array.of_list (List.rev signs) in
-               match zih zlim points with
+               match zih zlim zcoef points with
                | None   -> face_log.log (fun k -> k "test zih: true"); InL points
                | Some v -> face_log.log (fun k -> k "test zih: false");
                            InR ((signs, v)::acc)

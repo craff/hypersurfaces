@@ -792,7 +792,7 @@ module Make(R:S) = struct
     raise (ExitZih r)
 
   (** main zero in hull test function, can provide an initial position *)
-  let zih ?r0 zlim m0 = try
+  let zih ?r0 zlim zcoef m0 = try
       if m0 = [] then exit_zih 0 None;
       (* normalise and transform the list m0 into a matrix *)
       let m0 = List.sort_uniq compare m0 in
@@ -808,7 +808,7 @@ module Make(R:S) = struct
         | Some r -> Array.copy r
         | None -> Array.make nb (one /. of_int nb)
       in
-      (* in what follows: [v = m **- r] and [v2 = norm2 r] and we are trying to
+      (* in what follows: [v = m **- r] and [v2 = norm2 v] and we are trying to
        have [v2 = 0] with [r]'s coef non negative and summing to one *)
       (* previous descent direction *)
       let pr = Array.make nb zero in
@@ -838,20 +838,20 @@ module Make(R:S) = struct
         for i = 0 to nb - 1 do
           let s = m.(i) *.* v in
           (*zih_log.log "  %a %a %a" print r.(i) print s print_vector m.(i);*)
-          if s <=. zero then
+          if s <=. v2 *. zcoef then
             begin
 	      candidates := i :: !candidates;
-	      let v = r.(i) *. s in
+	      let v = (v2 *. zcoef -. s ) *. r.(i) in
 	      match !candidate with
    	      | None -> candidate := Some(i,v)
-              | Some (_,v') -> if v' > v then candidate := Some(i,v)
+              | Some (_,v') -> if v' < v then candidate := Some(i,v)
             end
         done;
         match !candidate with
 	| None ->
           begin
             zih_log.log (fun k -> k "false");
-            let v = ameliorate v m0 in
+            (*let v = ameliorate v m0 in*)
             let e = if Array.exists (fun w -> v *.* w <. zlim) m0 then None
                     else Some v
             in
@@ -865,7 +865,7 @@ module Make(R:S) = struct
         let w = m.(i) in
         let pw = p *.* w in
         let vw = m.(i) *.* v in
-        assert (vw <=. zero || (printf "%d\n%!" i; false) );
+        (*assert (vw <=. zero || (printf "%d\n%!" i; false) );*)
         (* function computing [alpha] and [f]: the new [norm v2] from [beta] *)
         let find_alpha beta =
           let w2 = beta *. beta *. p2 +. of_int 2 *. beta *. pw +. one in
@@ -1022,9 +1022,9 @@ module Make(R:S) = struct
       fn 0 v v2
     with ExitZih b -> b
 
-  let pih ?r0 zlim x m =
+  let pih ?r0 zlim zcoef x m =
     let m = List.map (fun v -> v --- x) m in
-    zih ?r0 zlim m
+    zih ?r0 zlim zcoef m
 
   (** Quick test for zih*)
   module Test = struct
@@ -1034,7 +1034,7 @@ module Make(R:S) = struct
       ; Array.map of_int [|0;0;-1|]
       ]
 
-    let _ = assert (exact || (zih zero a <> None))
+    let _ = assert (exact || (zih zero (of_float 0.4) a <> None))
 
     let a =
       [ Array.map of_int [|1;0;0|]
@@ -1043,7 +1043,7 @@ module Make(R:S) = struct
       ; Array.map of_int [|-1;1;1|]
       ]
 
-    let _ = assert (exact || (zih zero a = None))
+    let _ = assert (exact || (zih zero (of_float 0.4) a = None))
   end
 
   let test_mih ms m =
@@ -1052,7 +1052,7 @@ module Make(R:S) = struct
     Array.for_all fn ms
 
   (** find a matrix M such tMA is positive for the convex hul of ms *)
-  let mih zlim ms =
+  let mih zlim zcoef ms =
     Array.iter normalise2 ms;
     let nb = Array.length ms in
     let d1  = Array.length ms.(0) in
@@ -1133,7 +1133,7 @@ module Make(R:S) = struct
         let vgs = Array.to_list (Array.map vec_of_mat gs) in
         (*Format.printf "\t%d active\n%!" (List.length vgs);*)
         let dir =
-          match zih zlim vgs with
+          match zih zlim zcoef vgs with
           | None -> raise Not_found
           | Some v -> mat_of_vec v
         in
@@ -1561,9 +1561,9 @@ module type V = sig
   val solve : m -> v -> v
   val solve_cg : m -> v -> v
 
-  val zih : ?r0:vector -> t -> vector list -> vector option
-  val pih : ?r0:vector -> t -> vector -> vector list -> vector option
-  val mih : t -> matrix array -> t * matrix
+  val zih : ?r0:vector -> t -> t -> vector list -> vector option
+  val pih : ?r0:vector -> t -> t -> vector -> vector list -> vector option
+  val mih : t -> t -> matrix array -> t * matrix
   val print_zih_stats : formatter -> unit
 
   type solver_stats
