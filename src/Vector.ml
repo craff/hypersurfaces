@@ -778,9 +778,9 @@ module Make(R:S) = struct
           (*zih_log.log "  %a %a %a" print r.(i) print s print_vector m.(i);*)
           if s <=. max zlim (v2 *. zcoef) then
             begin
-              if s <=. zlim then can_stop := false;
+              if s <=. zero then can_stop := false;
 	      candidates := i :: !candidates;
-	      let v = (s <. zlim, r.(i) >. zero, -. s) in
+	      let v = if s <=. zero then (true, -. s *. r.(i)) else (false, -. s) in
 	      match !candidate with
    	      | None -> candidate := Some(i,v)
               | Some (_,v') -> if v' < v then candidate := Some(i,v)
@@ -860,7 +860,7 @@ module Make(R:S) = struct
 	      if not_cancelled i then (sel2 := i :: !sel2; incr nb2)
             end
         done;
-        let sel = !sel (*if !nb2 > 1 then !sel2 else !sel*) in
+        let sel = if !nb2 > 1 then !sel2 else !sel in
 	let nsel = Array.of_list sel in
 	let ms = Array.map (fun i -> Array.append m.(i) [|one|]) nsel in
         let vs = Array.append v [|zero|] in
