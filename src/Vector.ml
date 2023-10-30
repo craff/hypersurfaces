@@ -838,9 +838,9 @@ module Make(R:S) = struct
         (* [nv2] should be equal (very near with rounding) to [fa], checking
            in log *)
         zih_log.log (fun k ->
-            k "cg step: %d, index: %d, beta: %a, alpha: %a, norm: %a = %a, %a"
+            k "cg step: %d, index: %d, beta: %a, alpha: %a, norm: %a = %a, %a (> %a)"
               step i print beta print alpha print fa print nv2
-	      print_int_list !candidates);
+	      print_int_list !candidates print zlim);
         (nv, nv2)
       in
 
@@ -936,7 +936,7 @@ module Make(R:S) = struct
               exit_zih step None;
             end;
         in
-        if v2 <. epsilon2 then
+        if v2 <. zlim then
           begin
             zih_log.log (fun k -> k "too small %d, stops" step);
             exit_zih step None;
