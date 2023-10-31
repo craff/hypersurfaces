@@ -721,23 +721,41 @@ module Make(R:S) = struct
       the statistics *)
   exception ExitZih of vector option
 
-  let exit_zih ?(abort=false) step r =
-    zih_log.log (fun k -> k "exit zih: %b" (r = None));
-    zih_steps.nb_call <- zih_steps.nb_call + 1;
-    if abort then zih_steps.nb_abort <- zih_steps.nb_abort + 1
-    else if zih_steps.max < step then zih_steps.max <- step;
-    zih_steps.sum <- zih_steps.sum + step;
-    raise (ExitZih r)
-
   (** main zero in hull test function, can provide an initial position *)
   let zih ?r0 zlim zcoef m0 = try
-      if m0 = [] then exit_zih 0 None;
       (* normalise and transform the list m0 into a matrix *)
       let m0 = List.sort_uniq compare m0 in
       let nb = List.length m0 in
       let m0 = Array.of_list m0 in
+      let can_stop = ref false in
+
+      let exit_zih ?(abort=false) step r =
+        let r = match r with
+          | Some v when !can_stop ->
+             let v = normalise v in
+             if Array.exists (fun r -> r *.* v < zlim) m0 then
+               begin
+                 zih_log.log (fun k -> k "exit zih: 0 in hull");
+                 None
+               end
+             else
+               begin
+                 zih_log.log (fun k -> k "exit zih: 0 not in hull ");
+                 Some v
+               end
+          | _ ->
+             zih_log.log (fun k -> k "exit zih: 0 in hull");
+             None
+        in
+        zih_steps.nb_call <- zih_steps.nb_call + 1;
+        if abort then zih_steps.nb_abort <- zih_steps.nb_abort + 1
+        else if zih_steps.max < step then zih_steps.max <- step;
+        zih_steps.sum <- zih_steps.sum + step;
+        raise (ExitZih r)
+      in
+
       (* if a vector is nul, we exit immediately *)
-      if Array.exists (fun v -> norm v <=. zlim) m0 then exit_zih 0 None;
+      if nb = 0 || Array.exists (fun v -> norm v <=. zlim) m0 then exit_zih 0 None;
       let m = Array.map normalise m0 in
       zih_log.log (fun k -> k "zih: %a" print_matrix m);
       let dim = Array.length m.(0) in
@@ -752,7 +770,6 @@ module Make(R:S) = struct
       let pr = Array.make nb zero in
       (* last step where index was canceled *)
       let cancels = Array.make nb (-nb) in
-      let can_stop = ref false in
       (* first kind of steps:
          we will update [r] with [r = set_one (r + alpha(delta_i + beta pr))]
          where
@@ -777,14 +794,13 @@ module Make(R:S) = struct
         for i = 0 to nb - 1 do
           let s = m.(i) *.* v in
           (*zih_log.log "  %a %a %a" print r.(i) print s print_vector m.(i);*)
-          if s <=. max zlim (v2 *. zcoef) then
+          if s <=. v2 *. zcoef then
             begin
               if s <=. zero then can_stop := false;
 	      candidates := i :: !candidates;
-	      let v = if s <=. zero then (-. s *. r.(i)) else (-. s) in
 	      match !candidate with
-   	      | None -> candidate := Some(i,v)
-              | Some (_,v') -> if v' <. v then candidate := Some(i,v)
+   	      | None -> candidate := Some(i,s)
+              | Some (_,s') -> if s' >. s then candidate := Some(i,s)
             end
 
         done;
@@ -792,7 +808,7 @@ module Make(R:S) = struct
 	| None ->
           begin
             zih_log.log (fun k -> k "false");
-            exit_zih step (Some (normalise v))
+            exit_zih step (Some v)
           end
         | Some(i,_) ->
         (* value of interest, see the article *)
@@ -858,10 +874,13 @@ module Make(R:S) = struct
           if r.(i) >. zero then
 	    begin
   	      sel := i :: !sel;
+              (* Idea: we try not to do linear step with cancelled
+                 index that were reintroduced: we probably need then,
+                 this gives a chance to cancel another one *)
 	      if not_cancelled i then (sel2 := i :: !sel2; incr nb2)
             end
         done;
-        let sel = if !nb2 > 1 then !sel2 else !sel in
+        let sel = if !nb2 >= dim then !sel2 else !sel in
 	let nsel = Array.of_list sel in
 	let ms = Array.map (fun i -> Array.append m.(i) [|one|]) nsel in
         let vs = Array.append v [|zero|] in
@@ -928,10 +947,10 @@ module Make(R:S) = struct
         in
         let (v,v2) =
           let (nv,nv2) = conjugate_step step v v2 in
-          if nv2 <. zlim then
+          if nv2 <. epsilon2 then
             begin
               zih_log.log (fun k -> k "too small %d, stops" step);
-              exit_zih step (if !can_stop then Some (normalise v) else None);
+              exit_zih step (Some v)
             end;
           if (nv2 <. v2) then
             (nv,nv2)
@@ -941,14 +960,14 @@ module Make(R:S) = struct
                 to descent while [m.(i) *.* v] is not always > 0
                 means [v] ~ 0 up to numerical errors *)
               zih_log.log (fun k -> k "no progress %a >= %a, stops" print nv2 print v2);
-              exit_zih step (if !can_stop then Some (normalise v) else None);
+              exit_zih step (Some v)
             end;
         in
         (* if too many steps, we stop assuming zero in hull.  *)
         if step > 20 * dim * nb then
           begin
             zih_log.log (fun k -> k "too long %d, stops" step);
-            exit_zih ~abort:true step (if !can_stop then Some (normalise v) else None);
+            exit_zih ~abort:true step (Some v)
           end;
         fn (step+1) v v2
       in
