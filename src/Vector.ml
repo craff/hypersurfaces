@@ -722,6 +722,7 @@ module Make(R:S) = struct
   exception ExitZih of vector option
 
   let exit_zih ?(abort=false) step r =
+    zih_log.log (fun k -> k "exit zih: %b" (r = None));
     zih_steps.nb_call <- zih_steps.nb_call + 1;
     if abort then zih_steps.nb_abort <- zih_steps.nb_abort + 1
     else if zih_steps.max < step then zih_steps.max <- step;
@@ -780,10 +781,10 @@ module Make(R:S) = struct
             begin
               if s <=. zero then can_stop := false;
 	      candidates := i :: !candidates;
-	      let v = if s <=. zero then (true, -. s *. r.(i)) else (false, -. s) in
+	      let v = if s <=. zero then (-. s *. r.(i)) else (-. s) in
 	      match !candidate with
    	      | None -> candidate := Some(i,v)
-              | Some (_,v') -> if v' < v then candidate := Some(i,v)
+              | Some (_,v') -> if v' <. v then candidate := Some(i,v)
             end
 
         done;
@@ -930,7 +931,7 @@ module Make(R:S) = struct
           if nv2 <. zlim then
             begin
               zih_log.log (fun k -> k "too small %d, stops" step);
-              exit_zih step None;
+              exit_zih step (if !can_stop then Some (normalise v) else None);
             end;
           if (nv2 <. v2) then
             (nv,nv2)
@@ -947,7 +948,7 @@ module Make(R:S) = struct
         if step > 20 * dim * nb then
           begin
             zih_log.log (fun k -> k "too long %d, stops" step);
-            exit_zih step (if !can_stop then Some (normalise v) else None);
+            exit_zih ~abort:true step (if !can_stop then Some (normalise v) else None);
           end;
         fn (step+1) v v2
       in
