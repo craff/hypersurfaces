@@ -857,9 +857,9 @@ module Make(R:S) = struct
         (* [nv2] should be equal (very near with rounding) to [fa], checking
            in log *)
         zih_log.log (fun k ->
-            k "cg step: %d, index: %d, beta: %a, alpha: %a, norm: %a = %a, %a (> %a)"
+            k "cg step: %d, index: %d, beta: %a, alpha: %a, norm: %a = %a, cadidates: %a, can_stop: %b"
               step i print beta print alpha print fa print nv2
-	      print_int_list !candidates print zlim);
+	      print_int_list !candidates !can_stop);
         (nv, nv2)
       in
 
@@ -880,12 +880,12 @@ module Make(R:S) = struct
 	      if not_cancelled i then (sel2 := i :: !sel2; incr nb2)
             end
         done;
-        let sel = if !nb2 >= dim then !sel2 else !sel in
+        let sel = if !nb2 >= dim - 1 then !sel2 else !sel in
 	let nsel = Array.of_list sel in
 	let ms = Array.map (fun i -> Array.append m.(i) [|one|]) nsel in
         let vs = Array.append v [|zero|] in
         (* computing vector s such that [m **- s] is nearest to v
-           and sum to zero. We will move [r] is direction [-s] *)
+           and sum to near zero. We will move [r] in direction [-s] *)
         let s =
           if Array.length nsel > dim then
             let mm v = ms **- (ms *** v) in
@@ -894,7 +894,11 @@ module Make(R:S) = struct
             let mm v = ms *** (ms **- v) in
             irm_cg mm (ms *** vs)
         in
-        let alpha = ref (one) in
+        (* compute optimal step, assuming sums of the coef is small
+           in fron of [v *.* s] *)
+        let x = zero_v (Array.length v) in
+        Array.iteri (fun i k -> combqo x s.(i) m.(k)) nsel;
+        let alpha = ref ((x *.* v) /. norm2 x) in
         (* we update [r = r + alpha s], computing [alpha] maximum
            to keep r positive. *)
         let cancel = ref (-1) in
