@@ -1164,9 +1164,9 @@ module Make(R:Field.SPlus) = struct
 
     while not (Array.for_all SimpSet.is_empty to_do) do
       let codim =
-        let res = ref 0 in
+        let res = ref (dim - 1) in
         try
-          for i = 0 to dim-1 do
+          for i = dim-1 downto 0 do
             res := i; if not (SimpSet.is_empty to_do.(i)) then raise Exit
           done;
           assert false;
