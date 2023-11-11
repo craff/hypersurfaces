@@ -17,7 +17,6 @@ type parameters =
   ; dprec : float
   ; crit : int
   ; crit_limit : float
-  ; crit_quality : float
   ; pos_limit : float
   ; zero_limit : float option
   ; zih_limit : float (** if we get a vector vector < zlim, we consider
@@ -37,7 +36,6 @@ let default_parameters = ref
   ; dprec = 0.80
   ; crit  = 3
   ; crit_limit = 0.90
-  ; crit_quality = 1e-7
   ; pos_limit = 1.25
   ; zero_limit = None
   ; check = false
@@ -90,9 +88,6 @@ let spec =
   ; ( "--limit-critical"
     , Arg.Float (fun x -> p := { !p with crit_limit = x})
     , "value to consider points to be critical")
-  ; ( "--quality-critical"
-    , Arg.Float (fun x -> p := { !p with crit_quality = x})
-    , "value to consider critical points to be degenerated")
   ; ( "--limit-zero"
     , Arg.Float (fun x -> p := { !p with
                                  zero_limit = if x <= 0. then None else Some x})

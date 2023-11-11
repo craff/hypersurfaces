@@ -238,7 +238,6 @@ module Parse(R:Field.SPlus) = struct
     ; "delauney" "prec" "=" (p::FLOAT) => (fun opt -> Args.{ opt with dprec = p })
     ; "nb" "critical" "=" (p::INT) => (fun opt -> Args.{ opt with crit = p })
     ; "limit" "critical" "=" (p::FLOAT) => (fun opt -> Args.{ opt with crit_limit = p })
-    ; "quality" "critical" "=" (p::FLOAT) => (fun opt -> Args.{ opt with crit_quality = p })
     ; "limit" "positive" "=" (p::FLOAT) => (fun opt -> Args.{ opt with pos_limit = p })
     ; "limit" "zero" "=" (p::FLOAT) => (fun opt -> Args.{ opt with zero_limit = if p <= 0. then None else Some p })
     ; "limit" "zih" "=" (p::FLOAT) => (fun opt -> Args.{ opt with zih_limit = p })
