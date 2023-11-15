@@ -759,11 +759,12 @@ module Make(R:S) = struct
       let m = Array.map normalise m0 in
       zih_log.log (fun k -> k "zih: %a" print_matrix m);
       let dim = Array.length m.(0) in
-      (* initial position *)
+      (* initial position: around random dim point actif to start *)
       let r = match r0 with
         | Some r -> Array.copy r
-        | None -> Array.make nb (one /. of_int nb)
+        | None -> Array.init nb (fun i -> if i mod (nb / dim) = 0 then one else zero )
       in
+      set_one r;
       (* in what follows: [v = m **- r] and [v2 = norm2 v] and we are trying to
        have [v2 = 0] with [r]'s coef non negative and summing to one *)
       (* previous descent direction *)
@@ -857,7 +858,7 @@ module Make(R:S) = struct
         (* [nv2] should be equal (very near with rounding) to [fa], checking
            in log *)
         zih_log.log (fun k ->
-            k "cg step: %d, index: %d, beta: %a, alpha: %a, norm: %a = %a, cadidates: %a, can_stop: %b"
+            k "cg step: %d, index: %d, beta: %a, alpha: %a, norm: %a = %a, candidates: %a, can_stop: %b"
               step i print beta print alpha print fa print nv2
 	      print_int_list !candidates !can_stop);
         (nv, nv2)
