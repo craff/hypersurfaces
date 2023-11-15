@@ -100,7 +100,7 @@ let spec =
     , "value to consider gradient tu be zero in the zero in hull test")
   ; ( "--coef-zih"
     , Arg.Float (fun x -> p := { !p with zih_coef = x})
-    , "value in [0,0.5] to stop ameliorating certificate when zero not in hull")
+    , "value in [0,1.0[ to stop ameliorating certificate when zero not in hull")
   ; ( "--sing-limit"
     , Arg.Float (fun x -> p := if x <= 0. then
                                  { !p with sing_limit = None }
