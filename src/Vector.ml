@@ -825,31 +825,28 @@ module Make(R:S) = struct
           let w2 = beta *. beta *. p2 +. of_int 2 *. beta *. pw +. one in
           let vw = beta *. pv +. vw in
           let sigma = beta *. sigma +. one in
-          let alpha = (v2 *. sigma -. vw) /. (w2 -. vw *. sigma) in
-          let f =
-            let d = one +. alpha *. sigma in
-            (v2 +. of_int 2 *. alpha *. vw +. alpha *. alpha *. w2) /. (d*.d)
-          in
-          (alpha, f)
+          (v2 *. sigma -. vw) /. (w2 -. vw *. sigma)
         in
-        let beta =
-          if pv >. zero then
-            begin
-              (* beta0 : a maximum ? *)
-              (*let beta0 = (vw -. v2) /. (sigma *. v2 -. pv) in*)
-              let beta1 = (pw *. (vw -. v2) +.
+        let beta,alpha =
+          try
+            if p2 <=. zero then raise Exit;
+            (* beta0 : a maximum ? *)
+            (* let beta0 = (vw -. v2) /. (sigma *. v2 -. pv) in *)
+            let beta = (pw *. (vw -. v2) +.
                              sigma *. (v2 -. vw *. vw) +.
                              pv *. (vw -. one))
                           /. (p2 *. (v2 -. vw) +.
                                 pw *. (pv -. sigma *. v2) +.
                                 pv *. (sigma *. vw -. pv)) in
-              let beta_max = -. vw /. pv in (* ensures alpha >= 0 *)
-              if beta1 >. zero && beta1 <=. beta_max then beta1 else zero
-            end
-          else zero
+            if beta <. zero then raise Exit;
+            let alpha = find_alpha beta in
+            if alpha <. zero then raise Exit;
+            (beta,alpha)
+          with Exit ->
+            let alpha = find_alpha zero in
+            (zero,alpha)
         in
         (* final alpha from best beta *)
-        let (alpha, fa) = find_alpha beta in
         (* updating [r], [pr], and computing new [v] and new [v2] ([nv] and
            [nv2]) *)
         for j = 0 to nb - 1 do
@@ -863,8 +860,8 @@ module Make(R:S) = struct
         (* [nv2] should be equal (very near with rounding) to [fa], checking
            in log *)
         zih_log.log (fun k ->
-            k "cg step: %d, index: %d, beta: %a, alpha: %a, norm: %a = %a, candidates: %a, can_stop: %b"
-              step i print beta print alpha print fa print nv2
+            k "cg step: %d, index: %d, beta: %a, alpha: %a, norm: %a, candidates: %a, can_stop: %b"
+              step i print beta print alpha print nv2
 	      print_int_list !candidates !can_stop);
         (nv, nv2)
       in
