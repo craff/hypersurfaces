@@ -832,16 +832,21 @@ module Make(R:S) = struct
           in
           (alpha, f)
         in
-        (* computation of best beta by trichotomie *)
-        let f beta = snd (find_alpha beta) in
         let beta =
           if pv >. zero then
             begin
-              let beta1 = -. vw /. pv in
-              tricho ~stop_cond f zero beta1
+              (* beta0 : a maximum ? *)
+              (*let beta0 = (vw -. v2) /. (sigma *. v2 -. pv) in*)
+              let beta1 = (pw *. (vw -. v2) +.
+                             sigma *. (v2 -. vw *. vw) +.
+                             pv *. (vw -. one))
+                          /. (p2 *. (v2 -. vw) +.
+                                pw *. (pv -. sigma *. v2) +.
+                                pv *. (sigma *. vw -. pv)) in
+              let beta_max = -. vw /. pv in (* ensures alpha >= 0 *)
+              if beta1 >. zero && beta1 <=. beta_max then beta1 else zero
             end
-          else
-            zero
+          else zero
         in
         (* final alpha from best beta *)
         let (alpha, fa) = find_alpha beta in
@@ -930,7 +935,6 @@ module Make(R:S) = struct
            print_vector r print_vector (m *** v);*)
         (* one linear step and one conjugate steps. *)
         let (v,v2) =
-(*	  if step mod 2 = 0 then (v,v2) else*)
 	  let (nr, cancel, nv, nv2) = linear_step step v in
           if (nv2 <. v2) then
             begin
