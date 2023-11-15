@@ -737,69 +737,6 @@ module Make(R:S) = struct
       r.(j) <- r.(j) /. !s;
     done
 
-  (** Take a vector [v] and a matrix [m] such that [m.(i) *.* v > 0] and
-      maximise the min of [m.(i) *.* v] under the constraint [norm2 v = 1].
-   *)
-  let ameliorate v m =
-    ame_log.log (fun k -> k "start ameliorate");
-    assert (not (Array.exists (fun v -> norm2 v <=. zero) m));
-    let nb = Array.length m in
-    let dim = Array.length m.(0) in
-    if (nb <= 0) then v else
-    let v = normalise v in
-
-    let value v =
-      let best = ref inf in
-      Array.iter (fun w -> let s = v *.* w in if s <. !best then best := s) m;
-      !best
-    in
-
-    let direction v goal =
-      let values = Array.init nb (fun i -> (m.(i) *.* v, i)) in
-      let cmp (x,_) (y,_) = cmp x y in
-      Array.sort cmp values;
-      let size = ref 1 in
-      while !size < dim && !size < nb - 1 &&
-              fst values.(!size) <=. goal do incr size done;
-      let size = !size in
-      ame_log.log (fun k -> k "size: %d dim:%d nb:%d" size dim nb);
-      let mm = Array.init (size+1) (fun i ->
-                   if i = 0 then v else m.(snd values.(i - 1))) in
-      let mm' = transpose mm in
-      let b = Array.init (size+1) (fun i ->
-                  if i = 0 then zero else (goal -. fst values.(i-1))) in
-      ame_log.log (fun k -> k "solving with %a = %a" print_matrix mm print_vector b);
-      mm' *** (solve (mm **** mm') b)
-    in
-
-    let linear_search v d =
-      let fn l =
-        let w = normalise (comb one v l d) in
-        -. value w
-      in
-      let stop_cond = { default_stop_cond with max_steps = 15 } in
-      tricho ~safe:false ~stop_cond fn zero (of_int 10)
-    in
-
-    let rec loop v f step =
-      try
-        ame_log.log (fun k -> k "loop: %a %a" print f print step);
-        let goal = f +. step in
-        let d = direction v goal in
-        ame_log.log (fun k -> k  "d: %a (%a %b)"
-                            print_vector d print (norm2 d) (norm2 d <=. zero));
-        let l = linear_search v d in
-        ame_log.log (fun k -> k  "l: %a" print l);
-        let step' = step *. l in
-        let v' = normalise (comb one v l d) in
-        let f' = value v' in
-        if f' >. f then loop v' f' step' else v
-      with Not_found -> v
-    in
-
-    let f0 = value v in
-    loop v f0 f0
-
   (** structure to store statistics about zero in hull test *)
   type zih_steps = {
       mutable nb_call : int;
@@ -830,37 +767,56 @@ module Make(R:S) = struct
       the statistics *)
   exception ExitZih of vector option
 
-  let exit_zih ?(abort=false) step r =
-    zih_steps.nb_call <- zih_steps.nb_call + 1;
-    if abort then zih_steps.nb_abort <- zih_steps.nb_abort + 1
-    else if zih_steps.max < step then zih_steps.max <- step;
-    zih_steps.sum <- zih_steps.sum + step;
-    raise (ExitZih r)
-
   (** main zero in hull test function, can provide an initial position *)
-  let zih ?r0 zlim m0 = try
-      if m0 = [] then exit_zih 0 None;
+  let zih ?r0 zlim zcoef m0 = try
       (* normalise and transform the list m0 into a matrix *)
       let m0 = List.sort_uniq compare m0 in
       let nb = List.length m0 in
       let m0 = Array.of_list m0 in
+      let can_stop = ref false in
+
+      let exit_zih ?(abort=false) step r =
+        let r = match r with
+          | Some v when !can_stop ->
+             let v = normalise v in
+             if Array.exists (fun r -> r *.* v < zlim) m0 then
+               begin
+                 zih_log.log (fun k -> k "exit zih: 0 in hull");
+                 None
+               end
+             else
+               begin
+                 zih_log.log (fun k -> k "exit zih: 0 not in hull ");
+                 Some v
+               end
+          | _ ->
+             zih_log.log (fun k -> k "exit zih: 0 in hull");
+             None
+        in
+        zih_steps.nb_call <- zih_steps.nb_call + 1;
+        if abort then zih_steps.nb_abort <- zih_steps.nb_abort + 1
+        else if zih_steps.max < step then zih_steps.max <- step;
+        zih_steps.sum <- zih_steps.sum + step;
+        raise (ExitZih r)
+      in
+
       (* if a vector is nul, we exit immediately *)
-      if Array.exists (fun v -> norm v <=. zlim) m0 then exit_zih 0 None;
+      if nb = 0 || Array.exists (fun v -> norm v <=. zlim) m0 then exit_zih 0 None;
       let m = Array.map normalise m0 in
       zih_log.log (fun k -> k "zih: %a" print_matrix m);
       let dim = Array.length m.(0) in
-      (* initial position *)
+      (* initial position: around random dim point actif to start *)
       let r = match r0 with
         | Some r -> Array.copy r
-        | None -> Array.make nb (one /. of_int nb)
+        | None -> Array.init nb (fun i -> if i mod (nb / dim) = 0 then one else zero )
       in
-      (* in what follows: [v = m **- r] and [v2 = norm2 r] and we are trying to
+      set_one r;
+      (* in what follows: [v = m **- r] and [v2 = norm2 v] and we are trying to
        have [v2 = 0] with [r]'s coef non negative and summing to one *)
       (* previous descent direction *)
       let pr = Array.make nb zero in
       (* last step where index was canceled *)
       let cancels = Array.make nb (-nb) in
-
       (* first kind of steps:
          we will update [r] with [r = set_one (r + alpha(delta_i + beta pr))]
          where
@@ -881,27 +837,25 @@ module Make(R:S) = struct
           sigma := !sigma +. pr.(j)
         done;
         let sigma = !sigma in
+        can_stop := true;
         for i = 0 to nb - 1 do
           let s = m.(i) *.* v in
           (*zih_log.log "  %a %a %a" print r.(i) print s print_vector m.(i);*)
-          if s <=. zero then
+          if s <=. v2 *. zcoef then
             begin
+              if s <=. zero then can_stop := false;
 	      candidates := i :: !candidates;
-	      let v = r.(i) *. s in
 	      match !candidate with
-   	      | None -> candidate := Some(i,v)
-              | Some (_,v') -> if v' > v then candidate := Some(i,v)
+   	      | None -> candidate := Some(i,s)
+              | Some (_,s') -> if s' >. s then candidate := Some(i,s)
             end
+
         done;
         match !candidate with
 	| None ->
           begin
             zih_log.log (fun k -> k "false");
-            let v = ameliorate v m0 in
-            let e = if Array.exists (fun w -> v *.* w <. zlim) m0 then None
-                    else Some v
-            in
-            exit_zih step e
+            exit_zih step (Some v)
           end
         | Some(i,_) ->
         (* value of interest, see the article *)
@@ -911,7 +865,7 @@ module Make(R:S) = struct
         let w = m.(i) in
         let pw = p *.* w in
         let vw = m.(i) *.* v in
-        assert (vw <=. zero || (printf "%d\n%!" i; false) );
+        (*assert (vw <=. zero || (printf "%d\n%!" i; false) );*)
         (* function computing [alpha] and [f]: the new [norm v2] from [beta] *)
         let find_alpha beta =
           let w2 = beta *. beta *. p2 +. of_int 2 *. beta *. pw +. one in
@@ -950,9 +904,9 @@ module Make(R:S) = struct
         (* [nv2] should be equal (very near with rounding) to [fa], checking
            in log *)
         zih_log.log (fun k ->
-            k "cg step: %d, index: %d, beta: %a, alpha: %a, norm: %a = %a, %a"
+            k "cg step: %d, index: %d, beta: %a, alpha: %a, norm: %a = %a, candidates: %a, can_stop: %b"
               step i print beta print alpha print fa print nv2
-	      print_int_list !candidates);
+	      print_int_list !candidates !can_stop);
         (nv, nv2)
       in
 
@@ -967,15 +921,18 @@ module Make(R:S) = struct
           if r.(i) >. zero then
 	    begin
   	      sel := i :: !sel;
+              (* Idea: we try not to do linear step with cancelled
+                 index that were reintroduced: we probably need then,
+                 this gives a chance to cancel another one *)
 	      if not_cancelled i then (sel2 := i :: !sel2; incr nb2)
             end
         done;
-	let sel = if !nb2 > 1 then !sel2 else !sel in
+        let sel = if !nb2 >= dim - 1 then !sel2 else !sel in
 	let nsel = Array.of_list sel in
 	let ms = Array.map (fun i -> Array.append m.(i) [|one|]) nsel in
         let vs = Array.append v [|zero|] in
         (* computing vector s such that [m **- s] is nearest to v
-           and sum to zero. We will move [r] is direction [-s] *)
+           and sum to near zero. We will move [r] in direction [-s] *)
         let s =
           if Array.length nsel > dim then
             let mm v = ms **- (ms *** v) in
@@ -984,7 +941,11 @@ module Make(R:S) = struct
             let mm v = ms *** (ms **- v) in
             irm_cg mm (ms *** vs)
         in
-        let alpha = ref (one) in
+        (* compute optimal step, assuming sums of the coef is small
+           in fron of [v *.* s] *)
+        let x = zero_v (Array.length v) in
+        Array.iteri (fun i k -> combqo x s.(i) m.(k)) nsel;
+        let alpha = ref ((x *.* v) /. norm2 x) in
         (* we update [r = r + alpha s], computing [alpha] maximum
            to keep r positive. *)
         let cancel = ref (-1) in
@@ -1037,6 +998,11 @@ module Make(R:S) = struct
         in
         let (v,v2) =
           let (nv,nv2) = conjugate_step step v v2 in
+          if nv2 <. epsilon2 then
+            begin
+              zih_log.log (fun k -> k "too small %d, stops" step);
+              exit_zih step (Some v)
+            end;
           if (nv2 <. v2) then
             (nv,nv2)
           else
@@ -1045,19 +1011,14 @@ module Make(R:S) = struct
                 to descent while [m.(i) *.* v] is not always > 0
                 means [v] ~ 0 up to numerical errors *)
               zih_log.log (fun k -> k "no progress %a >= %a, stops" print nv2 print v2);
-              exit_zih step None;
+              exit_zih step (Some v)
             end;
         in
-        if v2 <. epsilon2 then
-          begin
-            zih_log.log (fun k -> k "too small %d, stops" step);
-            exit_zih step None;
-          end;
         (* if too many steps, we stop assuming zero in hull.  *)
         if step > 20 * dim * nb then
           begin
             zih_log.log (fun k -> k "too long %d, stops" step);
-            exit_zih ~abort:true step None;
+            exit_zih ~abort:true step (Some v)
           end;
         fn (step+1) v v2
       in
@@ -1068,9 +1029,9 @@ module Make(R:S) = struct
       fn 0 v v2
     with ExitZih b -> b
 
-  let pih ?r0 zlim x m =
+  let pih ?r0 zlim zcoef x m =
     let m = List.map (fun v -> v --- x) m in
-    zih ?r0 zlim m
+    zih ?r0 zlim zcoef m
 
   (** Quick test for zih*)
   module Test = struct
@@ -1080,7 +1041,7 @@ module Make(R:S) = struct
       ; Array.map of_int [|0;0;-1|]
       ]
 
-    let _ = assert (exact || (zih zero a <> None))
+    let _ = assert (exact || (zih zero (of_float 0.4) a <> None))
 
     let a =
       [ Array.map of_int [|1;0;0|]
@@ -1089,7 +1050,7 @@ module Make(R:S) = struct
       ; Array.map of_int [|-1;1;1|]
       ]
 
-    let _ = assert (exact || (zih zero a = None))
+    let _ = assert (exact || (zih zero (of_float 0.4) a = None))
   end
 
   let test_mih ms m =
@@ -1330,7 +1291,9 @@ module Make(R:S) = struct
     with ExitZih b -> b
    *)
   (** find a matrix M such tMA is positive for the convex hul of ms *)
-  let mih zlim ms =
+  let mih zlim zcoef ms =
+    Array.iter normalise2 ms;
+    let nb = Array.length ms in
     let d1  = Array.length ms.(0) in
     let d2  = Array.length ms.(0).(0) in
     assert (d1 <= d2);
@@ -1446,7 +1409,7 @@ module Make(R:S) = struct
         let vgs = Array.to_list (Array.map vec_of_mat gs) in
         (*Format.printf "\t%d active\n%!" (List.length vgs);*)
         let dir =
-          match zih zlim vgs with
+          match zih zlim zcoef vgs with
           | None -> raise Not_found
           | Some v -> mat_of_vec v
         in
@@ -1880,9 +1843,9 @@ module type V = sig
   val solve : m -> v -> v
   val solve_cg : m -> v -> v
 
-  val zih : ?r0:vector -> t -> vector list -> vector option
-  val pih : ?r0:vector -> t -> vector -> vector list -> vector option
-  val mih : t -> matrix array -> matrix option
+  val zih : ?r0:vector -> t -> t -> vector list -> vector option
+  val pih : ?r0:vector -> t -> t -> vector -> vector list -> vector option
+  val mih : t -> t -> matrix array -> t * matrix
   val print_zih_stats : formatter -> unit
 
   type solver_stats

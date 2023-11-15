@@ -17,10 +17,12 @@ type parameters =
   ; dprec : float
   ; crit : int
   ; crit_limit : float
-  ; crit_quality : float
   ; pos_limit : float
   ; zero_limit : float option
-  ; zih_limit : float
+  ; zih_limit : float (** if we get a vector vector < zlim, we consider
+                          zero to be in the convex hull *)
+  ; zih_coef : float (** between 0 and 0.5: 0 we do not ameliorate vector
+                         0.5 maximum possible to be decreasing, but may be slow *)
   ; sing_limit : float option
   ; topo : Topology.topo_ask
   ; expected : Topology.topology option
@@ -34,12 +36,12 @@ let default_parameters = ref
   ; dprec = 0.80
   ; crit  = 3
   ; crit_limit = 0.90
-  ; crit_quality = 1e-7
   ; pos_limit = 1.25
   ; zero_limit = None
   ; check = false
   ; certif = true
   ; zih_limit = 1.00
+  ; zih_coef = 1. /. 2. (* should converge up to one *)
   ; sing_limit = None
   ; topo = Topology.Ask_Nbc
   ; expected = None
@@ -86,9 +88,6 @@ let spec =
   ; ( "--limit-critical"
     , Arg.Float (fun x -> p := { !p with crit_limit = x})
     , "value to consider points to be critical")
-  ; ( "--quality-critical"
-    , Arg.Float (fun x -> p := { !p with crit_quality = x})
-    , "value to consider critical points to be degenerated")
   ; ( "--limit-zero"
     , Arg.Float (fun x -> p := { !p with
                                  zero_limit = if x <= 0. then None else Some x})
@@ -99,6 +98,9 @@ let spec =
   ; ( "--limit-zih"
     , Arg.Float (fun x -> p := { !p with zih_limit = x})
     , "value to consider gradient tu be zero in the zero in hull test")
+  ; ( "--coef-zih"
+    , Arg.Float (fun x -> p := { !p with zih_coef = x})
+    , "value in [0,1.0[ to stop ameliorating certificate when zero not in hull")
   ; ( "--sing-limit"
     , Arg.Float (fun x -> p := if x <= 0. then
                                  { !p with sing_limit = None }
