@@ -76,13 +76,13 @@ let%parser rec topo_mul =
 
 let%parser rec topo_list =
     (t::topo_mul)                    => [t]
-  ; (l::topo_list) "," (t::topo_mul) => t::l
+  ; (l::topo_list) "," (t::topo_mul) => t::l (* NOTE: reversed! *)
 
 let%parser parse =
   ()         => None
   ; (n::INT) => if n = 0 then Some[] else Some[(Any,n)]
   ; '(' ')'  => Some[]
-  ; '(' (l:: topo_list) ')' => Some (List.sort compare2 l)
+  ; '(' (l:: topo_list) ')' => Some (List.sort compare2 (List.rev l))
 
 let blank = Pacomb.Regexp.blank_regexp "[ \t]*"
 

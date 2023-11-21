@@ -711,11 +711,18 @@ module Make(R:S) = struct
 
   (** print the statistics and reset *)
   let print_zih_stats ff =
+    let nb = zih_steps.nb_call in
+    let max = zih_steps.max in
+    let avg = Stdlib.(float zih_steps.sum /. float zih_steps.nb_call) in
     fprintf ff "zih: [nb: %d, avg: %g, max: %d, abort: %d]"
-      zih_steps.nb_call
-      Stdlib.(float zih_steps.sum /. float zih_steps.nb_call)
-      zih_steps.max zih_steps.nb_abort;
-    reset_zih ()
+      nb avg max zih_steps.nb_abort
+
+  let get_zih_stats () =
+    let nb = zih_steps.nb_call in
+    let max = zih_steps.max in
+    let avg = Stdlib.(float zih_steps.sum /. float zih_steps.nb_call) in
+    reset_zih ();
+    (nb, avg, max)
 
   (** exception and function to exit the procedure. the function updates
       the statistics *)
@@ -762,7 +769,7 @@ module Make(R:S) = struct
       (* initial position: around random dim point actif to start *)
       let r = match r0 with
         | Some r -> Array.copy r
-        | None -> Array.init nb (fun i -> if i mod (nb / dim) = 0 then one else zero )
+        | None -> Array.init nb (fun i -> if nb <= dim || i mod (nb / dim) = 0 then one else zero )
       in
       set_one r;
       (* in what follows: [v = m **- r] and [v2 = norm2 v] and we are trying to
@@ -1189,6 +1196,15 @@ module Make(R:S) = struct
       name normal stat.nb_bad stat.nb_abort stat.nb_calls
       avg avg_normal stat.max_reached_steps
 
+  let get_solver_stats stat =
+    let nb = stat.nb_calls in
+    let avg =
+      if stat.nb_calls > 0 then
+        Stdlib.(float stat.sum_steps /. float nb)
+      else 0.0
+    in
+    (nb, avg, stat.max_reached_steps)
+
   let reset_solver_stats stat =
     stat.max_reached_steps <- 0;
     stat.sum_steps <- 0;
@@ -1527,11 +1543,13 @@ module type V = sig
   val pih : ?r0:vector -> t -> t -> vector -> vector list -> vector option
   val mih : t -> t -> matrix array -> t * matrix
   val print_zih_stats : formatter -> unit
+  val get_zih_stats : unit -> (int * float * int)
 
   type solver_stats
 
   val init_solver_stats : unit -> solver_stats
   val print_solver_stats : ?name:string -> formatter -> solver_stats -> unit
+  val get_solver_stats : solver_stats -> (int * float * int)
   val reset_solver_stats : solver_stats -> unit
 
   module type Fun = sig

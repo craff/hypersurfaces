@@ -49,9 +49,9 @@ module Parse(R:Field.SPlus) = struct
        printf "%s = %a\n%!" name (B.print_polynome ~times ~q ~vars) (to_bernstein p.dim vars0 p.poly);
        opts
     | Let_rand(name,vars0,deg) ->
-       let deg = eval_cst deg in
+       let deg = R.to_int (eval_cst deg) in
        let dim = List.length vars0 in
-       let p = B.random false (R.to_int deg) dim in
+       let p = B.random false deg dim in
        let pb = of_bernstein vars0 p in
        let p = P.mk true name vars0 pb in
        let vars = Array.of_list vars0 in
@@ -64,7 +64,7 @@ module Parse(R:Field.SPlus) = struct
        let opts = fn_opts opts in
        let dim = List.length vars in
        let ps = B.homogeneise_many (List.map (to_bernstein dim vars) pols) in
-       let (ts, ps, es, dim, ctrs, safe,sings,time) =
+       let (ts, ps, es, dim, ctrs, safe,sings,run_results,timings) =
          H.triangulation opts ps
        in
        let topo_ask =
@@ -100,10 +100,10 @@ module Parse(R:Field.SPlus) = struct
            let nbc = List.length topo in
            let rec pr_poly () (vars, p) = P.to_str pid vars p
            and pid (p:P.poly_rec) =
-             let pid = Db.insert_polynomial pr_poly (p.vars, p.poly) p.deg (p.dim-1) p.rand in
+             let pid = Db.insert_polynomial pr_poly (p.vars, p.poly) p.deg p.dim p.rand in
              sprintf "P%Ld" pid
            in
-           Db.insert_variety pr_poly pds (dim-1) nbc topo time opts;
+           Db.insert_variety pr_poly pds (dim-1) nbc topo run_results timings opts;
            printf "variety inserted in database\n%!";
          end;
        let os =

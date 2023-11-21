@@ -655,10 +655,10 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
         begin
           List.iter (fun (l,c) -> printf "(%a,%a) " print_int_array l print c) p;
           printf "\n%a\n%!" (fun p -> print_polynome p) p;
-        end;
-      r
+          assert false
+        end
     in
-    Array.of_list (filter_map (fun (l,c) -> assert (count l); c) p)
+    Array.of_list (filter_map (fun (l,c) -> count l; c) p)
 
   let transform p s1 s2 =
     let dim = Array.length s1 in
