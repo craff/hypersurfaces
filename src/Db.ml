@@ -205,10 +205,10 @@ let insert_variety to_str ps dim nbc topo run_results timings opts =
          let better_topo = Topology.better topo topo' in
          if better_topo then
            begin
-             let topo = Topology.(to_string (if better_topo then topo else topo')) in
+             let topo = Topology.(to_string topo) in
              let sql =
-               sprintf "UPDATE variety%d SET topology='%s' WHERE %s"
-                 nb_pol topo pid_sel
+               sprintf "UPDATE variety%d SET nb_components=%d, topology='%s' WHERE %s"
+                 nb_pol nbc topo pid_sel
              in
              db_log.log (fun k -> k "%s" sql);
              exec (db ()) sql;

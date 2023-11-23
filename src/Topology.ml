@@ -25,6 +25,9 @@ let compare_one t1 t2 = match (t1, t2) with
 
 type topo_ask = Ask_Nbc | Ask_Euler | Ask_Betti
 
+let nb_components topo =
+  List.fold_left (fun acc (_,n) -> acc+n) 0 topo
+
 let min_demand topo =
   let fn acc (t,_) = match t with
     | Any -> acc

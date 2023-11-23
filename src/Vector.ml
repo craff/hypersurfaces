@@ -215,6 +215,12 @@ module Make(R:S) = struct
     assert (n <>. zero);
     smulq (one /. norm v) v
 
+  (** random point on the unit sphere of dim n *)
+  let random_on_sphere n =
+    let v = Array.init n  (fun _ -> of_float (Gaussian.random ())) in
+    normaliseq v;
+    v
+
   (** normalisation for absolute norm *)
   let abs_normalise v = (one /. abs_norm v) **. v
 
