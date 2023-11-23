@@ -16,20 +16,91 @@ let rec pkey n = match n with
   | 1             -> "p0 INTEGER"
   | n             -> sprintf "%s, p%d INTEGER" (pkey (n-1)) (n-1)
 
+let rec fkey n = match n with
+  | _ when n <= 0 -> assert false
+  | 1             -> "FOREIGN KEY(p0) REFERENCES polynomial(rowid)"
+  | n             -> sprintf "%s, FOREIGN KEY(p%d) REFERENCES polynomial(rowid)"
+                       (fkey (n-1)) (n-1)
+
 let create_variety n = sprintf {|
   CREATE TABLE IF NOT EXISTS variety%d (
     %s,
     nb_components INTEGER,
     topology TEXT,
-    time FLOAT,
-    subd INTEGER,
-    crit INTEGER,
-    crit_limit FLOAT,
-    pos_limit FLOAT,
-    zih_limit FLOAT,
-    dprec FLOAT
-   )|} n (pkey n)
+    %s
+   )|} n (pkey n) (fkey n)
    (* euler : list of integers as string *)
+
+type run =
+  { nb_vertices : int
+  ; nb_simplices : int
+  ; nb_zih : int
+  ; avg_zih : float
+  ; max_zih : int
+  ; nb_solver1 : int
+  ; avg_solver1 : float
+  ; max_solver1 : int
+  ; nb_solver2 : int
+  ; avg_solver2 : float
+  ; max_solver2 : int
+  ; nb_solver3 : int
+  ; avg_solver3 : float
+  ; max_solver3 : int }
+
+type timings =
+  { total : float
+  ; certif : float
+  ; add : float
+  ; test : float
+  ; solver1 : float
+  ; solver2 : float
+  ; solver3 : float
+  }
+
+let create_run = {|
+  CREATE TABLE IF NOT EXISTS run (
+                  variety INTEGER,
+                  nb_polynomial INTEGER,
+                  nb_vertices INTEGER,
+                  nb_simplices INTEGER,
+                  nb_zih INTEGER,
+                  avg_zih FLOAT,
+                  max_zih INTEGER,
+                  nb_solver1 INTEGER,
+                  avg_solver1 FLOAT,
+                  max_solver1 INTEGER,
+                  nb_solver2 INTEGER,
+                  avg_solver2 FLOAT,
+                  max_solver2 INTEGER,
+                  nb_solver3 INTEGER,
+                  avg_solver3 FLOAT,
+                  max_solver3 INTEGER,
+                  subd INTEGER,
+                  crit INTEGER,
+                  crit_limit FLOAT,
+                  pos_limit FLOAT,
+                  zih_limit FLOAT,
+                  dprec FLOAT,
+                  total_time FLOAT,
+                  certif_time FLOAT,
+                  add_time FLOAT,
+                  test_time FLOAT,
+                  solver1_time FLOAT,
+                  solver2_time FLOAT,
+                  solver3_time FLOAT,
+                  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                  )|}
+   (* euler : list of integers as string *)
+
+let rec exec db ?cb sql =
+  let r = Sqlite3.exec db ?cb sql in
+  if r = Rc.BUSY then (Unix.sleep 2; exec db ?cb sql)
+  else Rc.check r
+
+let rec exec_not_null db ~cb sql =
+  let r = Sqlite3.exec_not_null db ~cb sql in
+  if r = Rc.BUSY then (Unix.sleep 2; exec_not_null db ~cb sql)
+  else Rc.check r
 
 let db_ptr = ref None
 let db () =
@@ -39,7 +110,8 @@ let db () =
   | (None, Some name) ->
      try
        let db = db_open ~mutex:`FULL ~cache:`PRIVATE name in
-       Rc.check (exec db create_polynomial);
+       exec db create_polynomial;
+       exec db create_run;
        db_ptr := Some db;
        db_log.log (fun k -> k "data base %s created" name);
        let init = (0.0,0.0,0) in
@@ -79,7 +151,7 @@ let insert_polynomial to_str p deg dim rand =
     (* printf "got %s\n%!" row.(0);*)
     res := Some (Int64.of_string row.(0))
   in
-  Rc.check (exec_not_null (db ()) ~cb sql);
+  exec_not_null (db ()) ~cb sql;
   match !res with
   | Some pid -> pid
   | None ->
@@ -90,18 +162,18 @@ let insert_polynomial to_str p deg dim rand =
          (if rand then 1 else 0)
      in
      try
-       Rc.check (exec (db ()) sql);
+       exec (db ()) sql;
        last_insert_rowid (db ())
      with
        SqliteError s ->
        eprintf "can not insert polynomial: %s %s\n%!" s sql;
        exit 1
 
-let insert_variety to_str ps dim nbc topo time opts =
+let insert_variety to_str ps dim nbc topo run_results timings opts =
   try
     let open Args in
     let nb_pol = List.length ps in
-    Rc.check (exec (db ()) (create_variety nb_pol));
+    exec (db ()) (create_variety nb_pol);
     let pid =
       List.map (fun (p,deg,rand) ->
           (deg, insert_polynomial to_str p deg dim rand)
@@ -111,53 +183,67 @@ let insert_variety to_str ps dim nbc topo time opts =
     let pid_sel = String.concat " AND " (List.mapi (sprintf "p%d = %Ld") pid) in
     let sql =
       sprintf
-        "SELECT nb_components, topology, time FROM variety%d WHERE %s"
+        "SELECT rowid, nb_components, topology FROM variety%d WHERE %s"
         nb_pol pid_sel
     in
     let res = ref None in
     let cb row _ =
       assert (Array.length row = 3);
-      res := Some (int_of_string row.(0), row.(1), float_of_string row.(2))
+      res := Some (int_of_string row.(0), int_of_string row.(1), row.(2))
     in
-    Rc.check (exec_not_null (db ()) ~cb sql);
-    match !res with
-    | Some (nbc', topo',time') ->
-       let topo' = Topology.of_string topo' in
-       if nbc' <> nbc || not (Topology.agree topo topo') then
-         begin
-           eprintf "TOPOLOGY DISAGREE: %a %a"
-             Topology.print topo Topology.print topo';
-           exit 1
-         end;
-       let better_topo = Topology.better topo topo' in
-       if time < time' || better_topo then
-         begin
-           let time = min time time' in
-           let topo = Topology.(to_string (if better_topo then topo else topo')) in
-           let sql =
-             sprintf "UPDATE variety%d SET topology='%s',time=%E,subd=%d,crit=%d,crit_limit=%E,pos_limit=%E,zih_limit=%E,dprec=%E WHERE %s"
-               nb_pol topo time opts.subd opts.crit
-               opts.crit_limit opts.pos_limit opts.zih_limit opts.dprec
-               pid_sel
-           in
-           db_log.log (fun k -> k "%s" sql);
-           Rc.check (exec (db ()) sql);
-         end
-    | None ->
-       let pid_ins = String.concat "," (List.map Int64.to_string pid) in
-       let topo = Topology.to_string topo in
-       let sql =
-         sprintf "INSERT INTO variety%d VALUES (%s,%d,'%s',%E,%d,%d,%E,%E,%E,%E)"
-           nb_pol pid_ins nbc topo time
-           opts.subd opts.crit
-           opts.crit_limit opts.pos_limit opts.zih_limit opts.dprec
-       in
-       db_log.log (fun k -> k "%s" sql);
-       Rc.check (exec (db ()) sql);
+    exec_not_null (db ()) ~cb sql;
+    let rowid =
+      match !res with
+      | Some (rowid, nbc', topo') ->
+         let topo' = Topology.of_string topo' in
+         if nbc' <> nbc || not (Topology.agree topo topo') then
+           begin
+             eprintf "TOPOLOGY DISAGREE: %a %a"
+               Topology.print topo Topology.print topo';
+             exit 1
+           end;
+         let better_topo = Topology.better topo topo' in
+         if better_topo then
+           begin
+             let topo = Topology.(to_string topo) in
+             let sql =
+               sprintf "UPDATE variety%d SET nb_components=%d, topology='%s' WHERE %s"
+                 nb_pol nbc topo pid_sel
+             in
+             db_log.log (fun k -> k "%s" sql);
+             exec (db ()) sql;
+           end;
+         rowid
+      | None ->
+         let pid_ins = String.concat "," (List.map Int64.to_string pid) in
+         let topo = Topology.to_string topo in
+         let sql =
+           sprintf "INSERT INTO variety%d VALUES (%s,%d,'%s')"
+             nb_pol pid_ins nbc topo
+         in
+         db_log.log (fun k -> k "%s" sql);
+         exec (db ()) sql;
+         Int64.to_int (last_insert_rowid (db ()))
+    in
+    let sql =
+      sprintf "INSERT INTO run(variety, nb_polynomial, nb_vertices, nb_simplices, nb_zih, avg_zih, max_zih, nb_solver1, avg_solver1, max_solver1, nb_solver2, avg_solver2, max_solver2, nb_solver3, avg_solver3, max_solver3, subd, crit, crit_limit, pos_limit, zih_limit, dprec, total_time, certif_time, add_time, test_time, solver1_time, solver2_time, solver3_time) VALUES (%d,%d,%d,%d,%d,%E,%d,%d,%E,%d,%d,%E,%d,%d,%E,%d,%d,%d,%E,%E,%E,%E,%E,%E,%E,%E,%E,%E,%E) "
+        rowid nb_pol run_results.nb_vertices run_results.nb_simplices
+        run_results.nb_zih run_results.avg_zih run_results.max_zih
+        run_results.nb_solver1 run_results.avg_solver1 run_results.max_solver1
+        run_results.nb_solver2 run_results.avg_solver2 run_results.max_solver2
+        run_results.nb_solver3 run_results.avg_solver3 run_results.max_solver3
+        opts.subd opts.crit
+        opts.crit_limit opts.pos_limit opts.zih_limit opts.dprec
+        timings.total timings.certif timings.add timings.test
+        timings.solver1 timings.solver2 timings.solver3
+    in
+    db_log.log (fun k -> k "%s" sql);
+    exec (db ()) sql;
+
   with
     SqliteError s ->
-     eprintf "can not insert variety: %s\n%!" s;
-     exit 1
+    eprintf "can not insert variety: %s\n%!" s;
+    exit 1
 
 let timings ?(css=false) dim nb =
   let pols =
@@ -189,7 +275,7 @@ let timings ?(css=false) dim nb =
   let cb row _ =
     res := row :: !res;
   in
-  Rc.check (exec_not_null (db ()) ~cb sql);
+  exec_not_null (db ()) ~cb sql;
   List.iter (fun row ->
       let dim = int_of_string row.(0) in
       let degs = Array.init nb (fun i -> int_of_string row.(i+1)) in
@@ -235,7 +321,7 @@ let stats dim degs =
     res := row :: !res;
     total := !total + int_of_string row.(2);
   in
-  Rc.check (exec_not_null (db ()) ~cb sql);
+  exec_not_null (db ()) ~cb sql;
   let total_f = float !total in
   List.iter (fun row ->
       let nb = int_of_string row.(2) in

@@ -215,6 +215,12 @@ module Make(R:S) = struct
     assert (n <>. zero);
     smulq (one /. norm v) v
 
+  (** random point on the unit sphere of dim n *)
+  let random_on_sphere n =
+    let v = Array.init n  (fun _ -> of_float (Gaussian.random ())) in
+    normaliseq v;
+    v
+
   (** normalisation for absolute norm *)
   let abs_normalise v = (one /. abs_norm v) **. v
 
@@ -757,11 +763,18 @@ module Make(R:S) = struct
 
   (** print the statistics and reset *)
   let print_zih_stats ff =
+    let nb = zih_steps.nb_call in
+    let max = zih_steps.max in
+    let avg = Stdlib.(float zih_steps.sum /. float zih_steps.nb_call) in
     fprintf ff "zih: [nb: %d, avg: %g, max: %d, abort: %d]"
-      zih_steps.nb_call
-      Stdlib.(float zih_steps.sum /. float zih_steps.nb_call)
-      zih_steps.max zih_steps.nb_abort;
-    reset_zih ()
+      nb avg max zih_steps.nb_abort
+
+  let get_zih_stats () =
+    let nb = zih_steps.nb_call in
+    let max = zih_steps.max in
+    let avg = Stdlib.(float zih_steps.sum /. float zih_steps.nb_call) in
+    reset_zih ();
+    (nb, avg, max)
 
   (** exception and function to exit the procedure. the function updates
       the statistics *)
@@ -808,7 +821,7 @@ module Make(R:S) = struct
       (* initial position: around random dim point actif to start *)
       let r = match r0 with
         | Some r -> Array.copy r
-        | None -> Array.init nb (fun i -> if i mod (nb / dim) = 0 then one else zero )
+        | None -> Array.init nb (fun i -> if nb <= dim || i mod (nb / dim) = 0 then one else zero )
       in
       set_one r;
       (* in what follows: [v = m **- r] and [v2 = norm2 v] and we are trying to
@@ -871,26 +884,28 @@ module Make(R:S) = struct
           let w2 = beta *. beta *. p2 +. of_int 2 *. beta *. pw +. one in
           let vw = beta *. pv +. vw in
           let sigma = beta *. sigma +. one in
-          let alpha = (v2 *. sigma -. vw) /. (w2 -. vw *. sigma) in
-          let f =
-            let d = one +. alpha *. sigma in
-            (v2 +. of_int 2 *. alpha *. vw +. alpha *. alpha *. w2) /. (d*.d)
-          in
-          (alpha, f)
+          (v2 *. sigma -. vw) /. (w2 -. vw *. sigma)
         in
-        (* computation of best beta by trichotomie *)
-        let f beta = snd (find_alpha beta) in
-        let beta =
-          if pv >. zero then
-            begin
-              let beta1 = -. vw /. pv in
-              tricho ~stop_cond f zero beta1
-            end
-          else
-            zero
+        let beta,alpha =
+          try
+            if p2 <=. zero then raise Exit;
+            (* beta0 : a maximum ? *)
+            (* let beta0 = (vw -. v2) /. (sigma *. v2 -. pv) in *)
+            let beta = (pw *. (vw -. v2) +.
+                             sigma *. (v2 -. vw *. vw) +.
+                             pv *. (vw -. one))
+                          /. (p2 *. (v2 -. vw) +.
+                                pw *. (pv -. sigma *. v2) +.
+                                pv *. (sigma *. vw -. pv)) in
+            if beta <. zero then raise Exit;
+            let alpha = find_alpha beta in
+            if alpha <. zero then raise Exit;
+            (beta,alpha)
+          with Exit ->
+            let alpha = find_alpha zero in
+            (zero,alpha)
         in
         (* final alpha from best beta *)
-        let (alpha, fa) = find_alpha beta in
         (* updating [r], [pr], and computing new [v] and new [v2] ([nv] and
            [nv2]) *)
         for j = 0 to nb - 1 do
@@ -904,8 +919,8 @@ module Make(R:S) = struct
         (* [nv2] should be equal (very near with rounding) to [fa], checking
            in log *)
         zih_log.log (fun k ->
-            k "cg step: %d, index: %d, beta: %a, alpha: %a, norm: %a = %a, candidates: %a, can_stop: %b"
-              step i print beta print alpha print fa print nv2
+            k "cg step: %d, index: %d, beta: %a, alpha: %a, norm: %a, candidates: %a, can_stop: %b"
+              step i print beta print alpha print nv2
 	      print_int_list !candidates !can_stop);
         (nv, nv2)
       in
@@ -976,7 +991,6 @@ module Make(R:S) = struct
            print_vector r print_vector (m *** v);*)
         (* one linear step and one conjugate steps. *)
         let (v,v2) =
-(*	  if step mod 2 = 0 then (v,v2) else*)
 	  let (nr, cancel, nv, nv2) = linear_step step v in
           if (nv2 <. v2) then
             begin
@@ -1542,6 +1556,15 @@ module Make(R:S) = struct
       name normal stat.nb_bad stat.nb_abort stat.nb_calls
       avg avg_normal stat.max_reached_steps
 
+  let get_solver_stats stat =
+    let nb = stat.nb_calls in
+    let avg =
+      if stat.nb_calls > 0 then
+        Stdlib.(float stat.sum_steps /. float nb)
+      else 0.0
+    in
+    (nb, avg, stat.max_reached_steps)
+
   let reset_solver_stats stat =
     stat.max_reached_steps <- 0;
     stat.sum_steps <- 0;
@@ -1880,11 +1903,13 @@ module type V = sig
   val pih : ?r0:vector -> t -> t -> vector -> vector list -> vector option
   val mih : t -> t -> matrix array -> t * matrix
   val print_zih_stats : formatter -> unit
+  val get_zih_stats : unit -> (int * float * int)
 
   type solver_stats
 
   val init_solver_stats : unit -> solver_stats
   val print_solver_stats : ?name:string -> formatter -> solver_stats -> unit
+  val get_solver_stats : solver_stats -> (int * float * int)
   val reset_solver_stats : solver_stats -> unit
 
   module type Fun = sig

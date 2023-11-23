@@ -25,6 +25,9 @@ let compare_one t1 t2 = match (t1, t2) with
 
 type topo_ask = Ask_Nbc | Ask_Euler | Ask_Betti
 
+let nb_components topo =
+  List.fold_left (fun acc (_,n) -> acc+n) 0 topo
+
 let min_demand topo =
   let fn acc (t,_) = match t with
     | Any -> acc
@@ -76,13 +79,13 @@ let%parser rec topo_mul =
 
 let%parser rec topo_list =
     (t::topo_mul)                    => [t]
-  ; (l::topo_list) "," (t::topo_mul) => t::l
+  ; (l::topo_list) "," (t::topo_mul) => t::l (* NOTE: reversed! *)
 
 let%parser parse =
   ()         => None
   ; (n::INT) => if n = 0 then Some[] else Some[(Any,n)]
   ; '(' ')'  => Some[]
-  ; '(' (l:: topo_list) ')' => Some (List.sort compare2 l)
+  ; '(' (l:: topo_list) ')' => Some (List.sort compare2 (List.rev l))
 
 let blank = Pacomb.Regexp.blank_regexp "[ \t]*"
 

@@ -1609,6 +1609,19 @@ module Make(R:Field.SPlus) = struct
       (print_solver_stats ~name:"solver2") solver2_stat
       (print_solver_stats ~name:"solver3") solver3_stat;
 
+    let (nb_zih, avg_zih, max_zih) = get_zih_stats () in
+    let (nb_solver1, avg_solver1, max_solver1) = get_solver_stats solver1_stat in
+    let (nb_solver2, avg_solver2, max_solver2) = get_solver_stats solver2_stat in
+    let (nb_solver3, avg_solver3, max_solver3) = get_solver_stats solver3_stat in
+    let run_result =
+      Db.{ nb_vertices = ctrs.nb
+      ; nb_simplices = trs.nb
+      ; nb_zih; avg_zih; max_zih
+      ; nb_solver1; avg_solver1; max_solver1
+      ; nb_solver2; avg_solver2; max_solver2
+      ; nb_solver3; avg_solver3; max_solver3 }
+    in
+
     let nb_unsafe = List.length !unsafe in
 
     let edges = Hashtbl.fold (fun _ l acc ->
@@ -1660,10 +1673,10 @@ module Make(R:Field.SPlus) = struct
         eprintf "unsafe cells present: not checking certificate\n%!";
 
     (List.map (Array.map to_vec) all, List.map (Array.map to_vec) !ptrs
-     , edges, dim, ctrs, nb_unsafe = 0, get_singulars trs)
+     , edges, dim, ctrs, nb_unsafe = 0, get_singulars trs, run_result)
 
   let triangulation param p0 =
-    let (all,ptrs,edges,dim,ctrs,unsafe,sings) =
+    let (all,ptrs,edges,dim,ctrs,unsafe,sings,run_result) =
       try
         Chrono.add_time total_chrono (triangulation param) p0
       with Not_found as e ->
@@ -1671,7 +1684,17 @@ module Make(R:Field.SPlus) = struct
         eprintf "Uncaught exception %s\n%!" (Printexc.to_string e);
         exit 1
     in
-    let r = (all,ptrs,edges,dim,ctrs,unsafe,sings,Chrono.get_cumul total_chrono) in
+    let timings =
+      Db.{ total = Chrono.get_cumul total_chrono
+      ; test = Chrono.get_time test_chrono
+      ; solver1 = Chrono.get_time solver1_chrono
+      ; solver2 = Chrono.get_time solver2_chrono
+      ; solver3 = Chrono.get_time solver3_chrono
+      ; add = Chrono.get_time add_chrono
+      ; certif = Chrono.get_time certif_chrono
+      }
+    in
+    let r = (all,ptrs,edges,dim,ctrs,unsafe,sings,run_result,timings) in
     Chrono.iter (fun n t tc c -> printf "   %10s: %8.3fs (%8.3fs self) for %6d call(s)\n%!" n tc t c);
     Chrono.reset_all ();
     r

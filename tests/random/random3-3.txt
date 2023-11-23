@@ -5,6 +5,6 @@ for i = 1 to NB do
   let p3 (x,y,z) = random D3;
 
   let p = zeros p1 p2 p3;
-  stats 4 D1 D2 D3;
+  stats 3 D1 D2 D3;
   display p;
 done;
