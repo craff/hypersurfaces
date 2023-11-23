@@ -793,7 +793,7 @@ module Make(R:Field.SPlus) = struct
               let gds0 = List.map (fun m -> assert (Array.length m = 1);
                                             m.(0)) gds in
               match
-                V.zih zlim gds0
+                V.zih zlim zcoef gds0
               with
               | None -> InL()
               | Some v -> InR(transpose [|v|],List.map (fun v -> [|v|]) gds0)
@@ -802,9 +802,7 @@ module Make(R:Field.SPlus) = struct
           begin
             Format.eprintf "calling mih\n%!";
             List.iter (Format.eprintf "  ===> %a\n%!" print_matrix) gds;
-            let v =
-              V.mih zlim (Array.of_list gds)
-            in
+            let v = V.mih zlim zcoef gds in
             match v with
             | None ->
                 begin
@@ -948,7 +946,8 @@ module Make(R:Field.SPlus) = struct
 	   fn dp;
 	   let gds = !gds in
            List.iter (fun mm ->
-             if not (mat_positive zero (mm **** m)) then
+             Format.printf "coucou %a %a\n%!" print_matrix m print_matrix mm;
+             if not (mat_positive zero (m **** mm)) then
              let m  = Array.map (Array.map R.to_float) m in
              let mm = Array.map (Array.map R.to_float) mm in
              failwith (sprintf "bad certificate (1): zero in hull (%a.%a => %a %b)"
