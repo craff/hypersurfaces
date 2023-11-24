@@ -800,8 +800,8 @@ module Make(R:Field.SPlus) = struct
             end
         else
           begin
-            Format.eprintf "calling mih\n%!";
-            List.iter (Format.eprintf "  ===> %a\n%!" print_matrix) gds;
+(*            Format.eprintf "calling mih\n%!";
+            List.iter (Format.eprintf "  ===> %a\n%!" print_matrix) gds;*)
             let v = V.mih zlim zcoef gds in
             match v with
             | None ->
@@ -813,6 +813,7 @@ module Make(R:Field.SPlus) = struct
                 begin
 	          face_log.log (fun k -> k "test zih: false");
                   Format.eprintf "storing mih\n%!";
+                  Format.eprintf "  >>>> %a\n%!" print_matrix v;
                   List.iter (Format.eprintf "  ===> %a\n%!" print_matrix) gds;
                   InR (v, gds)
                 end
@@ -945,16 +946,22 @@ module Make(R:Field.SPlus) = struct
 	   in
 	   fn dp;
 	   let gds = !gds in
+           Format.printf "VERIF1\n%!";
            List.iter (fun mm ->
-             Format.printf "coucou %a %a\n%!" print_matrix m print_matrix mm;
-             if not (mat_positive zero (m **** mm)) then
-             let m  = Array.map (Array.map R.to_float) m in
-             let mm = Array.map (Array.map R.to_float) mm in
-             failwith (sprintf "bad certificate (1): zero in hull (%a.%a => %a %b)"
-                                  Field.Float.V.print_matrix m
-                                  Field.Float.V.print_matrix mm
-                                  Field.Float.V.print_matrix Field.Float.V.(mm **** m)(Field.Float.V.mat_positive 0. Field.Float.V.(mm **** m)))) gds0;
-
+             let cm = mm **** m in
+             let b = mat_positive zero cm in
+             Format.printf "%a %a => %a %b\n%!"
+               print_matrix m print_matrix mm print_matrix cm b;
+             if not b then
+               begin
+                 let m  = Array.map (Array.map R.to_float) m in
+                 let mm = Array.map (Array.map R.to_float) mm in
+                 failwith (sprintf "bad certificate (1): zero in hull (%a.%a => %b)"
+                             Field.Float.V.print_matrix m
+                             Field.Float.V.print_matrix mm
+                             (Field.Float.V.mat_positive 0. Field.Float.V.(mm **** m)))
+               end) gds0;
+           Format.printf "VERIF2\n%!";
            assert (List.length gds = List.length gds0);
            let (m:Q.V.matrix) = Array.map (Array.map to_q) m in
            List.iteri (fun i mm ->

@@ -1107,7 +1107,6 @@ module Make(R:S) = struct
 
   let zih_matrix =
     let norm2 m = let (l, v) = max_eigen (transpose m **** m) in
-                  Format.printf "%a %a\n%!" print l print_vector v;
                   (l, (v, m *** v))
     in
     let mul ms r =
@@ -1131,21 +1130,28 @@ module Make(R:S) = struct
                                 print_matrix m))
     }
 
-  let mih zlim zcoef m =
+  let mih zlim zcoef m0 =
     let rec fn i acc m =
-      let w =
-        match zih_gen zih_matrix ?r0:None zlim zcoef m with
-        | None -> raise Exit
-        | Some(_,(_,w)) -> w
-      in
-      if i = 0 then
+      if i <= 0 then
         begin
-          let m = Array.of_list (w::acc) in
-          let tm = transpose m in
-          if positive zlim (tm **** m) then Some tm
+          let m = Array.of_list acc in
+          let b = List.for_all (fun m0 ->
+                      Format.printf "%a %a => %!" print_matrix m print_matrix m0;
+                      let cm = m0 **** m in
+                      let b = positive zlim cm in
+                      Format.printf "%a %b\n%!" print_matrix cm b;
+                      b) m0
+          in
+          if b then Some m
           else (zih_log.log (fun k -> k "matrix found but not positive"); None)
         end
-      else begin
+      else
+        begin
+          let w =
+            match zih_gen zih_matrix ?r0:None zlim zcoef m with
+            | None -> raise Exit
+            | Some(_,(_,w)) -> w
+          in
           let project m  =
             let m = transpose m in
             let m = Array.map (fun v -> comb one v (-. (v*.*w)) w) m in
@@ -1155,7 +1161,7 @@ module Make(R:S) = struct
           fn (i-1) (w::acc) m
         end
     in
-    try fn (Array.length (List.hd m).(0)) [] m
+    try fn (Array.length (List.hd m0).(0)) [] m0
     with Exit -> None
 
   (*
