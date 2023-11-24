@@ -233,12 +233,13 @@ module Make(R:SMin) = struct
           else gn beta1 beta2 f2 beta3
         end
     in
+    let f0 = f beta0 in
     let beta1 = beta3 -. g *. (beta3 -. beta0) in
     let f1 = f beta1 in
     let beta2 = beta0 +. g *. (beta3 -. beta0) in
     let f2 = f beta2 in
     let beta =
-      if f1 <. f2 then fn beta0 beta1 f1 beta2
+      if f1 <. f2 || f0 <. f2 then fn beta0 beta1 f1 beta2
       else if f2 <. f1 then gn beta1 beta2 f2 beta3
       else beta2
     in

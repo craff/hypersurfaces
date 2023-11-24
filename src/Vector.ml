@@ -772,6 +772,270 @@ module Make(R:S) = struct
     reset_zih ();
     (nb, avg, max)
 
+  (** main zero in hull test function, can provide an initial position *)
+  let zih ?r0 zlim zcoef m0 =
+      let exception ExitZih of vector option in try
+      (* normalise and transform the list m0 into a matrix *)
+      let m0 = List.sort_uniq compare m0 in
+      let nb = List.length m0 in
+      let m0 = Array.of_list m0 in
+      let can_stop = ref false in
+
+      let exit_zih ?(abort=false) step r =
+        let r = match r with
+          | Some v when !can_stop ->
+             let v = normalise v in
+             if Array.exists (fun r -> r *.* v < zlim) m0 then
+               begin
+                 zih_log.log (fun k -> k "exit zih: 0 in hull");
+                 None
+               end
+             else
+               begin
+                 zih_log.log (fun k -> k "exit zih: 0 not in hull ");
+                 Some v
+               end
+          | _ ->
+             zih_log.log (fun k -> k "exit zih: 0 in hull");
+             None
+        in
+        zih_steps.nb_call <- zih_steps.nb_call + 1;
+        if abort then zih_steps.nb_abort <- zih_steps.nb_abort + 1
+        else if zih_steps.max < step then zih_steps.max <- step;
+        zih_steps.sum <- zih_steps.sum + step;
+        raise (ExitZih r)
+      in
+
+      (* if a vector is nul, we exit immediately *)
+      if nb = 0 || Array.exists (fun v -> norm v <=. zlim) m0 then exit_zih 0 None;
+      let m = Array.map normalise m0 in
+      zih_log.log (fun k -> k "zih: %a" print_matrix m);
+      let dim = Array.length m.(0) in
+      (* initial position: around random dim point actif to start *)
+      let r = match r0 with
+        | Some r -> Array.copy r
+        | None -> Array.init nb (fun i -> if nb <= dim || i mod (nb / dim) = 0 then one else zero )
+      in
+      set_one r;
+      (* in what follows: [v = m **- r] and [v2 = norm2 v] and we are trying to
+       have [v2 = 0] with [r]'s coef non negative and summing to one *)
+      (* previous descent direction *)
+      let pr = Array.make nb zero in
+      (* last step where index was canceled *)
+      let cancels = Array.make nb (-nb) in
+      (* first kind of steps:
+         we will update [r] with [r = set_one (r + alpha(delta_i + beta pr))]
+         where
+
+          - [pr] is the previous descent direction
+            i.e previous [delta_i + beta pr]
+          - [delta_i =] vector with one in position such that
+                  [m.(i) *.* v <= 0] and minimum
+
+          alpha and beta, will be positive, this will increase all coefficient
+          of r keeping r non negative and summing to one thanks to the use of
+          set_one. *)
+      let conjugate_step step v v2 =
+        let candidate = ref None in
+        let candidates = ref [] in
+        let sigma = ref zero in
+        for j = 0 to nb-1 do
+          sigma := !sigma +. pr.(j)
+        done;
+        let sigma = !sigma in
+        can_stop := true;
+        for i = 0 to nb - 1 do
+          let s = m.(i) *.* v in
+          (*zih_log.log "  %a %a %a" print r.(i) print s print_vector m.(i);*)
+          if s <=. v2 *. zcoef then
+            begin
+              if s <=. zero then can_stop := false;
+	      candidates := i :: !candidates;
+	      match !candidate with
+   	      | None -> candidate := Some(i,s)
+              | Some (_,s') -> if s' >. s then candidate := Some(i,s)
+            end
+
+        done;
+        match !candidate with
+	| None ->
+          begin
+            zih_log.log (fun k -> k "false");
+            exit_zih step (Some v)
+          end
+        | Some(i,_) ->
+        (* value of interest, see the article *)
+        let p = m **- pr in
+        let p2 = norm2 p in
+        let pv = p *.* v in
+        let w = m.(i) in
+        let pw = p *.* w in
+        let vw = m.(i) *.* v in
+        (*assert (vw <=. zero || (printf "%d\n%!" i; false) );*)
+        (* function computing [alpha] and [f]: the new [norm v2] from [beta] *)
+        let find_alpha beta =
+          let w2 = beta *. beta *. p2 +. of_int 2 *. beta *. pw +. one in
+          let vw = beta *. pv +. vw in
+          let sigma = beta *. sigma +. one in
+          (v2 *. sigma -. vw) /. (w2 -. vw *. sigma)
+        in
+        let beta,alpha =
+          try
+            if p2 <=. zero then raise Exit;
+            (* beta0 : a maximum ? *)
+            (* let beta0 = (vw -. v2) /. (sigma *. v2 -. pv) in *)
+            let beta = (pw *. (vw -. v2) +.
+                             sigma *. (v2 -. vw *. vw) +.
+                             pv *. (vw -. one))
+                          /. (p2 *. (v2 -. vw) +.
+                                pw *. (pv -. sigma *. v2) +.
+                                pv *. (sigma *. vw -. pv)) in
+            if beta <. zero then raise Exit;
+            let alpha = find_alpha beta in
+            if alpha <. zero then raise Exit;
+            (beta,alpha)
+          with Exit ->
+            let alpha = find_alpha zero in
+            (zero,alpha)
+        in
+        (* final alpha from best beta *)
+        (* updating [r], [pr], and computing new [v] and new [v2] ([nv] and
+           [nv2]) *)
+        for j = 0 to nb - 1 do
+          pr.(j) <- pr.(j) *. beta;
+        done;
+        pr.(i) <- pr.(i) +. one;
+        Array.iteri (fun j c -> r.(j) <- r.(j) +. c *. alpha) pr;
+        set_one r;
+        let nv = m **- r in
+        let nv2 = norm2 nv in
+        (* [nv2] should be equal (very near with rounding) to [fa], checking
+           in log *)
+        zih_log.log (fun k ->
+            k "cg step: %d, index: %d, beta: %a, alpha: %a, norm: %a, candidates: %a, can_stop: %b"
+              step i print beta print alpha print nv2
+	      print_int_list !candidates !can_stop);
+        (nv, nv2)
+      in
+
+      (* second kind of steps *)
+      let linear_step step v =
+        (* we select indices with [r.(i) > 0] *)
+        let sel = ref [] in
+        let sel2 = ref [] in
+	let nb2 = ref 0 in
+	let not_cancelled i = step - cancels.(i) > dim in
+        for i = 0 to nb - 1 do
+          if r.(i) >. zero then
+	    begin
+  	      sel := i :: !sel;
+              (* Idea: we try not to do linear step with cancelled
+                 index that were reintroduced: we probably need then,
+                 this gives a chance to cancel another one *)
+	      if not_cancelled i then (sel2 := i :: !sel2; incr nb2)
+            end
+        done;
+        let sel = if !nb2 >= dim - 1 then !sel2 else !sel in
+	let nsel = Array.of_list sel in
+	let ms = Array.map (fun i -> Array.append m.(i) [|one|]) nsel in
+        let vs = Array.append v [|zero|] in
+        (* computing vector s such that [m **- s] is nearest to v
+           and sum to near zero. We will move [r] in direction [-s] *)
+        let s =
+          if Array.length nsel > dim then
+            let mm v = ms **- (ms *** v) in
+	    ms *** irm_cg mm vs
+          else
+            let mm v = ms *** (ms **- v) in
+            irm_cg mm (ms *** vs)
+        in
+        (* compute optimal step, assuming sums of the coef is small
+           in fron of [v *.* s] *)
+        let x = zero_v (Array.length v) in
+        Array.iteri (fun i k -> combqo x s.(i) m.(k)) nsel;
+        let alpha = ref ((x *.* v) /. norm2 x) in
+        (* we update [r = r + alpha s], computing [alpha] maximum
+           to keep r positive. *)
+        let cancel = ref (-1) in
+        Array.iteri (fun i k ->
+            if !alpha *. s.(i) >. r.(k) then
+              begin
+                alpha := r.(k) /. s.(i);
+                cancel := k
+              end) nsel;
+        let alpha = !alpha in
+        let cancel = !cancel in
+        (* if cancel = -1, then alpha = 1 and if [Array.length sel >= dim],
+           then new v = m **- r will be nul, so we can stop *)
+        let r = Array.copy r in
+        Array.iteri (fun i k ->
+            if k = cancel then (r.(k) <- zero)
+            else r.(k) <- r.(k) -. alpha *. s.(i)) nsel;
+        set_one r;
+        let nv = m **- r in
+        let nv2 = norm2 nv in
+        zih_log.log (fun k -> k  "lin step: %d, alpha: %a, cancel: %d, sel: %a"
+                            step print alpha cancel print_int_array nsel);
+        (r, cancel, nv, nv2)
+      in
+
+      let rec fn step v v2 =
+(*        zih_log.log "step: %d\n\tr: %a\n\tm.v: %a" step
+           print_vector r print_vector (m *** v);*)
+        (* one linear step and one conjugate steps. *)
+        let (v,v2) =
+	  let (nr, cancel, nv, nv2) = linear_step step v in
+          if (nv2 <. v2) then
+            begin
+              (* pr is set to zero for the cancelled index to force avoid
+                 this indice to be updated by the next conjugate step due to
+                 the previous descent direction. This appears to be better
+                 than resetting pr to zero completely. *)
+              if cancel <> -1 then (pr.(cancel) <- zero; cancels.(cancel) <- step);
+              Array.blit nr 0 r 0 nb;
+              (nv,nv2)
+            end
+          else
+            begin
+              (* linear steps are not always descent steps, so we do not
+                 stop if they are rejected *)
+              zih_log.log (fun k -> k  "reject linear step %a >= %a" print nv2 print v2);
+              (v,v2)
+            end
+        in
+        let (v,v2) =
+          let (nv,nv2) = conjugate_step step v v2 in
+          if nv2 <. epsilon2 then
+            begin
+              zih_log.log (fun k -> k "too small %d, stops" step);
+              exit_zih step (Some v)
+            end;
+          if (nv2 <. v2) then
+            (nv,nv2)
+          else
+            begin
+              (* conjugate steps are always descent step, so failure
+                to descent while [m.(i) *.* v] is not always > 0
+                means [v] ~ 0 up to numerical errors *)
+              zih_log.log (fun k -> k "no progress %a >= %a, stops" print nv2 print v2);
+              exit_zih step (Some v)
+            end;
+        in
+        (* if too many steps, we stop assuming zero in hull.  *)
+        if step > 20 * dim * nb then
+          begin
+            zih_log.log (fun k -> k "too long %d, stops" step);
+            exit_zih ~abort:true step (Some v)
+          end;
+        fn (step+1) v v2
+      in
+      (* initial call *)
+      let v = m **- r in
+      let v2 = norm2 v in
+      zih_log.log (fun k -> k "starts");
+      fn 0 v v2
+    with ExitZih b -> b
+
   type ('a,'b) zih_func =
     { norm2 : 'a -> R.t * 'b
     ; normalise : 'a -> 'a
@@ -832,6 +1096,12 @@ module Make(R:S) = struct
       if nb = 0 || Array.exists (fun v -> fst (norm2 v) <=. zlim *. zlim) m0 then
         exit_zih 0 None;
       let m = Array.map func.normalise m0 in
+      let eval r =
+        let nv = func.mul m r in
+        let nv2, neigen = norm2 nv in
+        (nv,nv2,neigen)
+      in
+
       zih_log.log (fun k -> k "zih: %a" print_ls m);
       let dim = func.dim m.(0) in
       (* initial position: around random dim point actif to start *)
@@ -861,15 +1131,10 @@ module Make(R:S) = struct
       let conjugate_step step v eigen v2 =
         let candidate = ref None in
         let candidates = ref [] in
-        let sigma = ref zero in
-        for j = 0 to nb-1 do
-          sigma := !sigma +. pr.(j)
-        done;
-        let sigma = !sigma in
         can_stop := true;
         for i = 0 to nb - 1 do
           let s = func.scal eigen m.(i) v in
-          zih_log.log (fun k -> k "  %d => %a %a %a" i print r.(i) print s func.print m.(i));
+          (*          zih_log.log (fun k -> k "  %d => %a %a %a" i print r.(i) print s func.print m.(i));*)
           if s <=. v2 *. zcoef then
             begin
               if s <=. zero then can_stop := false;
@@ -887,57 +1152,30 @@ module Make(R:S) = struct
             exit_zih step (Some (v,eigen))
           end
         | Some(i,_) ->
-        (* value of interest, see the article *)
-        let p = func.mul m pr in
-        let p2 = func.scal eigen p p in
-        let pv = func.scal eigen p v in
-        let w = m.(i) in
-        let w2 = func.scal eigen w w in
-        let pw = func.scal eigen p w in
-        let vw = func.scal eigen w v in
-        (*assert (vw <=. zero || (printf "%d\n%!" i; false) );*)
-        (* function computing [alpha] and [f]: the new [norm v2] from [beta] *)
-        let find_alpha beta =
-          let w2 = beta *. beta *. p2 +. of_int 2 *. beta *. pw +. w2 in
-          let vw = beta *. pv +. vw in
-          let sigma = beta *. sigma +. one in
-          (v2 *. sigma -. vw) /. (w2 -. vw *. sigma)
-        in
-        let beta,alpha =
-          try
-            if p2 <=. zero then raise Exit;
-            (* beta0 : a maximum ? *)
-            (* let beta0 = (vw -. v2) /. (sigma *. v2 -. pv) in *)
-            let beta = (pw *. (vw -. v2) +.
-                             sigma *. (v2 -. vw *. vw) +.
-                             pv *. (vw -. one))
-                          /. (p2 *. (v2 -. vw) +.
-                                pw *. (pv -. sigma *. v2) +.
-                                pv *. (sigma *. vw -. pv)) in
-            if beta <. zero then raise Exit;
-            let alpha = find_alpha beta in
-            if alpha <. zero then raise Exit;
-            (beta,alpha)
-          with Exit ->
-            let alpha = find_alpha zero in
-            (zero,alpha)
-        in
+           let stop_cond = { precision = zero ; max_steps = 40 } in
+           let f alpha =
+             let r = Array.mapi (fun j x ->
+                         if i = j then (x +. alpha) /. (one +. alpha)
+                         else x /. (one +. alpha)) r in
+             let (_,nv2,_) = eval r in
+             nv2
+           in
+           let alpha = tricho ~stop_cond f zero one in
         (* final alpha from best beta *)
         (* updating [r], [pr], and computing new [v] and new [v2] ([nv] and
            [nv2]) *)
-        for j = 0 to nb - 1 do
+        (*for j = 0 to nb - 1 do
           pr.(j) <- pr.(j) *. beta;
-        done;
-        pr.(i) <- pr.(i) +. one;
-        Array.iteri (fun j c -> r.(j) <- r.(j) +. c *. alpha) pr;
+        done;*)
+        r.(i) <- r.(i) +. alpha;
+        (*Array.iteri (fun j c -> r.(j) <- r.(j) +. c *. alpha) pr;*)
         set_one r;
-        let nv = func.mul m r in
-        let nv2, neigen = norm2 nv in
+        let (nv, nv2, neigen) = eval r in
         (* [nv2] should be equal (very near with rounding) to [fa], checking
            in log *)
         zih_log.log (fun k ->
             k "cg step: %d, index: %d, beta: %a, alpha: %a, norm: %a, candidates: %a, can_stop: %b"
-              step i print beta print alpha print nv2
+              step i print zero print alpha print nv2
 	      print_int_list !candidates !can_stop);
         (nv, neigen, nv2)
       in
@@ -993,15 +1231,25 @@ module Make(R:S) = struct
               end) nsel;
         let alpha = !alpha in
         let cancel = !cancel in
+        let stop_cond = { precision = zero ; max_steps = 40 } in
+        let f alpha =
+          let r = Array.copy r in
+          Array.iteri (fun i k ->
+              r.(k) <- r.(k) -. alpha *. s.(i)) nsel;
+          set_one r;
+          let (_,nv2,_) = eval r in
+          nv2
+        in
+        let alpha1 = tricho ~stop_cond f zero alpha in
+        let cancel = if alpha1 = alpha then cancel else -1 in
         (* if cancel = -1, then alpha = 1 and if [Array.length sel >= dim],
            then new v = m ***- r will be nul, so we can stop *)
         let r = Array.copy r in
         Array.iteri (fun i k ->
             if k = cancel then (r.(k) <- zero)
-            else r.(k) <- r.(k) -. alpha *. s.(i)) nsel;
+            else r.(k) <- r.(k) -. alpha1 *. s.(i)) nsel;
         set_one r;
-        let nv = func.mul m r in
-        let nv2, neigen = norm2 nv in
+        let nv, nv2, neigen = eval r in
         zih_log.log (fun k -> k  "lin step: %d, alpha: %a, cancel: %d, sel: %a"
                             step print alpha cancel print_int_array nsel);
         (r, cancel, nv, neigen, nv2)
@@ -1063,21 +1311,6 @@ module Make(R:S) = struct
       zih_log.log (fun k -> k "starts");
       fn 0 v eigen v2
     with ExitZih b -> b
-
-  let zih_vector =
-    { norm2 = (fun v -> (norm2 v, ()))
-    ; normalise = normalise
-    ; normalise_eigen = (fun () -> ())
-    ; scal  = (fun () -> ( *.* ))
-    ; mul   = ( **- )
-    ; dim   = Array.length
-    ; flatten = (fun x -> x)
-    ; print = print_vector }
-
-  let zih ?r0 zlim zcoef m =
-    match zih_gen zih_vector ?r0 zlim zcoef m with
-    | None -> None
-    | Some(v,_) -> Some v
 
   let pih ?r0 zlim zcoef x m =
     let m = List.map (fun v -> v --- x) m in
