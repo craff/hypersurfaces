@@ -946,7 +946,7 @@ module Make(R:Field.SPlus) = struct
 	   in
 	   fn dp;
 	   let gds = !gds in
-           Format.printf "VERIF1\n%!";
+           (*
            List.iter (fun mm ->
              let cm = mm **** m in
              let b = mat_positive zero cm in
@@ -960,8 +960,8 @@ module Make(R:Field.SPlus) = struct
                              Field.Float.V.print_matrix m
                              Field.Float.V.print_matrix mm
                              (Field.Float.V.mat_positive 0. Field.Float.V.(mm **** m)))
-               end) gds0;
-           Format.printf "VERIF2\n%!";
+                             end) gds0;
+            *)
            assert (List.length gds = List.length gds0);
            let (m:Q.V.matrix) = Array.map (Array.map to_q) m in
            List.iteri (fun i mm ->
