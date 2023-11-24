@@ -780,7 +780,7 @@ module Make(R:S) = struct
     ; mul   : 'a array -> R.t array -> 'a
     ; dim   : 'a -> int
     ; flatten : 'a -> R.t array
-    ; print_ls : Format.formatter -> 'a array -> unit }
+    ; print : Format.formatter -> 'a -> unit }
 
   (** main zero in hull test function, can provide an initial position *)
   let zih_gen
@@ -824,13 +824,15 @@ module Make(R:S) = struct
         raise (ExitZih r)
       in
 
+      let print_ls ch ms =
+        Array.iteri (fun i m -> Format.fprintf ch "%s%a" (if i = 0 then "" else " - ")
+                                  func.print m) ms
+      in
       (* if a vector is nul, we exit immediately *)
-      zih_log.log (fun k -> k "zih: %a" func.print_ls m0);
       if nb = 0 || Array.exists (fun v -> fst (norm2 v) <=. zlim *. zlim) m0 then
         exit_zih 0 None;
-      zih_log.log (fun k -> k "normalise");
       let m = Array.map func.normalise m0 in
-      zih_log.log (fun k -> k "zih: %a" func.print_ls m);
+      zih_log.log (fun k -> k "zih: %a" print_ls m);
       let dim = func.dim m.(0) in
       (* initial position: around random dim point actif to start *)
       let r = match r0 with
@@ -867,7 +869,7 @@ module Make(R:S) = struct
         can_stop := true;
         for i = 0 to nb - 1 do
           let s = func.scal eigen m.(i) v in
-          (*zih_log.log "  %a %a %a" print r.(i) print s print_vector m.(i);*)
+          zih_log.log (fun k -> k "  %d => %a %a %a" i print r.(i) print s func.print m.(i));
           if s <=. v2 *. zcoef then
             begin
               if s <=. zero then can_stop := false;
@@ -887,15 +889,16 @@ module Make(R:S) = struct
         | Some(i,_) ->
         (* value of interest, see the article *)
         let p = func.mul m pr in
-        let p2, _ = norm2 p in
+        let p2 = func.scal eigen p p in
         let pv = func.scal eigen p v in
         let w = m.(i) in
+        let w2 = func.scal eigen w w in
         let pw = func.scal eigen p w in
         let vw = func.scal eigen w v in
         (*assert (vw <=. zero || (printf "%d\n%!" i; false) );*)
         (* function computing [alpha] and [f]: the new [norm v2] from [beta] *)
         let find_alpha beta =
-          let w2 = beta *. beta *. p2 +. of_int 2 *. beta *. pw +. one in
+          let w2 = beta *. beta *. p2 +. of_int 2 *. beta *. pw +. w2 in
           let vw = beta *. pv +. vw in
           let sigma = beta *. sigma +. one in
           (v2 *. sigma -. vw) /. (w2 -. vw *. sigma)
@@ -1069,7 +1072,7 @@ module Make(R:S) = struct
     ; mul   = ( **- )
     ; dim   = Array.length
     ; flatten = (fun x -> x)
-    ; print_ls = print_matrix }
+    ; print = print_vector }
 
   let zih ?r0 zlim zcoef m =
     match zih_gen zih_vector ?r0 zlim zcoef m with
@@ -1106,8 +1109,8 @@ module Make(R:S) = struct
     Array.for_all fn ms
 
   let zih_matrix =
-    let norm2 m = let (l, v) = max_eigen (transpose m **** m) in
-                  (l, (v, m *** v))
+    let norm2 m = let (l, v) = max_eigen (m **** transpose m) in
+                  (l, (v, m **- v))
     in
     let mul ms r =
       let res = zero_m (Array.length ms.(0))
@@ -1116,25 +1119,23 @@ module Make(R:S) = struct
       res
     in
     { norm2
-    ; normalise = (fun m -> let (l, _) = max_eigen (transpose m **** m) in
+    ; normalise = (fun m -> let (l, _) = max_eigen (m **** transpose m) in
                             (one /. sqrt l) ***. m)
     ; normalise_eigen = (fun (v,w) -> (normalise v, normalise w))
-    ; scal  = (fun (v,_) m n -> (m *** v) *.* (n *** v))
+    ; scal  = (fun (v,_) m n -> (m **- v) *.* (n **- v))
     ; mul
     ; dim   = (fun m -> Array.length m * Array.length m.(0))
     ; flatten = (fun m -> let n1 = Array.length m and n2 = Array.length m.(0) in
                           Array.init (n1 * n2)
                             (fun i -> let j = i / n1 and k = i mod n1 in m.(k).(j)))
-    ; print_ls = (fun ch ->
-      Array.iteri (fun i m -> Format.fprintf ch "%s%a" (if i = 0 then "" else " - ")
-                                print_matrix m))
+    ; print = print_matrix
     }
 
   let mih zlim zcoef m0 =
     let rec fn i acc m =
       if i <= 0 then
         begin
-          let m = Array.of_list acc in
+          let m = transpose (Array.of_list acc) in
           let b = List.for_all (fun m0 ->
                       Format.printf "%a %a => %!" print_matrix m print_matrix m0;
                       let cm = m0 **** m in
@@ -1142,26 +1143,26 @@ module Make(R:S) = struct
                       Format.printf "%a %b\n%!" print_matrix cm b;
                       b) m0
           in
-          if b then Some m
+          if b then (zih_log.log (fun k -> k "matrix found: %a" print_matrix m); Some m)
           else (zih_log.log (fun k -> k "matrix found but not positive"); None)
         end
       else
         begin
+          zih_log.log (fun k -> k "MIH step %d\n%!" i);
           let w =
             match zih_gen zih_matrix ?r0:None zlim zcoef m with
             | None -> raise Exit
             | Some(_,(_,w)) -> w
           in
+          zih_log.log (fun k -> k "MIH step %d => %a\n%!" i print_vector w);
           let project m  =
-            let m = transpose m in
-            let m = Array.map (fun v -> comb one v (-. (v*.*w)) w) m in
-            transpose m
+            Array.map (fun v -> comb one v (-. (v*.*w)) w) m
           in
           let m = List.map project m in
           fn (i-1) (w::acc) m
         end
     in
-    try fn (Array.length (List.hd m0).(0)) [] m0
+    try fn (Array.length (List.hd m0)) [] m0
     with Exit -> None
 
   (*
