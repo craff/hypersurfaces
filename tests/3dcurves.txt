@@ -2,7 +2,7 @@
 let f1(x,y,z) = 2*x^2 + y^2 + z^2 - 4;
 let g1(x,y,z) = x^2 + 2*x*y + y^2 - 2*y*z - 2*z^2 + 2*z*x;
 
-let c = zeros [expected=2] f1 g1;
+let c = zeros [expected=2] f1, g1;
 display c c__t;
 
 let f2(x,y,z) = x^4 + y^4 + z^4 - 1;
@@ -13,17 +13,17 @@ let sf = zeros [expected=1] f2;
 let sg = zeros g2;
 #display sg;
 
-let c = zeros [expected=6] f2 g2;
+let c = zeros [expected=6] f2, g2;
 display c c__t;
 
 let g3(x,y,z) = x^2+y^2+z^2-1.25^2;
-let c = zeros [expected=8] f2 g3;
+let c = zeros [expected=8] f2, g3;
 display c c__t;
 
 let g3(x,y,z) = x^2+y^2+z^2-1.18^2;
-let c = zeros [subd=25,expected=6] f2 g3;
+let c = zeros [subd=25,expected=6] f2, g3;
 display c c__t;
 
 let g3(x,y,z) = x^2+y^2+z^2-1.2^2;
-let c = zeros [subd=30,expected=8] f2 g3;
+let c = zeros [subd=30,expected=8] f2, g3;
 display c c__t;

@@ -169,6 +169,19 @@ module Parse(R:Field.SPlus) = struct
        if !Args.dbname <> None then Db.timings ~css dim codim;
        opts
 
+  let run_cmd pos opts c =
+    try
+      run_cmd opts c
+    with
+    | Assert_failure _ as e ->
+       Format.eprintf "%a\n%s\n%!" (Pos.print_pos ()) pos
+         (Printexc.to_string e);
+       Printexc.print_backtrace stderr;
+       exit 1
+
+    | e -> Format.eprintf "%a\nError: %s\n%!" (Pos.print_pos ()) pos (Printexc.to_string e);
+           exit 1
+
   (** Parses a float in base 10. [".1"] is as ["0.1"]. *)
   let float_lit : R.t Lex.t =
     let f = fun s0 n0 ->
@@ -294,7 +307,7 @@ module Parse(R:Field.SPlus) = struct
     ; (p=Atom) '(' (p::poly Sum) ')'             => p
     ; (p=Atom) (v::ident) (args::args)           => Ref(v,args)
     ; (p=Atom) "DIFF" "(" (p::poly Sum) "," (v::ident) ")"
-      => Der(p,v)
+                                                 => Der(p,v)
     ; (p=Pow) (x::poly Pow) '^' (n::INT)         => P.Pow(x, n)
     ; (p=Prod) '-' (x::poly Pow)                 =>
         (match x with Cst _ -> Lex.give_up ()
@@ -316,11 +329,11 @@ module Parse(R:Field.SPlus) = struct
     ; "let" (name::ident) (vars :: params) '=' "random" (deg::poly Sum) =>
         Let_rand(name,vars,deg)
     ; "let" (name::ident)  '=' "zeros" (vars :: ne_params) (opts::options)
-        (pols:: ~+ (poly Sum)) =>
-        Let_surf(name, opts, vars, pols)
+        (pol::(poly Sum)) (pols:: ~* (',' (p::poly Sum) => p)) =>
+        Let_surf(name, opts, vars, (pol :: pols))
     ; "let" (name::ident) '=' "zeros" (opts::options)
-        (names:: ~+ ident) =>
-        (Let_short_surf(name, opts, names))
+        (name0 :: ident) (names:: ~* (',' (i::ident) => i)) =>
+        Let_short_surf(name, opts, name0::names)
     ; "display" (names :: ~+ ident) =>
         Display(names)
     ; "for" (name::ident) "=" (first::poly Sum) "to" (last::poly Sum)
@@ -334,7 +347,7 @@ module Parse(R:Field.SPlus) = struct
 
   let%parser rec cmds =
       () => !Args.default_parameters
-    ; (opts::cmds) (c::cmd) ';' => run_cmd opts c
+    ; (opts::cmds) (c::cmd) ';' => run_cmd _pos opts c
 
 end
 

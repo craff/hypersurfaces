@@ -11,9 +11,7 @@ let _ =
     eprintf "reading %S\n%!" fn;
     ignore (Grammar.parse_file Parser.main blank fn)
   in
-  List.iter
-    (Pos.handle_exception ~error:(fun _ -> exit 1) parse)
-    files;
+  List.iter (Pos.handle_exception parse) files;
   if not !Args.batch then
     while true do
       let l = read_line () in

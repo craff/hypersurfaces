@@ -653,9 +653,10 @@ module Make(R:S) (V:Vector.V with type t = R.t) = struct
       in
       if not r then
         begin
-          List.iter (fun (l,c) -> printf "(%a,%a) " print_int_array l print c) p;
-          printf "\n%a\n%!" (fun p -> print_polynome p) p;
-          assert false
+          let msg = sprintf "Unsupported polynomial: %a"
+                      (fun p -> print_polynome p) p
+          in
+          failwith msg
         end
     in
     Array.of_list (filter_map (fun (l,c) -> count l; c) p)

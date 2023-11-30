@@ -1,35 +1,35 @@
 let p = zeros(x,y) [expected=4]
-  10 * x^2 + y^2 - 1
+  10 * x^2 + y^2 - 1,
   x^2 + 10 * y^2 - 1;
 display p p__t;
 display p;
 
 let p2 = zeros(x,y) [expected=4]
-  1000 * x^2 + y^2 - 1
+  1000 * x^2 + y^2 - 1,
   x^2 + 1000 * y^2 - 1;
 display p2 p2__t;
 display p2;
 
 let p3 = zeros(x,y) [expected=2]
-  (x-0.99)^2 + y^2 - 1
+  (x-0.99)^2 + y^2 - 1,
   (x+0.991)^2 + y^2 - 1;
 display p3 p3__t;
 display p3;
 
 let p4 = zeros(x,y) [expected=2]
-  (x-0.999)^2 + y^2 - 1
+  (x-0.999)^2 + y^2 - 1,
   (x+0.9991)^2 + y^2 - 1;
 display p4 p4__t;
 display p4;
 
 let e1(x,y) = (x-1.001)^2 + y^2 - 1;
 let e2(x,y) = (x+1.002)^2 + y^2 - 1;
-let p5 = zeros [expected=0] e1 e2;
+let p5 = zeros [expected=0] e1, e2;
 display p5 p5__t;
 display p5;
 
 let e1(x,y) = (x-1.2)^2 + y^2 - 1;
 let e2(x,y) = (x+0.6)^2 + y^2 - 1;
-let p6 = zeros [expected=2] e1 e2;
+let p6 = zeros [expected=2] e1, e2;
 display p6 p6__t;
 display p6;
