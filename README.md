@@ -1,6 +1,6 @@
 # An OCaml program for compute discretization of algebraic hypersurfaces
 
-![Screen shot](https://raw.githubusercontent.com/craff/hypersurfaces/master/article/quartic-M-2.png?raw=true "A nice screen shot")
+![Screen shot](https://raffalli.eu/pics/quartic.jpg "A nice screen shot")
 
 ## Introduction
 
