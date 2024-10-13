@@ -17,24 +17,24 @@ module FloatMin =
     let one = 1.
     let inf = infinity
     let is_nan = Float.is_nan
-    let ( +. ) = ( +. ) [@@inlined]
-    let ( *. ) = ( *. ) [@@inlined]
-    let ( -. ) = ( -. ) [@@inlined]
-    let ( /. ) = ( /. ) [@@inlined]
-    let ( ~-.) = ( ~-.) [@@inlined]
-    let ( =. ) : float -> float -> bool = ( = ) [@@inlined]
-    let ( <>. ): float -> float -> bool = ( <> )[@@inlined]
-    let ( <. ) : float -> float -> bool = ( < ) [@@inlined]
-    let ( >. ) : float -> float -> bool = ( > ) [@@inlined]
-    let ( <=. ): float -> float -> bool = ( <= )[@@inlined]
-    let ( >=. ): float -> float -> bool = ( >= )[@@inlined]
+    let ( +. ) = ( +. )
+    let ( *. ) = ( *. )
+    let ( -. ) = ( -. )
+    let ( /. ) = ( /. )
+    let ( ~-.) = ( ~-.)
+    let ( =. ) : float -> float -> bool = ( = )
+    let ( <>. ): float -> float -> bool = ( <> )
+    let ( <. ) : float -> float -> bool = ( < )
+    let ( >. ) : float -> float -> bool = ( > )
+    let ( <=. ): float -> float -> bool = ( <= )
+    let ( >=. ): float -> float -> bool = ( >= )
     let sqrt = sqrt
     let cmp : float -> float -> int = Stdlib.compare
     let abs = abs_float
     let of_int = float
     let to_int = int_of_float
-    let to_float x = x [@@inlined]
-    let of_float x = x [@@inlined]
+    let to_float x = x [@@inline always]
+    let of_float x = x [@@inline always]
     let of_string = float_of_string
     let to_string = Format.sprintf "%.13H"
     let to_q = Q.of_float
