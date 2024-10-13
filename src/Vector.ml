@@ -825,58 +825,54 @@ module Make(R:S) = struct
             exit_zih step (Some v)
           end
         | Some(i,_) ->
-        (* value of interest, see the article *)
-        let p = m **- pr in
-        let p2 = norm2 p in
-        let pv = p *.* v in
-        let w = m.(i) in
-        let pw = p *.* w in
-        let vw = m.(i) *.* v in
-        (*assert (vw <=. zero || (printf "%d\n%!" i; false) );*)
-        (* function computing [alpha] and [f]: the new [norm v2] from [beta] *)
-        let find_alpha beta =
-          let w2 = beta *. beta *. p2 +. of_int 2 *. beta *. pw +. one in
-          let vw = beta *. pv +. vw in
-          let sigma = beta *. sigma +. one in
-          (v2 *. sigma -. vw) /. (w2 -. vw *. sigma)
-        in
-        let beta,alpha =
-          try
-            if p2 <=. zero then raise Exit;
-            (* beta0 : a maximum ? *)
-            (* let beta0 = (vw -. v2) /. (sigma *. v2 -. pv) in *)
-            let beta = (pw *. (vw -. v2) +.
-                             sigma *. (v2 -. vw *. vw) +.
-                             pv *. (vw -. one))
-                          /. (p2 *. (v2 -. vw) +.
-                                pw *. (pv -. sigma *. v2) +.
-                                pv *. (sigma *. vw -. pv)) in
-            if beta <. zero then raise Exit;
-            let alpha = find_alpha beta in
-            if alpha <. zero then raise Exit;
-            (beta,alpha)
-          with Exit ->
-            let alpha = find_alpha zero in
-            (zero,alpha)
-        in
-        (* final alpha from best beta *)
-        (* updating [r], [pr], and computing new [v] and new [v2] ([nv] and
-           [nv2]) *)
-        for j = 0 to nb - 1 do
-          pr.(j) <- pr.(j) *. beta;
-        done;
-        pr.(i) <- pr.(i) +. one;
-        Array.iteri (fun j c -> r.(j) <- r.(j) +. c *. alpha) pr;
-        set_one r;
-        let nv = m **- r in
-        let nv2 = norm2 nv in
-        (* [nv2] should be equal (very near with rounding) to [fa], checking
+           let (alpha, beta, beta') =
+             (* value of interest, see the article *)
+             let p = (one /. sigma) **. (m **- pr) in
+             let p2 = norm2 p in
+             let pv = p *.* v in
+             let w = m.(i) in
+             let w2 = norm2 w in
+             let pw = p *.* w in
+             let vw = m.(i) *.* v in
+             let a' = v2 -. vw in
+             let b' = v2 -. pv in
+             let two = one +. one in
+             let a11 = v2 +. w2 -. two *. vw in
+             let a22 = v2 +. p2 -. two *. pv in
+             let a12 = v2 -. vw -. pv +. pw in
+             let d = a11 *. a22 -. a12 *. a12 in
+             let a = (a22 *. a' -. a12 *. b') /. d in
+             let b = (a11 *. b' -. a12 *. a') /. d in
+             if (a >. zero && b >. zero && a +. b <. one) then
+               begin
+                 (a, b, b /. sigma)
+               end
+             else
+               begin
+                 let a = a' /. a11 in
+                 assert (a >= zero);
+                 assert (a < one);
+                 (a, zero, zero)
+               end
+           in
+           (* final alpha from best beta *)
+           (* updating [r], [pr], and computing new [v] and new [v2] ([nv] and
+              [nv2]) *)
+           for j = 0 to nb - 1 do
+             pr.(j) <- pr.(j) *. beta';
+           done;
+           pr.(i) <- pr.(i) +. alpha;
+           Array.iteri (fun j c -> r.(j) <- r.(j) *. (one -. alpha -. beta) +. c) pr;
+           set_one r;
+           let nv = m **- r in
+           let nv2 = norm2 nv in
+           (* [nv2] should be equal (very near with rounding) to [fa], checking
            in log *)
-        zih_log.log (fun k ->
+           zih_log.log (fun k ->
             k "cg step: %d, index: %d, beta: %a, alpha: %a, norm: %a, candidates: %a, can_stop: %b"
               step i print beta print alpha print nv2
 	      print_int_list !candidates !can_stop);
-        (nv, nv2)
+           (nv, nv2)
       in
 
       (* second kind of steps *)
