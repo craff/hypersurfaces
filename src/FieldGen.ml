@@ -53,7 +53,6 @@ module type S = sig
   val ball_integrals : (t array -> t) -> int -> int -> t
   val ball_integrals1 : t array -> (t array -> t array) -> int -> int -> t array
   val ball_integrals2 : t array array -> (t array -> t array array) -> int -> int -> t array array
-  val rk4 : ?debug:(t -> t -> unit) -> (t -> t -> t) -> t -> t -> t -> int -> t
   val rk4_1 : ?debug:(t -> t array -> unit) -> (t -> t array -> t array) -> t -> t -> t array -> int -> t array
 
   type stop_cond =

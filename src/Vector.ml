@@ -1348,6 +1348,53 @@ module Make(R:S) = struct
       min_log.log (fun k -> k "minmax ends");
       r
   end
+
+  let ode_solve : h:t -> ?t0:t -> ?t1:t -> x0:v -> (t -> v -> v) -> v =
+    fun ~h ?(t0 = R.zero) ?(t1 = R.one) ~x0 f ->
+      let t_final = t1 in
+      let t = ref t0 in
+      let x = Array.copy x0 in
+      let hh = h /. of_int 2 in
+      let step () =
+        Format.eprintf "%a ==> %a\n%!" print !t print_vector x;
+        let (t1, t2, h, hh) =
+          let t2 = !t +. h in
+          if t2 >. t_final then
+            begin
+              let h = t_final -. !t in
+              let hh = h /. of_int 2 in
+              (!t +. hh, t_final, h, hh)
+            end
+          else (!t +. hh, t2, h, hh)
+        in
+        let k1 = f !t x in
+        let k2 = f t1 (comb one x hh k1) in
+        let k3 = f t1 (comb one x hh k2) in
+        let k4 = f t2 (comb one x h k3) in
+
+        combqo x (h /. of_int 6) k1;
+        combqo x (h /. of_int 3) k2;
+        combqo x (h /. of_int 3) k3;
+        combqo x (h /. of_int 6) k4;
+        t := t2
+
+      in
+      while !t <. t_final do
+        step ()
+      done;
+      x
+(*
+  module TestODE = struct
+    let f _ x =
+      let y = x.(0) in
+      let y' = x.(1) in
+      [|y'; -. y|]
+    in
+    let r = ode_solve ~h:(of_float 0.01) ~t1:(of_float (acos 0.)) ~x0:[|zero; one|] f in
+    Format.eprintf "==> %a\n%!" print_vector r;
+    exit 0
+    end
+ *)
 end
 
 module type V = sig

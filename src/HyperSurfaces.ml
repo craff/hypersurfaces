@@ -1210,12 +1210,12 @@ module Make(R:Field.SPlus) = struct
     in
     if param.Args.check then check ();
 
-    let (nb, eps) = match param.Args.project with
+    let (nb, _) = match param.Args.project with
       | None -> (0, zero)
       | Some(nb,e) -> (nb, of_float e)
     in
 
-    let s1 =
+(*    let s1 =
       let s0 x =
         let x2 = norm2 x in
         assert (x2 <. one);
@@ -1224,53 +1224,51 @@ module Make(R:Field.SPlus) = struct
       let n = ball_integrals s0 dim 10 in
       fun x -> s0 x /. n
     in
-
-    let find_simplex x =
+ *)
+    let rec find_simplex ?(debug=false) x =
       let r = ref [] in
       Hashtbl.iter (fun _ s ->
           let c = pcoord x s.m in
-          let inside = Array.for_all (fun x -> x >=. -. of_float 1e-24) c in
+          if debug then Format.eprintf "coord1: %a\n%!" print_vector c;
+          let inside = Array.for_all (fun x -> x >=. -. of_float 1e-4) c in
           if inside then r:= (s,c,true) :: !r;
           let c = pcoord (opp x) s.m in
-          let inside = Array.for_all (fun x -> x >=. -. of_float 1e-24) c in
+          if debug then Format.eprintf "coord2: %a\n%!" print_vector c;
+          let inside = Array.for_all (fun x -> x >=. -. of_float 1e-4) c in
           if inside then r:= (s,c,false) :: !r;
         ) trs.all;
       match !r with
-      | [] -> assert false
+      | [] -> if debug then assert false else find_simplex ~debug:true x
       | _ -> !r
     in
 
     let zerov = zero_v codim in
     let zerom = zero_m codim dim in
 
-    let phat x0  =
-      (*printf "phat: %a = %!" print_vector x;*)
-      let l = find_simplex x0 in
-      let fn (s,x,sg) =
+    let phat l x0  =
+      let fn (s,_,sg) =
+        let x = pcoord (if sg then x0 else V.opp x0) s.m in
+        (*Format.eprintf "\t %a => %a\n%!" print_vector x0 print_vector x;*)
         let sg deg = if not sg && deg mod 2 = 0 then -. one else one in
         let p = List.map2 (fun l deg ->
                     let dp = l *.* x in
-                    R.pow (norm x0) (deg-1) *. sg deg *. dp) s.o.l deg in
-        let r =
-          Array.of_list p
-        in
-        r
+                    (*Format.eprintf "\t\t%a\n%!" print dp;*)
+                    sg deg *. dp) s.o.l deg in
+        Array.of_list p
       in
       let l = List.map fn l in
       let n = List.length l in
-      (List.fold_left (+++) zerov l) //. of_int n
+      let r = (List.fold_left (+++) zerov l) //. of_int n in
+      (*Format.eprintf "\r phat: %a\n%!" print_vector r;*)
+      r
     in
 
-    let gphat x0  =
-      let l = find_simplex x0 in
-      let fn (s,x,sg) =
+    let gphat l _  =
+      let fn (s,_,sg) =
         let sg deg = if not sg && deg mod 2 = 0 then -. one else one in
         let m = List.map2 (fun l deg ->
-                    let dp = l *.* x in
-                    let x1 = R.pow (norm x0) (deg-1) *. sg deg in
-                    let l1 = V.transform l s.m s0 in
-                    let x2 = dp *. of_int (deg-1) *. R.pow (norm x0) (deg-3) *. sg deg in
-                    x1 **. l1 +++ x2 **. x0
+                    let v = sg deg **. solve s.m l in
+                    v
                   (* ignore derivative of x power as it is normal *)
                   ) s.o.l deg
         in
@@ -1278,86 +1276,58 @@ module Make(R:Field.SPlus) = struct
       in
       let l = List.map fn l in
       let n = List.length l in
-      let r =
-        (one /. of_int n) ***. (List.fold_left (fun acc x -> x ++++ acc) zerom l)
-      in
-(*      let d = Array.init dim (fun _ -> of_float (Random.float 1.0)) in
-      let d = normalise d in
-      let v = phat x0 in
-      let eps = eps *. of_float 1e-3 in
-      let v' = phat (x0 +++ eps **. d) in
-      let e = (v' --- v) //. eps --- (r *** d) in
-      printf "x0: %a, gphat: %a\n%!" print_vector x0 print_matrix r;
-      printf "ERR: %a (%d)\n%!" print_vector e n;*)
-      r
+      (one /. of_int n) ***. (List.fold_left (fun acc x -> x ++++ acc) zerom l)
     in
 
-    let sphat t x =
-      let f u = s1 u **. phat (x --- (t *. eps) **. u) in
-      ball_integrals1 zerov f dim nb
-    in
-
-    let dsphat_dt t x =
-      let f u = (-. eps *. s1 u) **. (gphat (x --- (t *. eps) **. u) *** u) in
-      ball_integrals1 zerov f dim nb
-    in
-
-    let gsphat t x =
-      let f u = s1 u ***. gphat (x --- (t *. eps) **. u) in
-      let r =  ball_integrals2 zerom f dim nb in
-      (*printf "  gsphat: %a\n%!" print_matrix r;*)
-      r
-    in
-
-    let pt t x =
+    let pt l t x =
       let p = Array.of_list (List.map (fun (p,_,_,_) -> eval p x) dp00) in
-      let q = sphat t x in
+      let q = phat l x in
+      Format.printf "p: %a, phat: %a\n%!" print_vector p print_vector q;
       (one -. t) **. q +++ t **. p
     in
 
-    let q t x =
+    let q l x =
       let v1 = Array.of_list (List.map (fun (p,_,_,_) -> eval p x) dp00) in
-      let v2 = sphat t x in
-      let v3 = dsphat_dt t x in
-      v1 --- v2 +++ (one -. t) **. v3
+      let v2 = phat l x in
+      v2 --- v1
     in
 
-    let g t x =
-      let m1 = Array.of_list (List.map (fun (_,dp,_,_) -> eval_grad dp x) dp00) in
-      let m2 = gsphat t x in
+    let g l t x =
+      let m1 = Array.of_list (List.map (fun (_,dp,_,_) ->
+                                  eval_grad dp x) dp00) in
+      let m2 = gphat l x in
+      Format.printf "grad: %a\n%!" print_matrix m1;
+      Format.printf "grad hat: %a\n%!" print_matrix m2;
       let r = (t ***. m1) ++++ ((one -. t) ***. m2) in
+      Format.printf "g avant: %a\n%!" print_matrix r;
       let r = Array.map (fun r -> r --- ((r *.* x) /. norm2 x) **. x) r in
+      Format.printf "g après: %a\n%!" print_matrix r;
       r
     in
 
-    let f t x =
-      let g = g t x in (* codim lines of dim length *)
+    let f l t x =
+      let g = g l t x in (* codim lines of dim length *)
       let gg = g **** transpose g in
-      let q = q t x in
+      Format.printf "gg: %a\n%!" print_matrix gg;
+      let q = q l x in
+      Format.printf "q: %a\n%!" print_vector q;
       try
-        let r = (-.one) **. (transpose g *** (solve gg q))in
+        let r = transpose g *** (solve gg q) in
+        let verif = g *** r --- q in
+        Format.printf "r: %a ==> %a\n%!" print_vector r print_vector verif;
         r
       with Not_found -> failwith "g not invertible"
     in
 
     let isotopy x =
+      let l = find_simplex x in
+      let x = normalise x in
+      Format.eprintf "ISO: %d simplices\n%!" (List.length l);
       let debug t x =
-        let eps = eps *. of_float 1e-4 in
-        let v = pt t x in
-        let v' = pt (t +. eps) x in
-        let e = (v' --- v) //. eps --- q t x in
-        let d = Array.init dim (fun _ -> of_float (Random.float 1.0)) in
-        let d = d --- (d *.* x /. norm2 x) **. x in
-        let d = normalise d in
-        let v' = pt t (x +++ eps **. d) in
-        let m = g t x in
-        let e' = (v' --- v) //. eps --- (m *** d) in
-        printf "t: %a, x: %a, pt: %a (%a %a %d %d)\n%!"
-          print t print_vector x print_vector v
-          print_vector e print_vector e' (Array.length m) (Array.length m.(0))
+        let v = pt l t x in
+        printf "==> t: %a, x: %a (%a), pt: %a\n%!" print t print_vector x print (norm2 x) print_vector v;
       in
-      let x = rk4_1 ~debug f zero eps x 1 in
-      rk4_1 ~debug f eps one x (nb*50)
+      rk4_1 ~debug (f l) zero one x (nb*50)
     in
 
     let ctrs = empty_triangulation ~has_v_tbl:false ~has_f_tbl:false dim in

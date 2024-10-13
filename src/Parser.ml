@@ -260,7 +260,6 @@ module Parse(R:Field.SPlus) = struct
       else
         Args.{ opt with sing_limit = Some p; certif = false })
     ; "expected" "=" (l::Topology.parse) => (fun opt -> Args.{ opt with expected = l})
-    ; "project" "=" (p::INT) (e::FLOAT) =>  (fun opt -> Args.{ opt with project = Some(p,e) })
     ; "check" "certificate" "=" (p::bool) =>  (fun opt -> Args.{ opt with certif = p })
     ; "check" "triangulation" "=" (p::bool) =>  (fun opt -> Args.{ opt with check = p })
     ; "project" "=" (p::INT) (e::FLOAT) =>  (fun opt -> Args.{ opt with project = Some(p,e) })

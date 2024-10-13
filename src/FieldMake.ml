@@ -96,7 +96,7 @@ module Make(R:SMin) = struct
     let addf v1 x v2 = v1 +. x*.v2 in
     ball_integrals zero addf f dim nb
 
-  let rk4 debug addf f t0 t1 x0 nb =
+  let rk4 debug addf addq f t0 t1 x0 nb =
     let h = (t1 -. t0) /. of_int nb in
     let rk4_step t0 x0 =
       let h2 = h /. of_int 2 in
@@ -104,26 +104,37 @@ module Make(R:SMin) = struct
       let k2 = f(t0 +. h2) (addf x0 h2 k1) in
       let k3 = f(t0 +. h2) (addf x0 h2 k2) in
       let k4 = f(t0 +. h) (addf x0 h k3) in
-      addf x0 (h /. of_int 6) (addf (addf k1 one k4)
-                                 (of_int 2)
-                                 (addf k2 one k3))
+      addq x0 (h /. of_int 6) k1;
+      addq x0 (h /. of_int 3) k2;
+      addq x0 (h /. of_int 3) k3;
+      addq x0 (h /. of_int 6) k4;
     in
-    let x = ref x0 in
+    let x = Array.copy x0 in
     for i = 0 to nb - 1 do
       let t = t0 +. of_int i *. h in
-      (*debug t !x;*)
-      x := rk4_step t !x;
+      debug t x;
+      rk4_step t x;
     done;
-    debug t1 !x;
-    !x
+    debug t1 x;
+    x
 
-  let rk4_1 ?(debug=fun _ _ -> ()) t0 t1 x0 nb =
+  let rk4_1 ?(debug=fun _ _ -> ()) f t0 t1 x0 nb =
     let addf v1 x v2 = Array.map2 (fun a b -> a +. x*. b) v1 v2 in
-    rk4 debug addf t0 t1 x0 nb
+    let addq v1 x v2 = Array.iteri (fun i a -> v1.(i) <- a +. x*. v2.(i)) v1 in
+    rk4 debug addf addq f t0 t1 x0 nb
 
-  let rk4 ?(debug=fun _ _ -> ()) t0 t1 x0 nb =
-    let addf x1 x x2 = x1 +. x*.x2 in
-    rk4 debug addf t0 t1 x0 nb
+
+  let rk4_0 ?(debug=fun _ _ -> ()) f t0 t1 x0 nb =
+    let addf x1 x x2 = [|x1.(0) +. x*.x2.(0)|] in
+    let addq x1 x x2 = x1.(0) <- x1.(0) +. x*.x2.(0) in
+    let res = rk4 debug addf addq f t0 t1 [|x0|] nb in
+    res.(0)
+
+  let _ =
+    let x1 = rk4_0 (fun _ x -> x) zero one one 50 in
+    Format.printf "TEST TEST: %a\n%!" print x1;
+    let x1 = rk4_1 (fun _ x -> [|x.(1); -.x.(0)|]) zero (of_float (acos 0.0)) [|zero; one|] 50 in
+    Format.printf "TEST TEST: %a\n%!" print x1.(0)
   (*
   let _ =
     let f _ = one in

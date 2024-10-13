@@ -123,6 +123,9 @@ let spec =
   ; ( "--topo-betti"
     , Arg.Unit (fun () -> p := { !p with topo = Topology.Ask_Betti})
     , "compute only the number of connected components of each variety")
+  ; ( "--project"
+    , Arg.Int (fun t -> p := {!p with project = Some(t,1e-2)})
+    , "")
   ; ( "--db"
     , Arg.String (fun s -> dbname := Some s)
     , "DB name to store result")
