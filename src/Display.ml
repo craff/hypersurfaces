@@ -198,7 +198,9 @@ let lines_prg : unit Shaders.program =
   let open Shaders in
   let vertex   = Shaders.of_string gl_vertex_shader Lines_shader.vertex in
   let fragment = Shaders.of_string gl_fragment_shader Lines_shader.fragment in
-  compile ("light_shader", [vertex ; fragment])
+  let r = compile ("light_shader", [vertex ; fragment]) in
+  Gles3.show_errors "compile lines_prg";
+  r
 
 (* Note that [lines_prg] cannot be used until uniforms and atributes are set. *)
 
@@ -222,11 +224,13 @@ let lines_prg = Shaders.float_attr lines_prg "in_position"
 
 let draw_line_object cam proj obj =
   Shaders.draw_uint_elements lines_prg gl_lines obj.elem
-    obj.vert obj.col obj.view cam proj
+    obj.vert obj.col obj.view cam proj;
+  Gles3.show_errors "draw_line_object"
 
 let draw_point_object cam proj obj =
   Shaders.draw_uint_elements lines_prg gl_points obj.elem
-    obj.vert obj.col obj.view cam proj
+    obj.vert obj.col obj.view cam proj;
+  Gles3.show_errors "draw_point_object"
 
 (* Shader programs for triangles *)
 let triangles_prg : unit Shaders.program =
@@ -271,7 +275,8 @@ let triangles_prg = Shaders.float_attr triangles_prg "in_position"
 
 let draw_triangle_object cam proj obj =
   Shaders.draw_uint_elements triangles_prg gl_triangles obj.elem
-    obj.vert obj.norm obj.col obj.view cam proj
+    obj.vert obj.norm obj.col obj.view cam proj;
+  Gles3.show_errors "draw_triangle_object"
 
 let draw_object cam proj (_,obj) =
   if obj.visible then match obj.shape with
@@ -288,7 +293,6 @@ let draw : unit -> unit = fun () ->
   let cam = camera_mat () and proj = projection () in
   List.iter (draw_object cam proj) !objects;
   Mutex.unlock draw_mutex;
-  Gles3.show_errors "hypersurfaces";
   Egl.swap_buffers ()
 
 let fresh_filename () =
